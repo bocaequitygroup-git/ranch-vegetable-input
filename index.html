@@ -1,0 +1,500 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>Ngapori Ranch — Field Data Entry</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@500;600&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#EAE6D9;
+    --panel:#FBF9F2;
+    --panel-2:#F3EFE1;
+    --ink:#2B2A22;
+    --ink-soft:#6B6857;
+    --forest:#1B4332;
+    --forest-mid:#2D6A4F;
+    --gold:#A9820A;
+    --gold-fill:#F3E4B0;
+    --rust:#9C3B2C;
+    --rust-fill:#F1D9D1;
+    --sage:#8FA878;
+    --sage-fill:#DCE6D2;
+    --line:#D9D2BC;
+  }
+  *{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
+  html,body{margin:0; padding:0;}
+  body{
+    background:var(--bg); color:var(--ink); font-family:'Inter',sans-serif;
+    min-height:100vh; padding-bottom:100px;
+  }
+  .wrap{max-width:520px; margin:0 auto; padding:16px 16px 0;}
+
+  header{padding:6px 0 14px;}
+  .eyebrow{
+    font-family:'IBM Plex Mono',monospace; font-size:11px; letter-spacing:0.1em;
+    text-transform:uppercase; color:var(--forest-mid); margin:0 0 4px;
+  }
+  h1{font-size:22px; font-weight:700; color:var(--forest); margin:0 0 8px;}
+  .conn{
+    display:flex; align-items:center; gap:6px; font-family:'IBM Plex Mono',monospace;
+    font-size:11px; color:var(--ink-soft);
+  }
+  .conn-dot{width:8px; height:8px; border-radius:50%; background:var(--gold);}
+  .conn-dot.live{background:var(--sage);}
+
+  /* Action switcher */
+  .tabs{
+    display:grid; grid-template-columns:repeat(3,1fr); gap:8px; margin-bottom:16px;
+  }
+  .tab-btn{
+    padding:12px 6px; border-radius:10px; border:1px solid var(--line); background:var(--panel);
+    font-family:'Inter',sans-serif; font-size:12.5px; font-weight:600; color:var(--ink-soft);
+    text-align:center; cursor:pointer; line-height:1.25;
+  }
+  .tab-btn.active{background:var(--forest); color:#fff; border-color:var(--forest);}
+
+  /* Form card */
+  .card{
+    background:var(--panel); border:1px solid var(--line); border-radius:12px;
+    padding:18px; margin-bottom:16px;
+  }
+  .card h2{font-size:15px; margin:0 0 4px; color:var(--forest);}
+  .card p.hint{font-size:12.5px; color:var(--ink-soft); margin:0 0 16px;}
+
+  label{
+    display:block; font-family:'IBM Plex Mono',monospace; font-size:10.5px; text-transform:uppercase;
+    letter-spacing:0.06em; color:var(--ink-soft); margin:14px 0 6px;
+  }
+  label:first-of-type{margin-top:0;}
+  select, input[type=text], input[type=number], input[type=date], textarea{
+    width:100%; padding:13px 12px; border-radius:8px; border:1px solid var(--line);
+    background:#fff; color:var(--ink); font-family:'Inter',sans-serif; font-size:16px;
+    appearance:none; -webkit-appearance:none;
+  }
+  select{
+    background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='9'%3E%3Cpath d='M1 1l6 6 6-6' stroke='%236B6857' stroke-width='2' fill='none' fill-rule='evenodd'/%3E%3C/svg%3E");
+    background-repeat:no-repeat; background-position:right 14px center; padding-right:36px;
+  }
+  textarea{resize:vertical; min-height:70px; font-size:15px;}
+  .row2{display:grid; grid-template-columns:1fr 1fr; gap:10px;}
+
+  .bed-id-preview{
+    margin-top:8px; font-family:'IBM Plex Mono',monospace; font-size:13px; font-weight:600;
+    color:var(--forest); background:var(--sage-fill); border-radius:6px; padding:8px 10px; display:inline-block;
+  }
+
+  .submit-btn{
+    width:100%; margin-top:20px; padding:15px; border:none; border-radius:9px;
+    background:var(--forest); color:#fff; font-size:16px; font-weight:700; cursor:pointer;
+  }
+  .submit-btn:active{background:var(--forest-mid);}
+  .submit-btn:disabled{background:var(--ink-soft); cursor:not-allowed;}
+
+  .toast{
+    position:fixed; left:16px; right:16px; bottom:96px; max-width:488px; margin:0 auto;
+    padding:13px 16px; border-radius:10px; font-size:14px; font-weight:600;
+    display:none; z-index:20; box-shadow:0 4px 16px rgba(0,0,0,0.15);
+  }
+  .toast.ok{display:block; background:var(--sage-fill); color:#2F4A22; border:1px solid var(--sage);}
+  .toast.err{display:block; background:var(--rust-fill); color:var(--rust); border:1px solid var(--rust);}
+
+  /* Config footer, pinned */
+  .config{
+    position:fixed; bottom:0; left:0; right:0; background:var(--panel-2); border-top:1px solid var(--line);
+    padding:10px 16px; z-index:10;
+  }
+  .config-inner{max-width:520px; margin:0 auto; display:flex; gap:8px; align-items:center;}
+  .config input{
+    flex:1; padding:9px 10px; border-radius:7px; border:1px solid var(--line);
+    font-family:'IBM Plex Mono',monospace; font-size:12px; background:#fff; color:var(--ink);
+  }
+  .config button{
+    padding:9px 14px; border-radius:7px; border:none; background:var(--forest); color:#fff;
+    font-family:'IBM Plex Mono',monospace; font-size:12px; font-weight:600; cursor:pointer; white-space:nowrap;
+  }
+
+  .field-note{font-size:11.5px; color:var(--ink-soft); margin-top:4px;}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <p class="eyebrow">Ngapori Ranch · Vegetable CASN</p>
+    <h1>Field Data Entry</h1>
+    <div class="conn"><span class="conn-dot" id="connDot"></span><span id="connLabel">Not connected — set endpoint below</span></div>
+  </header>
+
+  <div class="tabs" id="tabs">
+    <div class="tab-btn active" data-form="bed">Bed State</div>
+    <div class="tab-btn" data-form="greenhouse">Greenhouse</div>
+    <div class="tab-btn" data-form="storage">Storage</div>
+    <div class="tab-btn" data-form="task">Daily Task</div>
+    <div class="tab-btn" data-form="escalation">Escalation</div>
+  </div>
+
+  <!-- BED STATE FORM -->
+  <div class="card form-panel" id="form-bed">
+    <h2>Update Bed State</h2>
+    <p class="hint">Pick the pad and bed, then set its new state. Logs today's date automatically.</p>
+
+    <div class="row2">
+      <div>
+        <label>Pad #</label>
+        <select id="bedPad"></select>
+      </div>
+      <div>
+        <label>Bed #</label>
+        <select id="bedNum"></select>
+      </div>
+    </div>
+    <div class="bed-id-preview" id="bedIdPreview">P01-B01</div>
+
+    <label>New State</label>
+    <select id="bedState">
+      <option value="1">1 — Available</option>
+      <option value="2">2 — Planted</option>
+      <option value="3">3 — Growing</option>
+      <option value="4">4 — Harvestable</option>
+      <option value="5">5 — Harvested</option>
+      <option value="6">6 — Cleanup</option>
+      <option value="7">7 — Cover Crop / Rest</option>
+      <option value="8">8 — Replant / Prep</option>
+    </select>
+
+    <label>Crop / Variety (optional)</label>
+    <input type="text" id="bedCrop" placeholder="e.g. Carrots — Nantes">
+
+    <label>Notes (optional)</label>
+    <textarea id="bedNotes" placeholder="Anything the manager should know"></textarea>
+
+    <button class="submit-btn" id="submitBed">Log Bed Update</button>
+  </div>
+
+  <!-- GREENHOUSE FORM -->
+  <div class="card form-panel" id="form-greenhouse" style="display:none;">
+    <h2>Update Greenhouse Bay</h2>
+    <p class="hint">Sets status and occupancy for one bay.</p>
+
+    <label>Bay #</label>
+    <select id="bayNum">
+      <option value="1">Bay 1 — Winter Greens</option>
+      <option value="2">Bay 2 — Winter Greens</option>
+      <option value="3">Bay 3 — Winter Greens</option>
+      <option value="4">Bay 4 — Winter Greens</option>
+      <option value="5">Bay 5 — Winter Greens</option>
+      <option value="6">Bay 6 — Winter Greens</option>
+      <option value="7">Bay 7 — African Greens</option>
+      <option value="8">Bay 8 — African Greens</option>
+      <option value="9">Bay 9 — Aromatics / Microgreens</option>
+      <option value="10">Bay 10 — Nursery / Germination</option>
+    </select>
+
+    <label>Current Crop</label>
+    <input type="text" id="bayCrop" placeholder="e.g. Lettuce trays — batch 4">
+
+    <label>Occupancy %</label>
+    <input type="number" id="bayOcc" min="0" max="100" placeholder="0–100">
+
+    <label>Status</label>
+    <select id="bayStatus">
+      <option value="Active">Active</option>
+      <option value="Idle">Idle</option>
+      <option value="Maintenance">Maintenance</option>
+      <option value="Sanitizing">Sanitizing</option>
+    </select>
+
+    <label>Notes (optional)</label>
+    <textarea id="bayNotes"></textarea>
+
+    <button class="submit-btn" id="submitBay">Log Greenhouse Update</button>
+  </div>
+
+  <!-- STORAGE FORM -->
+  <div class="card form-panel" id="form-storage" style="display:none;">
+    <h2>Log Storage Transaction</h2>
+    <p class="hint">Adds to that crop's running total — enter only the amount moved today, not the new balance.</p>
+
+    <label>Crop</label>
+    <select id="storeCrop">
+      <option>Carrots</option>
+      <option>Beets</option>
+      <option>Turnips</option>
+      <option>Cabbages</option>
+      <option>Winter Squash</option>
+      <option>Yams</option>
+      <option>Sweet Potatoes</option>
+      <option>Onions</option>
+    </select>
+
+    <div class="row2">
+      <div>
+        <label>Qty In (lb)</label>
+        <input type="number" id="storeIn" min="0" placeholder="0">
+      </div>
+      <div>
+        <label>Qty Drawn (lb)</label>
+        <input type="number" id="storeDrawn" min="0" placeholder="0">
+      </div>
+    </div>
+
+    <label>Storage Room</label>
+    <input type="text" id="storeRoom" placeholder="e.g. Cold Room 2">
+
+    <div class="row2">
+      <div>
+        <label>Temp (°F)</label>
+        <input type="number" id="storeTemp" placeholder="34–38">
+      </div>
+      <div>
+        <label>Humidity %</label>
+        <input type="number" id="storeHum" placeholder="0–100">
+      </div>
+    </div>
+
+    <label>Notes (optional)</label>
+    <textarea id="storeNotes"></textarea>
+
+    <button class="submit-btn" id="submitStorage">Log Storage Entry</button>
+  </div>
+
+  <!-- DAILY TASK FORM -->
+  <div class="card form-panel" id="form-task" style="display:none;">
+    <h2>Log Daily Task</h2>
+    <p class="hint">Record a task from today's seasonal protocol.</p>
+
+    <label>Date</label>
+    <input type="date" id="taskDate">
+
+    <div class="row2">
+      <div>
+        <label>Season</label>
+        <select id="taskSeason">
+          <option>Spring (Mar-Apr)</option>
+          <option>Summer (May-Aug)</option>
+          <option>Fall (Sep-Oct)</option>
+          <option>Winter (Nov-Feb)</option>
+        </select>
+      </div>
+      <div>
+        <label>Time Block</label>
+        <select id="taskBlock">
+          <option value="06:00-08:00">06:00-08:00</option>
+          <option value="08:00-11:00">08:00-11:00</option>
+          <option value="11:00-14:00">11:00-14:00</option>
+          <option value="14:00-17:00">14:00-17:00</option>
+          <option value="17:00-18:00">17:00-18:00</option>
+        </select>
+      </div>
+    </div>
+
+    <label>Task Description</label>
+    <textarea id="taskDesc" placeholder="What did you do?"></textarea>
+
+    <label>Assigned To</label>
+    <input type="text" id="taskWho" placeholder="Your name">
+
+    <label>Status</label>
+    <select id="taskStatus">
+      <option>Complete</option>
+      <option>In Progress</option>
+      <option>Pending</option>
+      <option>Skipped</option>
+    </select>
+
+    <label>Notes (optional)</label>
+    <textarea id="taskNotes"></textarea>
+
+    <button class="submit-btn" id="submitTask">Log Task</button>
+  </div>
+
+  <!-- ESCALATION FORM -->
+  <div class="card form-panel" id="form-escalation" style="display:none;">
+    <h2>Log Escalation</h2>
+    <p class="hint">Use this for any of the six end-of-day exception checks. It shows as open on the Founder Dashboard until resolved.</p>
+
+    <label>Check Type</label>
+    <select id="escType">
+      <option>SCR Deficit (&lt;1.00)</option>
+      <option>30-Min Wash Violation</option>
+      <option>Greenhouse Bay Idle (&gt;5 days)</option>
+      <option>Storage Humidity/Temp Drift</option>
+      <option>Pest / Disease Detection</option>
+      <option>Unassigned Bed Idle</option>
+    </select>
+
+    <label>Details</label>
+    <textarea id="escDetails" placeholder="What happened, and where"></textarea>
+
+    <div class="row2">
+      <div>
+        <label>Metric Value</label>
+        <input type="text" id="escMetric" placeholder="e.g. 0.70">
+      </div>
+      <div>
+        <label>Threshold</label>
+        <input type="text" id="escThreshold" placeholder="e.g. 1.00">
+      </div>
+    </div>
+
+    <label>Action Taken</label>
+    <textarea id="escAction" placeholder="What you did about it"></textarea>
+
+    <button class="submit-btn" id="submitEsc">Log Escalation</button>
+  </div>
+
+  <div class="toast" id="toast"></div>
+
+</div>
+
+<div class="config">
+  <div class="config-inner">
+    <input type="text" id="endpointInput" placeholder="Paste Apps Script /exec URL">
+    <button id="connectBtn">Save</button>
+  </div>
+</div>
+
+<script>
+  let endpoint = "";
+
+  // ---------- Tab switching ----------
+  document.querySelectorAll(".tab-btn").forEach(btn => {
+    btn.addEventListener("click", () => {
+      document.querySelectorAll(".tab-btn").forEach(b => b.classList.remove("active"));
+      btn.classList.add("active");
+      document.querySelectorAll(".form-panel").forEach(p => p.style.display = "none");
+      document.getElementById("form-" + btn.dataset.form).style.display = "block";
+    });
+  });
+
+  // ---------- Bed ID selects ----------
+  const padSel = document.getElementById("bedPad");
+  const bedSel = document.getElementById("bedNum");
+  for (let p = 1; p <= 10; p++) {
+    const o = document.createElement("option");
+    o.value = p; o.textContent = "Pad " + String(p).padStart(2,"0");
+    padSel.appendChild(o);
+  }
+  for (let b = 1; b <= 20; b++) {
+    const o = document.createElement("option");
+    o.value = b; o.textContent = "Bed " + String(b).padStart(2,"0");
+    bedSel.appendChild(o);
+  }
+  function updateBedPreview(){
+    const pad = String(padSel.value).padStart(2,"0");
+    const bed = String(bedSel.value).padStart(2,"0");
+    document.getElementById("bedIdPreview").textContent = `P${pad}-B${bed}`;
+  }
+  padSel.addEventListener("change", updateBedPreview);
+  bedSel.addEventListener("change", updateBedPreview);
+  updateBedPreview();
+
+  // ---------- Default today's date ----------
+  document.getElementById("taskDate").value = new Date().toISOString().slice(0,10);
+
+  // ---------- Toast ----------
+  function showToast(msg, ok){
+    const t = document.getElementById("toast");
+    t.textContent = msg;
+    t.className = "toast " + (ok ? "ok" : "err");
+    setTimeout(() => { t.className = "toast"; }, 3800);
+  }
+
+  // ---------- Connection ----------
+  function setConn(live, label){
+    document.getElementById("connDot").className = "conn-dot" + (live ? " live" : "");
+    document.getElementById("connLabel").textContent = label;
+  }
+  document.getElementById("connectBtn").addEventListener("click", () => {
+    endpoint = document.getElementById("endpointInput").value.trim().replace(/\/$/, "");
+    if (endpoint) setConn(true, "Endpoint saved — ready to submit");
+    else setConn(false, "Not connected — set endpoint above");
+  });
+
+  // ---------- Generic submit ----------
+  async function submitAction(action, body, btn){
+    if (!endpoint) { showToast("Set the Apps Script endpoint at the bottom first.", false); return; }
+    const original = btn.textContent;
+    btn.disabled = true; btn.textContent = "Submitting…";
+    try {
+      const res = await fetch(endpoint, {
+        method: "POST",
+        headers: { "Content-Type": "text/plain;charset=utf-8" }, // avoids CORS preflight on Apps Script
+        body: JSON.stringify({ action, ...body })
+      });
+      const json = await res.json();
+      if (!json.ok) throw new Error(json.error || "Server returned an error");
+      showToast("Saved.", true);
+    } catch (err) {
+      showToast("Failed: " + err.message, false);
+    } finally {
+      btn.disabled = false; btn.textContent = original;
+    }
+  }
+
+  // ---------- Bed ----------
+  document.getElementById("submitBed").addEventListener("click", (e) => {
+    const pad = String(padSel.value).padStart(2,"0");
+    const bed = String(bedSel.value).padStart(2,"0");
+    submitAction("updateBedState", {
+      bedId: `P${pad}-B${bed}`,
+      stateNum: Number(document.getElementById("bedState").value),
+      crop: document.getElementById("bedCrop").value || undefined,
+      notes: document.getElementById("bedNotes").value || undefined
+    }, e.target);
+  });
+
+  // ---------- Greenhouse ----------
+  document.getElementById("submitBay").addEventListener("click", (e) => {
+    submitAction("updateGreenhouseBay", {
+      bay: Number(document.getElementById("bayNum").value),
+      currentCrop: document.getElementById("bayCrop").value || undefined,
+      occupancyPct: document.getElementById("bayOcc").value ? Number(document.getElementById("bayOcc").value) : undefined,
+      status: document.getElementById("bayStatus").value,
+      notes: document.getElementById("bayNotes").value || undefined
+    }, e.target);
+  });
+
+  // ---------- Storage ----------
+  document.getElementById("submitStorage").addEventListener("click", (e) => {
+    submitAction("logStorageTransaction", {
+      crop: document.getElementById("storeCrop").value,
+      dateIn: new Date().toISOString().slice(0,10),
+      qtyIn: document.getElementById("storeIn").value ? Number(document.getElementById("storeIn").value) : undefined,
+      qtyDrawn: document.getElementById("storeDrawn").value ? Number(document.getElementById("storeDrawn").value) : undefined,
+      storageRoom: document.getElementById("storeRoom").value || undefined,
+      tempF: document.getElementById("storeTemp").value ? Number(document.getElementById("storeTemp").value) : undefined,
+      humidityPct: document.getElementById("storeHum").value ? Number(document.getElementById("storeHum").value) : undefined,
+      notes: document.getElementById("storeNotes").value || undefined
+    }, e.target);
+  });
+
+  // ---------- Task ----------
+  document.getElementById("submitTask").addEventListener("click", (e) => {
+    submitAction("logTask", {
+      date: document.getElementById("taskDate").value,
+      season: document.getElementById("taskSeason").value,
+      timeBlock: document.getElementById("taskBlock").value,
+      taskDescription: document.getElementById("taskDesc").value,
+      assignedTo: document.getElementById("taskWho").value || undefined,
+      status: document.getElementById("taskStatus").value,
+      notes: document.getElementById("taskNotes").value || undefined
+    }, e.target);
+  });
+
+  // ---------- Escalation ----------
+  document.getElementById("submitEsc").addEventListener("click", (e) => {
+    submitAction("logEscalation", {
+      date: new Date().toISOString().slice(0,10),
+      checkType: document.getElementById("escType").value,
+      details: document.getElementById("escDetails").value,
+      metricValue: document.getElementById("escMetric").value || undefined,
+      threshold: document.getElementById("escThreshold").value || undefined,
+      actionTaken: document.getElementById("escAction").value || undefined
+    }, e.target);
+  });
+</script>
+</body>
+</html>
