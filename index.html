@@ -2,451 +2,983 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
-<title>Ngapori Ranch — Field Data Entry</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<title>Ngapori Ranch — Field Board</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@500;600&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap" rel="stylesheet">
 <style>
   :root{
-    --bg:#EAE6D9; --panel:#FBF9F2; --panel-2:#F3EFE1; --ink:#2B2A22; --ink-soft:#6B6857;
-    --forest:#1B4332; --forest-mid:#2D6A4F; --gold:#A9820A; --gold-fill:#F3E4B0;
-    --rust:#9C3B2C; --rust-fill:#F1D9D1; --sage:#8FA878; --sage-fill:#DCE6D2; --line:#D9D2BC;
+    --soil:#2B2620;
+    --soil-2:#3A332B;
+    --sage:#7C8B6F;
+    --sage-dark:#5E6B54;
+    --wheat:#D9C89E;
+    --wheat-dim:#EDE3C8;
+    --rust:#A63D2F;
+    --rust-dark:#832F24;
+    --cream:#F6F1E4;
+    --ink:#22201B;
+    --line:#DCD0AC;
+    --ok:#5E7A4E;
+    --radius:10px;
   }
-  *{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
-  html,body{margin:0; padding:0;}
-  body{background:var(--bg); color:var(--ink); font-family:'Inter',sans-serif; min-height:100vh; padding-bottom:100px;}
-  .wrap{max-width:520px; margin:0 auto; padding:16px 16px 0;}
-
-  /* ---------- Login screen ---------- */
-  .login-wrap{max-width:380px; margin:0 auto; padding:60px 20px; min-height:100vh;}
-  .login-card{background:var(--panel); border:1px solid var(--line); border-radius:14px; padding:28px 24px; text-align:center;}
-  .login-card .eyebrow{font-family:'IBM Plex Mono',monospace; font-size:11px; letter-spacing:0.1em; text-transform:uppercase; color:var(--forest-mid); margin:0 0 6px;}
-  .login-card h1{font-size:21px; color:var(--forest); margin:0 0 22px;}
-  .login-card label{display:block; text-align:left; font-family:'IBM Plex Mono',monospace; font-size:10.5px; text-transform:uppercase; letter-spacing:0.06em; color:var(--ink-soft); margin:14px 0 6px;}
-  .login-card input{width:100%; padding:13px 12px; border-radius:8px; border:1px solid var(--line); background:#fff; font-size:16px; text-align:center;}
-  .login-btn{width:100%; margin-top:20px; padding:15px; border:none; border-radius:9px; background:var(--forest); color:#fff; font-size:16px; font-weight:700; cursor:pointer;}
-  .login-btn:disabled{background:var(--ink-soft);}
-  .login-err{margin-top:12px; padding:10px 12px; border-radius:8px; background:var(--rust-fill); color:var(--rust); font-size:13px; display:none;}
-  .login-endpoint{margin-top:22px; padding-top:18px; border-top:1px dashed var(--line);}
-  .login-endpoint label{text-align:center;}
-  .login-endpoint input{font-family:'IBM Plex Mono',monospace; font-size:12px;}
-
-  /* ---------- Main app ---------- */
-  header{padding:6px 0 14px; display:flex; justify-content:space-between; align-items:flex-start; gap:10px;}
-  .eyebrow{font-family:'IBM Plex Mono',monospace; font-size:11px; letter-spacing:0.1em; text-transform:uppercase; color:var(--forest-mid); margin:0 0 4px;}
-  h1{font-size:22px; font-weight:700; color:var(--forest); margin:0 0 8px;}
-  .who{font-family:'IBM Plex Mono',monospace; font-size:11.5px; color:var(--ink-soft);}
-  .role-badge{display:inline-block; padding:2px 8px; border-radius:5px; background:var(--sage-fill); color:#2F4A22; font-weight:600; margin-left:4px;}
-  .logout-btn{background:none; border:1px solid var(--line); border-radius:7px; padding:7px 12px; font-family:'IBM Plex Mono',monospace; font-size:11px; color:var(--ink-soft); cursor:pointer; white-space:nowrap;}
-
-  .tabs{display:grid; grid-template-columns:repeat(3,1fr); gap:8px; margin-bottom:16px;}
-  .tab-btn{padding:12px 6px; border-radius:10px; border:1px solid var(--line); background:var(--panel); font-size:12.5px; font-weight:600; color:var(--ink-soft); text-align:center; cursor:pointer; line-height:1.25;}
-  .tab-btn.active{background:var(--forest); color:#fff; border-color:var(--forest);}
-  .tab-btn.hidden{display:none;}
-
-  .card{background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:18px; margin-bottom:16px;}
-  .card h2{font-size:15px; margin:0 0 4px; color:var(--forest);}
-  .card p.hint{font-size:12.5px; color:var(--ink-soft); margin:0 0 16px;}
-
-  label{display:block; font-family:'IBM Plex Mono',monospace; font-size:10.5px; text-transform:uppercase; letter-spacing:0.06em; color:var(--ink-soft); margin:14px 0 6px;}
-  label:first-of-type{margin-top:0;}
-  select, input[type=text], input[type=number], input[type=date], textarea{
-    width:100%; padding:13px 12px; border-radius:8px; border:1px solid var(--line); background:#fff; color:var(--ink);
-    font-family:'Inter',sans-serif; font-size:16px; appearance:none; -webkit-appearance:none;
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    background:var(--cream);
+    color:var(--ink);
+    font-family:'Inter',system-ui,sans-serif;
+    -webkit-font-smoothing:antialiased;
+    padding-bottom:84px;
   }
-  select{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='9'%3E%3Cpath d='M1 1l6 6 6-6' stroke='%236B6857' stroke-width='2' fill='none' fill-rule='evenodd'/%3E%3C/svg%3E"); background-repeat:no-repeat; background-position:right 14px center; padding-right:36px;}
-  textarea{resize:vertical; min-height:70px; font-size:15px;}
-  .row2{display:grid; grid-template-columns:1fr 1fr; gap:10px;}
-  .bed-id-preview{margin-top:8px; font-family:'IBM Plex Mono',monospace; font-size:13px; font-weight:600; color:var(--forest); background:var(--sage-fill); border-radius:6px; padding:8px 10px; display:inline-block;}
+  h1,h2,h3,.label-font{
+    font-family:'Barlow Condensed',sans-serif;
+    text-transform:uppercase;
+    letter-spacing:.04em;
+  }
+  .mono{font-family:'IBM Plex Mono',monospace;}
 
-  .submit-btn{width:100%; margin-top:20px; padding:15px; border:none; border-radius:9px; background:var(--forest); color:#fff; font-size:16px; font-weight:700; cursor:pointer;}
-  .submit-btn:active{background:var(--forest-mid);}
-  .submit-btn:disabled{background:var(--ink-soft); cursor:not-allowed;}
+  /* ---------- Header / masthead ---------- */
+  header.masthead{
+    background:var(--soil);
+    color:var(--wheat-dim);
+    padding:18px 16px 14px;
+    border-bottom:4px solid var(--sage);
+  }
+  header.masthead .eyebrow{
+    font-family:'Barlow Condensed',sans-serif;
+    font-size:12px;
+    letter-spacing:.18em;
+    color:var(--sage);
+    font-weight:600;
+    text-transform:uppercase;
+  }
+  header.masthead h1{
+    margin:2px 0 0;
+    font-size:28px;
+    font-weight:700;
+    color:var(--cream);
+    line-height:1.05;
+  }
+  header.masthead .sub{
+    font-size:12.5px;
+    color:#BDB093;
+    margin-top:4px;
+  }
+  #connBadge{
+    display:inline-block;
+    margin-top:8px;
+    font-family:'IBM Plex Mono',monospace;
+    font-size:11px;
+    padding:3px 8px;
+    border-radius:20px;
+    background:rgba(124,139,111,.18);
+    border:1px solid var(--sage);
+    color:var(--wheat);
+  }
+  #connBadge.offline{
+    background:rgba(166,61,47,.18);
+    border-color:var(--rust);
+    color:#EBC9C2;
+  }
 
-  .toast{position:fixed; left:16px; right:16px; bottom:20px; max-width:488px; margin:0 auto; padding:13px 16px; border-radius:10px; font-size:14px; font-weight:600; display:none; z-index:20; box-shadow:0 4px 16px rgba(0,0,0,0.15);}
-  .toast.ok{display:block; background:var(--sage-fill); color:#2F4A22; border:1px solid var(--sage);}
-  .toast.err{display:block; background:var(--rust-fill); color:var(--rust); border:1px solid var(--rust);}
+  /* ---------- Field board tally strip (signature element) ---------- */
+  .board{
+    margin:14px 16px 0;
+    background:var(--soil-2);
+    border-radius:var(--radius);
+    padding:12px 12px 10px;
+    overflow-x:auto;
+    white-space:nowrap;
+    -webkit-overflow-scrolling:touch;
+    border:1px solid #4A4238;
+  }
+  .board .board-title{
+    color:#BDB093;
+    font-size:11px;
+    letter-spacing:.14em;
+    font-weight:600;
+    margin-bottom:8px;
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+  }
+  .board .board-title button{
+    background:none;border:none;color:var(--sage);font-family:'Barlow Condensed',sans-serif;
+    font-size:12px;letter-spacing:.08em;text-transform:uppercase;cursor:pointer;padding:2px 4px;
+  }
+  .chip-row{display:inline-flex;gap:8px;}
+  .chip{
+    display:inline-flex;
+    flex-direction:column;
+    align-items:center;
+    justify-content:center;
+    min-width:74px;
+    padding:8px 10px;
+    border-radius:8px;
+    background:var(--soil);
+    border:1px solid #4A4238;
+  }
+  .chip .n{
+    font-family:'IBM Plex Mono',monospace;
+    font-size:20px;
+    font-weight:600;
+    color:var(--wheat);
+    line-height:1;
+  }
+  .chip .l{
+    font-size:9.5px;
+    color:#9C907A;
+    text-transform:uppercase;
+    letter-spacing:.06em;
+    margin-top:4px;
+    white-space:normal;
+    text-align:center;
+    max-width:70px;
+  }
+  .chip.alert .n{color:#E7A79B;}
 
-  .config{position:fixed; bottom:0; left:0; right:0; background:var(--panel-2); border-top:1px solid var(--line); padding:10px 16px; z-index:10;}
-  .config-inner{max-width:520px; margin:0 auto; display:flex; gap:8px; align-items:center;}
-  .config input{flex:1; padding:9px 10px; border-radius:7px; border:1px solid var(--line); font-family:'IBM Plex Mono',monospace; font-size:12px; background:#fff; color:var(--ink);}
-  .config button{padding:9px 14px; border-radius:7px; border:none; background:var(--forest); color:#fff; font-family:'IBM Plex Mono',monospace; font-size:12px; font-weight:600; cursor:pointer; white-space:nowrap;}
+  /* ---------- Main content ---------- */
+  main{padding:16px;max-width:640px;margin:0 auto;}
+  section.view{display:none;}
+  section.view.active{display:block;animation:fadeIn .18s ease;}
+  @keyframes fadeIn{from{opacity:0;transform:translateY(4px);}to{opacity:1;transform:translateY(0);}}
 
-  /* Activity log */
-  .activity-item{border-left:3px solid var(--forest-mid); background:var(--panel-2); border-radius:0 6px 6px 0; padding:10px 12px; margin-bottom:8px;}
-  .activity-item .a-action{font-weight:600; font-size:12.5px; color:var(--forest);}
-  .activity-item .a-summary{font-size:13px; margin-top:2px;}
-  .activity-item .a-meta{font-family:'IBM Plex Mono',monospace; font-size:10.5px; color:var(--ink-soft); margin-top:4px;}
-  .activity-empty{color:var(--ink-soft); font-size:13px; font-style:italic;}
-  .scope-toggle{display:flex; gap:8px; margin-bottom:14px;}
-  .scope-toggle button{flex:1; padding:9px; border-radius:8px; border:1px solid var(--line); background:#fff; font-size:12.5px; font-weight:600; color:var(--ink-soft); cursor:pointer;}
-  .scope-toggle button.active{background:var(--forest); color:#fff; border-color:var(--forest);}
+  .view-title{
+    display:flex;align-items:baseline;justify-content:space-between;margin-bottom:12px;
+  }
+  .view-title h2{font-size:22px;margin:0;color:var(--soil);}
+  .view-title .count-badge{
+    font-family:'IBM Plex Mono',monospace;font-size:12px;color:var(--sage-dark);
+  }
 
-  .hidden{display:none !important;}
+  .card{
+    background:#fff;
+    border:1px solid var(--line);
+    border-radius:var(--radius);
+    padding:14px;
+    margin-bottom:12px;
+  }
+
+  .field{margin-bottom:14px;}
+  .field label{
+    display:block;
+    font-family:'Barlow Condensed',sans-serif;
+    font-size:13px;
+    letter-spacing:.05em;
+    text-transform:uppercase;
+    color:var(--sage-dark);
+    font-weight:600;
+    margin-bottom:5px;
+  }
+  input,select,textarea{
+    width:100%;
+    padding:11px 10px;
+    border-radius:8px;
+    border:1.5px solid var(--line);
+    background:var(--wheat-dim);
+    font-family:'Inter',sans-serif;
+    font-size:16px;
+    color:var(--ink);
+  }
+  input:focus,select:focus,textarea:focus{
+    outline:2px solid var(--sage);
+    outline-offset:1px;
+    background:#fff;
+  }
+  textarea{resize:vertical;min-height:60px;}
+  .row2{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
+
+  .btn{
+    display:inline-flex;align-items:center;justify-content:center;gap:6px;
+    width:100%;
+    padding:13px 14px;
+    border-radius:9px;
+    border:none;
+    font-family:'Barlow Condensed',sans-serif;
+    font-size:16px;
+    font-weight:600;
+    letter-spacing:.04em;
+    text-transform:uppercase;
+    cursor:pointer;
+    background:var(--sage);
+    color:#fff;
+  }
+  .btn:active{background:var(--sage-dark);}
+  .btn.secondary{background:var(--wheat-dim);color:var(--soil);border:1.5px solid var(--line);}
+  .btn.danger{background:var(--rust);}
+  .btn:disabled{opacity:.55;cursor:default;}
+
+  .pill-select{display:flex;flex-wrap:wrap;gap:6px;}
+  .pill{
+    padding:7px 12px;border-radius:20px;border:1.5px solid var(--line);
+    background:var(--wheat-dim);font-size:13px;cursor:pointer;color:var(--ink);
+    font-family:'Barlow Condensed',sans-serif;letter-spacing:.02em;text-transform:uppercase;
+  }
+  .pill.active{background:var(--sage);border-color:var(--sage);color:#fff;}
+
+  .list-item{
+    display:flex;justify-content:space-between;align-items:center;
+    padding:12px 4px;border-bottom:1px solid var(--line);cursor:pointer;
+  }
+  .list-item:last-child{border-bottom:none;}
+  .list-item .li-id{font-family:'IBM Plex Mono',monospace;font-weight:600;font-size:14px;}
+  .list-item .li-meta{font-size:12px;color:#8A7F65;margin-top:2px;}
+  .state-tag{
+    font-size:11px;padding:3px 9px;border-radius:20px;font-family:'Barlow Condensed',sans-serif;
+    text-transform:uppercase;letter-spacing:.04em;font-weight:600;background:var(--wheat-dim);color:var(--sage-dark);
+    border:1px solid var(--line);
+  }
+
+  .search-bar{
+    display:flex;gap:8px;margin-bottom:10px;
+  }
+  .search-bar input{flex:1;}
+
+  .empty{
+    text-align:center;padding:40px 16px;color:#9C907A;font-size:14px;
+  }
+  .empty .big{font-size:34px;display:block;margin-bottom:8px;}
+
+  .demand-row{border-bottom:1px solid var(--line);padding:10px 0;}
+  .demand-row:last-child{border-bottom:none;}
+  .demand-row .crop-name{font-family:'Barlow Condensed',sans-serif;font-weight:600;font-size:15px;margin-bottom:6px;color:var(--soil);}
+  .demand-row .row3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;}
+  .demand-row .row3 input{padding:8px;font-size:14px;}
+  .demand-row .mini-label{font-size:10px;text-align:center;color:#9C907A;margin-top:2px;text-transform:uppercase;letter-spacing:.05em;}
+
+  /* ---------- Bottom tab bar ---------- */
+  nav.tabbar{
+    position:fixed;bottom:0;left:0;right:0;
+    background:var(--soil);
+    display:flex;
+    border-top:3px solid var(--sage);
+    z-index:20;
+    padding-bottom:env(safe-area-inset-bottom);
+  }
+  nav.tabbar button{
+    flex:1;background:none;border:none;color:#9C907A;
+    padding:9px 2px 8px;display:flex;flex-direction:column;align-items:center;gap:3px;
+    font-family:'Barlow Condensed',sans-serif;font-size:10.5px;letter-spacing:.02em;
+    text-transform:uppercase;cursor:pointer;
+  }
+  nav.tabbar button .ic{font-size:18px;line-height:1;}
+  nav.tabbar button.active{color:var(--wheat);}
+  nav.tabbar button.active .ic{color:var(--sage);}
+
+  /* ---------- Toast ---------- */
+  #toast{
+    position:fixed;left:16px;right:16px;bottom:92px;
+    background:var(--soil);color:var(--cream);
+    padding:12px 16px;border-radius:9px;
+    font-size:14px;text-align:center;
+    box-shadow:0 6px 20px rgba(0,0,0,.25);
+    opacity:0;transform:translateY(10px);pointer-events:none;
+    transition:all .25s ease;
+    z-index:30;
+    border-left:4px solid var(--sage);
+  }
+  #toast.show{opacity:1;transform:translateY(0);}
+  #toast.err{border-left-color:var(--rust);}
+
+  @media (min-width:700px){
+    main{padding:24px;}
+    .row3{grid-template-columns:repeat(3,1fr);}
+  }
 </style>
 </head>
 <body>
 
-<!-- ============ LOGIN SCREEN ============ -->
-<div class="login-wrap" id="loginScreen">
-  <div class="login-card">
-    <p class="eyebrow">Ngapori Ranch · Vegetable CASN</p>
-    <h1>Field Sign-In</h1>
+<header class="masthead">
+  <div class="eyebrow">Ngapori Ranch · Vegetable CASN</div>
+  <h1>Field Board</h1>
+  <div class="sub">Work-order level data entry — beds, bays, storage, demand, tasks &amp; escalations</div>
+  <span id="connBadge" class="mono">connecting…</span>
+</header>
 
-    <label>Username</label>
-    <input type="text" id="loginUsername" autocomplete="username" placeholder="e.g. worker1">
-    <label>PIN</label>
-    <input type="text" id="loginPin" inputmode="numeric" autocomplete="current-password" placeholder="••••">
-
-    <button class="login-btn" id="loginBtn">Sign In</button>
-    <div class="login-err" id="loginErr"></div>
-
-    <div class="login-endpoint">
-      <label>Apps Script /exec URL</label>
-      <input type="text" id="endpointInput" placeholder="https://script.google.com/macros/s/XXXXX/exec">
-    </div>
+<div class="board">
+  <div class="board-title">
+    <span>Bed state tally · 200 beds</span>
+    <button id="refreshBoard" type="button">Refresh</button>
+  </div>
+  <div class="chip-row" id="chipRow">
+    <div class="chip"><span class="n">—</span><span class="l">Loading</span></div>
   </div>
 </div>
 
-<!-- ============ MAIN APP ============ -->
-<div class="wrap hidden" id="appScreen">
+<main>
 
-  <header>
-    <div>
-      <p class="eyebrow">Ngapori Ranch · Vegetable CASN</p>
-      <h1>Field Data Entry</h1>
-      <div class="who"><span id="whoName"></span><span class="role-badge" id="whoRole"></span></div>
+  <!-- ============ OVERVIEW ============ -->
+  <section class="view active" id="view-overview">
+    <div class="view-title"><h2>Overview</h2><span class="count-badge mono" id="asOfLabel"></span></div>
+    <div class="card">
+      <div class="field" style="margin-bottom:8px;">
+        <label>Greenhouse bays</label>
+      </div>
+      <div class="chip-row" id="bayChips" style="display:flex;flex-wrap:wrap;"></div>
     </div>
-    <button class="logout-btn" id="logoutBtn">Sign Out</button>
-  </header>
-
-  <div class="tabs" id="tabs">
-    <div class="tab-btn active" data-form="bed">Bed State</div>
-    <div class="tab-btn" data-form="greenhouse">Greenhouse</div>
-    <div class="tab-btn" data-form="storage">Storage</div>
-    <div class="tab-btn" data-form="task">Daily Task</div>
-    <div class="tab-btn" data-form="escalation">Escalation</div>
-    <div class="tab-btn" data-form="activity">My Activity</div>
-  </div>
-
-  <!-- BED STATE FORM -->
-  <div class="card form-panel" id="form-bed">
-    <h2>Update Bed State</h2>
-    <p class="hint">Pick the pad and bed, then set its new state. Logs today's date automatically.</p>
-    <div class="row2">
-      <div><label>Pad #</label><select id="bedPad"></select></div>
-      <div><label>Bed #</label><select id="bedNum"></select></div>
+    <div class="card">
+      <p style="margin:0 0 10px;font-size:13.5px;color:#6B6250;">Jump straight to a task:</p>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+        <button class="btn secondary" data-goto="beds">Update a bed</button>
+        <button class="btn secondary" data-goto="greenhouse">Update a bay</button>
+        <button class="btn secondary" data-goto="storage">Log storage</button>
+        <button class="btn secondary" data-goto="demand">Weekly demand</button>
+        <button class="btn secondary" data-goto="tasks">Log a task</button>
+        <button class="btn secondary" data-goto="escalations">Log escalation</button>
+      </div>
     </div>
-    <div class="bed-id-preview" id="bedIdPreview">P01-B01</div>
-    <label>New State</label>
-    <select id="bedState">
-      <option value="1">1 — Available</option><option value="2">2 — Planted</option>
-      <option value="3">3 — Growing</option><option value="4">4 — Harvestable</option>
-      <option value="5">5 — Harvested</option><option value="6">6 — Cleanup</option>
-      <option value="7">7 — Cover Crop / Rest</option><option value="8">8 — Replant / Prep</option>
-    </select>
-    <label>Crop / Variety (optional)</label>
-    <input type="text" id="bedCrop" placeholder="e.g. Carrots — Nantes">
-    <label>Notes (optional)</label>
-    <textarea id="bedNotes" placeholder="Anything the manager should know"></textarea>
-    <button class="submit-btn" id="submitBed">Log Bed Update</button>
-  </div>
+  </section>
 
-  <!-- GREENHOUSE FORM -->
-  <div class="card form-panel" id="form-greenhouse" style="display:none;">
-    <h2>Update Greenhouse Bay</h2>
-    <p class="hint">Sets status and occupancy for one bay.</p>
-    <label>Bay #</label>
-    <select id="bayNum">
-      <option value="1">Bay 1 — Winter Greens</option><option value="2">Bay 2 — Winter Greens</option>
-      <option value="3">Bay 3 — Winter Greens</option><option value="4">Bay 4 — Winter Greens</option>
-      <option value="5">Bay 5 — Winter Greens</option><option value="6">Bay 6 — Winter Greens</option>
-      <option value="7">Bay 7 — African Greens</option><option value="8">Bay 8 — African Greens</option>
-      <option value="9">Bay 9 — Aromatics / Microgreens</option><option value="10">Bay 10 — Nursery / Germination</option>
-    </select>
-    <label>Current Crop</label>
-    <input type="text" id="bayCrop" placeholder="e.g. Lettuce trays — batch 4">
-    <label>Occupancy %</label>
-    <input type="number" id="bayOcc" min="0" max="100" placeholder="0–100">
-    <label>Status</label>
-    <select id="bayStatus"><option value="Active">Active</option><option value="Idle">Idle</option><option value="Maintenance">Maintenance</option><option value="Sanitizing">Sanitizing</option></select>
-    <label>Notes (optional)</label>
-    <textarea id="bayNotes"></textarea>
-    <button class="submit-btn" id="submitBay">Log Greenhouse Update</button>
-  </div>
-
-  <!-- STORAGE FORM -->
-  <div class="card form-panel" id="form-storage" style="display:none;">
-    <h2>Log Storage Transaction</h2>
-    <p class="hint">Adds to that crop's running total — enter only the amount moved today, not the new balance.</p>
-    <label>Crop</label>
-    <select id="storeCrop"><option>Carrots</option><option>Beets</option><option>Turnips</option><option>Cabbages</option><option>Winter Squash</option><option>Yams</option><option>Sweet Potatoes</option><option>Onions</option></select>
-    <div class="row2">
-      <div><label>Qty In (lb)</label><input type="number" id="storeIn" min="0" placeholder="0"></div>
-      <div><label>Qty Drawn (lb)</label><input type="number" id="storeDrawn" min="0" placeholder="0"></div>
+  <!-- ============ BED MASTER ============ -->
+  <section class="view" id="view-beds">
+    <div class="view-title"><h2>Bed Master</h2><span class="count-badge mono" id="bedCountLabel"></span></div>
+    <div id="bedListWrap">
+      <div class="search-bar">
+        <input type="text" id="bedSearch" placeholder="Search bed ID or crop…">
+      </div>
+      <div class="card" style="padding:4px 10px;">
+        <div id="bedList"></div>
+      </div>
     </div>
-    <label>Storage Room</label>
-    <input type="text" id="storeRoom" placeholder="e.g. Cold Room 2">
-    <div class="row2">
-      <div><label>Temp (°F)</label><input type="number" id="storeTemp" placeholder="34–38"></div>
-      <div><label>Humidity %</label><input type="number" id="storeHum" placeholder="0–100"></div>
+
+    <div id="bedFormWrap" style="display:none;">
+      <div class="card">
+        <button class="btn secondary" style="margin-bottom:14px;" id="bedBack">&larr; Back to bed list</button>
+        <div class="field"><label>Bed ID</label><input type="text" id="bedId" disabled class="mono"></div>
+        <div class="row2">
+          <div class="field"><label>Pad</label><input type="text" id="bedPad" disabled></div>
+          <div class="field"><label>Default crop</label><input type="text" id="bedDefaultCrop" disabled></div>
+        </div>
+        <div class="field">
+          <label>Crop / variety planted</label>
+          <input type="text" id="bedCropVariety" placeholder="e.g. Romaine lettuce">
+        </div>
+        <div class="field">
+          <label>Bed state</label>
+          <div class="pill-select" id="bedStatePills"></div>
+        </div>
+        <div class="field">
+          <label>Date entered state</label>
+          <input type="date" id="bedDate">
+        </div>
+        <div class="field">
+          <label>Notes</label>
+          <textarea id="bedNotes" placeholder="Anything the next shift should know"></textarea>
+        </div>
+        <button class="btn" id="bedSave">Save bed update</button>
+      </div>
     </div>
-    <label>Notes (optional)</label>
-    <textarea id="storeNotes"></textarea>
-    <button class="submit-btn" id="submitStorage">Log Storage Entry</button>
-  </div>
+  </section>
 
-  <!-- DAILY TASK FORM -->
-  <div class="card form-panel" id="form-task" style="display:none;">
-    <h2>Log Daily Task</h2>
-    <p class="hint">Record a task from today's seasonal protocol.</p>
-    <label>Date</label>
-    <input type="date" id="taskDate">
-    <div class="row2">
-      <div><label>Season</label><select id="taskSeason"><option>Spring (Mar-Apr)</option><option>Summer (May-Aug)</option><option>Fall (Sep-Oct)</option><option>Winter (Nov-Feb)</option></select></div>
-      <div><label>Time Block</label><select id="taskBlock"><option value="06:00-08:00">06:00-08:00</option><option value="08:00-11:00">08:00-11:00</option><option value="11:00-14:00">11:00-14:00</option><option value="14:00-17:00">14:00-17:00</option><option value="17:00-18:00">17:00-18:00</option></select></div>
+  <!-- ============ GREENHOUSE ============ -->
+  <section class="view" id="view-greenhouse">
+    <div class="view-title"><h2>Greenhouse Bays</h2><span class="count-badge mono">10 bays</span></div>
+    <div id="ghListWrap">
+      <div class="card" style="padding:4px 10px;"><div id="ghList"></div></div>
     </div>
-    <label>Task Description</label>
-    <textarea id="taskDesc" placeholder="What did you do?"></textarea>
-    <label>Status</label>
-    <select id="taskStatus"><option>Complete</option><option>In Progress</option><option>Pending</option><option>Skipped</option></select>
-    <label>Notes (optional)</label>
-    <textarea id="taskNotes"></textarea>
-    <button class="submit-btn" id="submitTask">Log Task</button>
-  </div>
-
-  <!-- ESCALATION FORM -->
-  <div class="card form-panel" id="form-escalation" style="display:none;">
-    <h2>Log Escalation</h2>
-    <p class="hint">Use this for any of the six end-of-day exception checks. It shows as open on the Founder Dashboard until resolved.</p>
-    <label>Check Type</label>
-    <select id="escType">
-      <option>SCR Deficit (&lt;1.00)</option><option>30-Min Wash Violation</option>
-      <option>Greenhouse Bay Idle (&gt;5 days)</option><option>Storage Humidity/Temp Drift</option>
-      <option>Pest / Disease Detection</option><option>Unassigned Bed Idle</option>
-    </select>
-    <label>Details</label>
-    <textarea id="escDetails" placeholder="What happened, and where"></textarea>
-    <div class="row2">
-      <div><label>Metric Value</label><input type="text" id="escMetric" placeholder="e.g. 0.70"></div>
-      <div><label>Threshold</label><input type="text" id="escThreshold" placeholder="e.g. 1.00"></div>
+    <div id="ghFormWrap" style="display:none;">
+      <div class="card">
+        <button class="btn secondary" style="margin-bottom:14px;" id="ghBack">&larr; Back to bay list</button>
+        <div class="row2">
+          <div class="field"><label>Bay #</label><input type="text" id="ghBayNum" disabled class="mono"></div>
+          <div class="field"><label>Purpose</label><input type="text" id="ghPurpose" disabled></div>
+        </div>
+        <div class="field"><label>Current crop</label><input type="text" id="ghCrop" placeholder="e.g. Spinach"></div>
+        <div class="field"><label>Occupancy %</label><input type="number" id="ghOccupancy" min="0" max="100" placeholder="0–100"></div>
+        <div class="field">
+          <label>Status</label>
+          <div class="pill-select" id="ghStatusPills"></div>
+        </div>
+        <div class="field"><label>Date status set</label><input type="date" id="ghDate"></div>
+        <div class="field"><label>Notes</label><textarea id="ghNotes"></textarea></div>
+        <button class="btn" id="ghSave">Save bay update</button>
+      </div>
     </div>
-    <label>Action Taken</label>
-    <textarea id="escAction" placeholder="What you did about it"></textarea>
-    <button class="submit-btn" id="submitEsc">Log Escalation</button>
-  </div>
+  </section>
 
-  <!-- ACTIVITY LOG -->
-  <div class="card form-panel" id="form-activity" style="display:none;">
-    <h2>Activity Log</h2>
-    <p class="hint">Everything you've logged through this app, most recent first.</p>
-    <div class="scope-toggle" id="scopeToggle">
-      <button class="active" data-scope="mine">My Activity</button>
-      <button class="hidden" id="teamScopeBtn" data-scope="team">Whole Team</button>
+  <!-- ============ STORAGE ============ -->
+  <section class="view" id="view-storage">
+    <div class="view-title"><h2>Storage Reserve</h2><span class="count-badge mono">Channel C</span></div>
+    <div class="card">
+      <div class="field">
+        <label>Crop</label>
+        <select id="stCrop"></select>
+      </div>
+      <div class="field"><label>Date</label><input type="date" id="stDate"></div>
+      <div class="row2">
+        <div class="field"><label>Qty in (lb)</label><input type="number" id="stQtyIn" min="0" placeholder="0"></div>
+        <div class="field"><label>Qty drawn (lb)</label><input type="number" id="stQtyDrawn" min="0" placeholder="0"></div>
+      </div>
+      <div class="field"><label>Storage room</label><input type="text" id="stRoom" placeholder="e.g. Cold Room 2"></div>
+      <div class="row2">
+        <div class="field"><label>Temp (°F)</label><input type="number" id="stTemp" placeholder="34–38"></div>
+        <div class="field"><label>Humidity %</label><input type="number" id="stHumidity" min="0" max="100"></div>
+      </div>
+      <div class="field"><label>Notes</label><textarea id="stNotes"></textarea></div>
+      <button class="btn" id="stSave">Log storage transaction</button>
     </div>
-    <div id="activityList"></div>
-  </div>
+  </section>
 
-  <div class="toast" id="toast"></div>
-</div>
+  <!-- ============ WEEKLY DEMAND ============ -->
+  <section class="view" id="view-demand">
+    <div class="view-title"><h2>Weekly Demand &amp; SCR</h2><span class="count-badge mono">Set every Monday</span></div>
+    <div class="card">
+      <div class="field"><label>Week of</label><input type="date" id="wdWeekOf"></div>
+    </div>
+    <div class="card" id="wdRows"></div>
+    <button class="btn" id="wdSave">Save weekly demand</button>
+  </section>
 
-<div class="config hidden" id="configBar">
-  <div class="config-inner">
-    <span style="font-family:'IBM Plex Mono',monospace; font-size:11px; color:var(--ink-soft);" id="configEndpointLabel">—</span>
-  </div>
-</div>
+  <!-- ============ DAILY TASK LOG ============ -->
+  <section class="view" id="view-tasks">
+    <div class="view-title"><h2>Daily Task Log</h2></div>
+    <div class="card">
+      <div class="field"><label>Date</label><input type="date" id="tkDate"></div>
+      <div class="field">
+        <label>Season</label>
+        <div class="pill-select" id="tkSeasonPills"></div>
+      </div>
+      <div class="field">
+        <label>Time block</label>
+        <div class="pill-select" id="tkBlockPills">
+          <div class="pill" data-val="06:00-08:00">06:00–08:00</div>
+          <div class="pill" data-val="08:00-11:00">08:00–11:00</div>
+          <div class="pill" data-val="11:00-14:00">11:00–14:00</div>
+          <div class="pill" data-val="14:00-17:00">14:00–17:00</div>
+          <div class="pill" data-val="17:00-18:00">17:00–18:00</div>
+        </div>
+      </div>
+      <div class="field"><label>Task description</label><textarea id="tkDesc" placeholder="What was done"></textarea></div>
+      <div class="field"><label>Assigned to</label><input type="text" id="tkAssigned" placeholder="Worker name"></div>
+      <div class="field">
+        <label>Status</label>
+        <div class="pill-select" id="tkStatusPills"></div>
+      </div>
+      <div class="field"><label>Notes</label><textarea id="tkNotes"></textarea></div>
+      <button class="btn" id="tkSave">Log task</button>
+    </div>
+  </section>
+
+  <!-- ============ ESCALATION LOG ============ -->
+  <section class="view" id="view-escalations">
+    <div class="view-title"><h2>Escalation Log</h2><span class="count-badge mono">17:00 daily check</span></div>
+    <div class="card">
+      <div class="field"><label>Date</label><input type="date" id="esDate"></div>
+      <div class="field">
+        <label>Check type</label>
+        <div class="pill-select" id="esTypePills"></div>
+      </div>
+      <div class="field"><label>Details</label><textarea id="esDetails" placeholder="What triggered this"></textarea></div>
+      <div class="row2">
+        <div class="field"><label>Metric value</label><input type="text" id="esMetric" placeholder="e.g. 0.86"></div>
+        <div class="field"><label>Threshold</label><input type="text" id="esThreshold" placeholder="e.g. 1.00"></div>
+      </div>
+      <div class="field"><label>Action taken</label><textarea id="esAction"></textarea></div>
+      <div class="field">
+        <label>Resolved</label>
+        <div class="pill-select" id="esResolvedPills"></div>
+      </div>
+      <div class="field"><label>Resolved date</label><input type="date" id="esResolvedDate"></div>
+      <button class="btn danger" id="esSave">Log escalation</button>
+    </div>
+  </section>
+
+</main>
+
+<div id="toast"></div>
+
+<nav class="tabbar">
+  <button data-view="overview" class="active"><span class="ic">&#9678;</span>Board</button>
+  <button data-view="beds"><span class="ic">&#9634;</span>Beds</button>
+  <button data-view="greenhouse"><span class="ic">&#9721;</span>Bays</button>
+  <button data-view="storage"><span class="ic">&#9707;</span>Storage</button>
+  <button data-view="demand"><span class="ic">&#8776;</span>Demand</button>
+  <button data-view="tasks"><span class="ic">&#10003;</span>Tasks</button>
+  <button data-view="escalations"><span class="ic">&#9888;</span>Escalate</button>
+</nav>
 
 <script>
-  let endpoint = "";
-  let currentUser = null; // {username, fullName, role, pin}
+/* ==========================================================================
+   ENVIRONMENT SHIM — lets this file preview standalone (outside Apps Script)
+   with mock data. When served from Apps Script, google.script.run is real
+   and this shim is skipped entirely.
+   ========================================================================== */
+const LIVE = (typeof google !== 'undefined' && google.script && google.script.run);
 
-  // ---------- Bed ID selects (built once, used post-login) ----------
-  const padSel = document.getElementById("bedPad");
-  const bedSel = document.getElementById("bedNum");
-  for (let p = 1; p <= 10; p++) { const o=document.createElement("option"); o.value=p; o.textContent="Pad "+String(p).padStart(2,"0"); padSel.appendChild(o); }
-  for (let b = 1; b <= 20; b++) { const o=document.createElement("option"); o.value=b; o.textContent="Bed "+String(b).padStart(2,"0"); bedSel.appendChild(o); }
-  function updateBedPreview(){ document.getElementById("bedIdPreview").textContent = `P${String(padSel.value).padStart(2,"0")}-B${String(bedSel.value).padStart(2,"0")}`; }
-  padSel.addEventListener("change", updateBedPreview);
-  bedSel.addEventListener("change", updateBedPreview);
-  updateBedPreview();
-  document.getElementById("taskDate").value = new Date().toISOString().slice(0,10);
-
-  // ---------- Tabs ----------
-  document.querySelectorAll(".tab-btn").forEach(btn => {
-    btn.addEventListener("click", () => {
-      document.querySelectorAll(".tab-btn").forEach(b => b.classList.remove("active"));
-      btn.classList.add("active");
-      document.querySelectorAll(".form-panel").forEach(p => p.style.display = "none");
-      document.getElementById("form-" + btn.dataset.form).style.display = "block";
-      if (btn.dataset.form === "activity") loadActivity("mine");
+const MOCK = {
+  lists: {
+    bedStates: [{num:1,name:'Available'},{num:2,name:'Planted'},{num:3,name:'Growing'},{num:4,name:'Harvestable'},{num:5,name:'Harvested'},{num:6,name:'Cleanup'},{num:7,name:'Cover Crop / Rest'},{num:8,name:'Replant / Prep'}],
+    channels:[{code:'A',name:'Field Volume Engine'},{code:'B',name:'Greenhouse Stability Engine'},{code:'C',name:'Storage Reserve Engine'},{code:'D',name:'Bridge Layer Deficit Engine'}],
+    cropCategories:['Leafy Greens','African Greens','Brassicas','Root Crops','Tubers & Perennials','Fruiting Crops','Aromatics & Herbs','Organic Grains & Covers'],
+    taskStatus:['Complete','Pending','Skipped','In Progress'],
+    escalationCheckTypes:['SCR Deficit (<1.00)','30-Min Wash Violation','Greenhouse Bay Idle (>5 days)','Storage Humidity/Temp Drift','Pest / Disease Detection','Unassigned Bed Idle'],
+    resolvedOptions:['Y','N'],
+    seasons:['Spring (Mar-Apr)','Summer (May-Aug)','Fall (Sep-Oct)','Winter (Nov-Feb)'],
+    greenhouseBayStatus:['Active','Idle','Maintenance','Sanitizing']
+  },
+  beds: (() => {
+    const pads = [
+      [1,'Leafy Greens'],[2,'Leafy Greens'],[3,'Brassicas'],[4,'Brassicas'],[5,'Root Crops'],
+      [6,'Root Crops'],[7,'Fruiting Crops'],[8,'Fruiting Crops'],[9,'Aromatics & Herbs'],[10,'Aromatics & Herbs']
+    ];
+    const out = [];
+    let rn = 5;
+    pads.forEach(([pad,crop]) => {
+      for (let b=1;b<=20;b++){
+        out.push({rowNum:rn++, bedId:'P'+String(pad).padStart(2,'0')+'-B'+String(b).padStart(2,'0'), pad, defaultCrop:crop, cropVariety:'', stateNum:1, stateName:'Available', dateEnteredState:'', daysInState:'', notes:''});
+      }
     });
+    return out;
+  })(),
+  bays: [1,2,3,4,5,6,7,8,9,10].map(n => ({rowNum:4+n, bayNum:n, purpose: n<=6?'Winter Greens / Leafy Greens rotation': n<=8?'African Greens': n===9?'Aromatics, Herbs & Microgreen Bench Trays':'Nursery Starts / Germination', currentCrop:'', occupancyPct:'', status:'Active', dateStatusSet:'', notes:''})),
+  storageCrops:['Carrots','Beets','Turnips','Cabbages','Winter Squash','Yams','Sweet Potatoes','Onions'],
+  demand: { weekOf:'', rows: ['Leafy Greens','African Greens','Brassicas','Root Crops','Tubers & Perennials','Fruiting Crops','Aromatics & Herbs','Organic Grains & Covers'].map((c,i)=>({rowNum:7+i, cropCategory:c, chASupply:'', chBSupply:'', chCSupply:'', totalSupply:0, weeklyDemand:'', scr:'', bridgeStatus:''})) },
+  dashboard: { asOf:new Date().toISOString().slice(0,10), bedStateCounts:{Available:200}, totalBeds:200, bayStatusCounts:{Active:10}, totalBays:10 }
+};
+
+function callServer(fnName, arg){
+  return new Promise((resolve,reject) => {
+    if (!LIVE){
+      // Mock responses for standalone preview
+      setTimeout(() => {
+        try{ resolve(mockDispatch(fnName, arg)); }catch(e){ reject(e); }
+      }, 180);
+      return;
+    }
+    google.script.run
+      .withSuccessHandler(resolve)
+      .withFailureHandler(err => reject(err))
+      [fnName](arg);
   });
-  document.querySelectorAll("#scopeToggle button").forEach(btn => {
-    btn.addEventListener("click", () => {
-      document.querySelectorAll("#scopeToggle button").forEach(b => b.classList.remove("active"));
-      btn.classList.add("active");
-      loadActivity(btn.dataset.scope);
+}
+
+function mockDispatch(fnName, arg){
+  switch(fnName){
+    case 'getLists': return MOCK.lists;
+    case 'getDashboardSummary': return MOCK.dashboard;
+    case 'getBeds': return MOCK.beds;
+    case 'updateBed': {
+      const b = MOCK.beds.find(x=>x.rowNum===Number(arg.rowNum));
+      if (b){ b.cropVariety=arg.cropVariety; b.stateNum=Number(arg.stateNum); b.stateName=MOCK.lists.bedStates.find(s=>s.num===Number(arg.stateNum)).name; b.dateEnteredState=arg.dateEnteredState; b.notes=arg.notes; MOCK.dashboard.bedStateCounts = tally(MOCK.beds.map(x=>x.stateName)); }
+      return {ok:true};
+    }
+    case 'getGreenhouseBays': return MOCK.bays;
+    case 'updateGreenhouseBay': {
+      const b = MOCK.bays.find(x=>x.bayNum===Number(arg.bayNum));
+      if (b){ b.currentCrop=arg.currentCrop; b.occupancyPct=arg.occupancyPct; b.status=arg.status; b.dateStatusSet=arg.dateStatusSet; b.notes=arg.notes; MOCK.dashboard.bayStatusCounts = tally(MOCK.bays.map(x=>x.status)); }
+      return {ok:true};
+    }
+    case 'getStorageCrops': return MOCK.storageCrops;
+    case 'addStorageTransaction': return {ok:true, newBalance:(Number(arg.qtyIn)||0)-(Number(arg.qtyDrawn)||0)};
+    case 'getWeeklyDemand': return MOCK.demand;
+    case 'saveWeeklyDemand': return {ok:true};
+    case 'addDailyTaskLog': return {ok:true};
+    case 'addEscalation': return {ok:true};
+    default: throw new Error('No mock for ' + fnName);
+  }
+}
+function tally(arr){ const o={}; arr.forEach(v=>{ if(v) o[v]=(o[v]||0)+1; }); return o; }
+
+/* ========================================================================
+   APP STATE + NAVIGATION
+   ======================================================================== */
+let LISTS = null;
+let BEDS_CACHE = [];
+let BAYS_CACHE = [];
+
+function showToast(msg, isErr){
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.className = 'show' + (isErr ? ' err' : '');
+  clearTimeout(showToast._t);
+  showToast._t = setTimeout(() => { t.className=''; }, 2600);
+}
+
+function switchView(name){
+  document.querySelectorAll('section.view').forEach(s => s.classList.remove('active'));
+  document.getElementById('view-'+name).classList.add('active');
+  document.querySelectorAll('nav.tabbar button').forEach(b => b.classList.toggle('active', b.dataset.view===name));
+  window.scrollTo({top:0,behavior:'instant'});
+}
+document.querySelectorAll('nav.tabbar button').forEach(b => b.addEventListener('click', () => switchView(b.dataset.view)));
+document.querySelectorAll('[data-goto]').forEach(b => b.addEventListener('click', () => switchView(b.dataset.goto)));
+
+function todayStr(){ return new Date().toISOString().slice(0,10); }
+
+function makePills(container, options, defaultVal){
+  container.innerHTML = '';
+  let selected = defaultVal || (options[0] && (options[0].name || options[0]));
+  options.forEach(opt => {
+    const val = opt.name || opt;
+    const label = opt.name || opt;
+    const pill = document.createElement('div');
+    pill.className = 'pill' + (val===selected ? ' active':'');
+    pill.textContent = label;
+    pill.dataset.val = val;
+    pill.addEventListener('click', () => {
+      container.querySelectorAll('.pill').forEach(p=>p.classList.remove('active'));
+      pill.classList.add('active');
+      container.dataset.selected = val;
     });
+    container.appendChild(pill);
   });
+  container.dataset.selected = selected;
+}
 
-  function showToast(msg, ok){
-    const t = document.getElementById("toast");
-    t.textContent = msg; t.className = "toast " + (ok ? "ok" : "err");
-    setTimeout(() => { t.className = "toast"; }, 3800);
+/* ========================================================================
+   BOOT
+   ======================================================================== */
+async function boot(){
+  const badge = document.getElementById('connBadge');
+  try{
+    LISTS = await callServer('getLists');
+    badge.textContent = LIVE ? 'connected · live sheet' : 'preview mode · sample data';
+    badge.classList.toggle('offline', false);
+  }catch(e){
+    badge.textContent = 'offline — check connection';
+    badge.classList.add('offline');
+    showToast('Could not load reference lists: ' + e.message, true);
+    return;
   }
 
-  // ---------- Generic API call ----------
-  async function callApi(action, body){
-    const payload = { action, username: currentUser ? currentUser.username : undefined, pin: currentUser ? currentUser.pin : undefined, ...body };
-    const res = await fetch(endpoint, {
-      method: "POST",
-      headers: { "Content-Type": "text/plain;charset=utf-8" }, // avoids CORS preflight on Apps Script
-      body: JSON.stringify(payload)
+  populateStorageCrops();
+  await refreshBoard();
+  await loadBeds();
+  await loadBays();
+  await loadWeeklyDemand();
+
+  document.getElementById('tkDate').value = todayStr();
+  document.getElementById('esDate').value = todayStr();
+  document.getElementById('stDate').value = todayStr();
+
+  makePills(document.getElementById('tkSeasonPills'), LISTS.seasons);
+  makePills(document.getElementById('tkStatusPills'), LISTS.taskStatus);
+  makePills(document.getElementById('esTypePills'), LISTS.escalationCheckTypes);
+  makePills(document.getElementById('esResolvedPills'), LISTS.resolvedOptions, 'N');
+}
+
+document.getElementById('refreshBoard').addEventListener('click', refreshBoard);
+
+async function refreshBoard(){
+  try{
+    const d = await callServer('getDashboardSummary');
+    document.getElementById('asOfLabel').textContent = 'as of ' + d.asOf;
+    const chipRow = document.getElementById('chipRow');
+    chipRow.innerHTML = '';
+    const order = ['Available','Planted','Growing','Harvestable','Harvested','Cleanup','Cover Crop / Rest','Replant / Prep'];
+    order.forEach(name => {
+      const n = d.bedStateCounts[name] || 0;
+      const chip = document.createElement('div');
+      chip.className = 'chip' + (name!=='Available' && name!=='Harvestable' && n>0 ? '' : '');
+      chip.innerHTML = '<span class="n">'+n+'</span><span class="l">'+name+'</span>';
+      chipRow.appendChild(chip);
     });
-    const json = await res.json();
-    if (!json.ok) throw new Error(json.error || "Server returned an error");
-    return json.result;
+
+    const bayChips = document.getElementById('bayChips');
+    bayChips.innerHTML = '';
+    Object.keys(d.bayStatusCounts).forEach(status => {
+      const chip = document.createElement('div');
+      chip.className = 'chip' + (status!=='Active' ? ' alert' : '');
+      chip.style.marginBottom='8px';
+      chip.innerHTML = '<span class="n">'+d.bayStatusCounts[status]+'</span><span class="l">'+status+'</span>';
+      bayChips.appendChild(chip);
+    });
+  }catch(e){
+    showToast('Dashboard refresh failed: ' + e.message, true);
   }
+}
 
-  // ---------- Login ----------
-  document.getElementById("loginBtn").addEventListener("click", async () => {
-    const btn = document.getElementById("loginBtn");
-    const errBox = document.getElementById("loginErr");
-    errBox.style.display = "none";
-    endpoint = document.getElementById("endpointInput").value.trim().replace(/\/$/, "");
-    const username = document.getElementById("loginUsername").value.trim();
-    const pin = document.getElementById("loginPin").value.trim();
-    if (!endpoint) { errBox.textContent = "Paste the Apps Script /exec URL first."; errBox.style.display = "block"; return; }
-    if (!username || !pin) { errBox.textContent = "Enter both username and PIN."; errBox.style.display = "block"; return; }
-
-    btn.disabled = true; btn.textContent = "Signing in…";
-    try {
-      const res = await fetch(endpoint, {
-        method: "POST",
-        headers: { "Content-Type": "text/plain;charset=utf-8" },
-        body: JSON.stringify({ action: "login", username, pin })
-      });
-      const json = await res.json();
-      if (!json.ok) throw new Error(json.error || "Sign-in failed");
-      currentUser = { username: json.result.username, fullName: json.result.fullName, role: json.result.role, pin };
-      enterApp();
-    } catch (err) {
-      errBox.textContent = err.message;
-      errBox.style.display = "block";
-    } finally {
-      btn.disabled = false; btn.textContent = "Sign In";
-    }
-  });
-
-  function enterApp(){
-    document.getElementById("loginScreen").classList.add("hidden");
-    document.getElementById("appScreen").classList.remove("hidden");
-    document.getElementById("configBar").classList.remove("hidden");
-    document.getElementById("whoName").textContent = currentUser.fullName + " (" + currentUser.username + ")";
-    document.getElementById("whoRole").textContent = currentUser.role;
-    document.getElementById("configEndpointLabel").textContent = "Connected: " + endpoint.slice(0, 46) + "…";
-    if (currentUser.role === "Manager" || currentUser.role === "Founder") {
-      document.getElementById("teamScopeBtn").classList.remove("hidden");
-    }
+/* ========================================================================
+   BED MASTER
+   ======================================================================== */
+async function loadBeds(){
+  BEDS_CACHE = await callServer('getBeds');
+  document.getElementById('bedCountLabel').textContent = BEDS_CACHE.length + ' beds';
+  renderBedList(BEDS_CACHE);
+}
+function renderBedList(list){
+  const wrap = document.getElementById('bedList');
+  wrap.innerHTML = '';
+  if (!list.length){
+    wrap.innerHTML = '<div class="empty"><span class="big">&#9634;</span>No beds match.</div>';
+    return;
   }
-
-  document.getElementById("logoutBtn").addEventListener("click", () => {
-    currentUser = null;
-    document.getElementById("appScreen").classList.add("hidden");
-    document.getElementById("configBar").classList.add("hidden");
-    document.getElementById("loginScreen").classList.remove("hidden");
-    document.getElementById("loginPin").value = "";
+  list.forEach(bed => {
+    const row = document.createElement('div');
+    row.className = 'list-item';
+    row.innerHTML =
+      '<div><div class="li-id">'+bed.bedId+'</div>'+
+      '<div class="li-meta">'+(bed.cropVariety || bed.defaultCrop)+' · Pad '+bed.pad+(bed.daysInState!=='' && bed.daysInState!==undefined ? ' · '+bed.daysInState+'d' : '')+'</div></div>'+
+      '<span class="state-tag">'+bed.stateName+'</span>';
+    row.addEventListener('click', () => openBedForm(bed));
+    wrap.appendChild(row);
   });
+}
+document.getElementById('bedSearch').addEventListener('input', (e) => {
+  const q = e.target.value.trim().toLowerCase();
+  const filtered = !q ? BEDS_CACHE : BEDS_CACHE.filter(b =>
+    b.bedId.toLowerCase().includes(q) ||
+    (b.cropVariety||'').toLowerCase().includes(q) ||
+    (b.defaultCrop||'').toLowerCase().includes(q));
+  renderBedList(filtered);
+});
 
-  // ---------- Form submits ----------
-  async function submitAction(action, body, btn){
-    const original = btn.textContent;
-    btn.disabled = true; btn.textContent = "Submitting…";
-    try {
-      await callApi(action, body);
-      showToast("Saved.", true);
-    } catch (err) {
-      showToast("Failed: " + err.message, false);
-    } finally {
-      btn.disabled = false; btn.textContent = original;
-    }
+let currentBed = null;
+function openBedForm(bed){
+  currentBed = bed;
+  document.getElementById('bedListWrap').style.display = 'none';
+  document.getElementById('bedFormWrap').style.display = 'block';
+  document.getElementById('bedId').value = bed.bedId;
+  document.getElementById('bedPad').value = 'Pad ' + bed.pad;
+  document.getElementById('bedDefaultCrop').value = bed.defaultCrop;
+  document.getElementById('bedCropVariety').value = bed.cropVariety || '';
+  document.getElementById('bedDate').value = bed.dateEnteredState || todayStr();
+  document.getElementById('bedNotes').value = bed.notes || '';
+  makePills(document.getElementById('bedStatePills'), LISTS.bedStates, bed.stateName);
+}
+document.getElementById('bedBack').addEventListener('click', () => {
+  document.getElementById('bedFormWrap').style.display = 'none';
+  document.getElementById('bedListWrap').style.display = 'block';
+});
+document.getElementById('bedSave').addEventListener('click', async () => {
+  if (!currentBed) return;
+  const stateName = document.getElementById('bedStatePills').dataset.selected;
+  const stateObj = LISTS.bedStates.find(s => s.name === stateName);
+  const btn = document.getElementById('bedSave');
+  btn.disabled = true; btn.textContent = 'Saving…';
+  try{
+    await callServer('updateBed', {
+      rowNum: currentBed.rowNum,
+      bedId: currentBed.bedId,
+      cropVariety: document.getElementById('bedCropVariety').value,
+      stateNum: stateObj.num,
+      dateEnteredState: document.getElementById('bedDate').value,
+      notes: document.getElementById('bedNotes').value
+    });
+    showToast(currentBed.bedId + ' updated');
+    await loadBeds();
+    await refreshBoard();
+    document.getElementById('bedFormWrap').style.display = 'none';
+    document.getElementById('bedListWrap').style.display = 'block';
+  }catch(e){
+    showToast('Save failed: ' + e.message, true);
+  }finally{
+    btn.disabled = false; btn.textContent = 'Save bed update';
   }
+});
 
-  document.getElementById("submitBed").addEventListener("click", (e) => {
-    submitAction("updateBedState", {
-      bedId: `P${String(padSel.value).padStart(2,"0")}-B${String(bedSel.value).padStart(2,"0")}`,
-      stateNum: Number(document.getElementById("bedState").value),
-      crop: document.getElementById("bedCrop").value || undefined,
-      notes: document.getElementById("bedNotes").value || undefined
-    }, e.target);
+/* ========================================================================
+   GREENHOUSE BAYS
+   ======================================================================== */
+async function loadBays(){
+  BAYS_CACHE = await callServer('getGreenhouseBays');
+  renderBayList();
+}
+function renderBayList(){
+  const wrap = document.getElementById('ghList');
+  wrap.innerHTML = '';
+  BAYS_CACHE.forEach(bay => {
+    const row = document.createElement('div');
+    row.className = 'list-item';
+    row.innerHTML =
+      '<div><div class="li-id">Bay '+bay.bayNum+'</div>'+
+      '<div class="li-meta">'+(bay.currentCrop || bay.purpose)+'</div></div>'+
+      '<span class="state-tag">'+bay.status+'</span>';
+    row.addEventListener('click', () => openBayForm(bay));
+    wrap.appendChild(row);
   });
-
-  document.getElementById("submitBay").addEventListener("click", (e) => {
-    submitAction("updateGreenhouseBay", {
-      bay: Number(document.getElementById("bayNum").value),
-      currentCrop: document.getElementById("bayCrop").value || undefined,
-      occupancyPct: document.getElementById("bayOcc").value ? Number(document.getElementById("bayOcc").value) : undefined,
-      status: document.getElementById("bayStatus").value,
-      notes: document.getElementById("bayNotes").value || undefined
-    }, e.target);
-  });
-
-  document.getElementById("submitStorage").addEventListener("click", (e) => {
-    submitAction("logStorageTransaction", {
-      crop: document.getElementById("storeCrop").value,
-      dateIn: new Date().toISOString().slice(0,10),
-      qtyIn: document.getElementById("storeIn").value ? Number(document.getElementById("storeIn").value) : undefined,
-      qtyDrawn: document.getElementById("storeDrawn").value ? Number(document.getElementById("storeDrawn").value) : undefined,
-      storageRoom: document.getElementById("storeRoom").value || undefined,
-      tempF: document.getElementById("storeTemp").value ? Number(document.getElementById("storeTemp").value) : undefined,
-      humidityPct: document.getElementById("storeHum").value ? Number(document.getElementById("storeHum").value) : undefined,
-      notes: document.getElementById("storeNotes").value || undefined
-    }, e.target);
-  });
-
-  document.getElementById("submitTask").addEventListener("click", (e) => {
-    submitAction("logTask", {
-      date: document.getElementById("taskDate").value,
-      season: document.getElementById("taskSeason").value,
-      timeBlock: document.getElementById("taskBlock").value,
-      taskDescription: document.getElementById("taskDesc").value,
-      assignedTo: currentUser.fullName,
-      status: document.getElementById("taskStatus").value,
-      notes: document.getElementById("taskNotes").value || undefined
-    }, e.target);
-  });
-
-  document.getElementById("submitEsc").addEventListener("click", (e) => {
-    submitAction("logEscalation", {
-      date: new Date().toISOString().slice(0,10),
-      checkType: document.getElementById("escType").value,
-      details: document.getElementById("escDetails").value,
-      metricValue: document.getElementById("escMetric").value || undefined,
-      threshold: document.getElementById("escThreshold").value || undefined,
-      actionTaken: document.getElementById("escAction").value || undefined
-    }, e.target);
-  });
-
-  // ---------- Activity log ----------
-  async function loadActivity(scope){
-    const list = document.getElementById("activityList");
-    list.innerHTML = `<div class="activity-empty">Loading…</div>`;
-    try {
-      const action = scope === "team" ? "getTeamActivity" : "getMyActivity";
-      const rows = await callApi(action, { limit: 100 });
-      if (!rows || rows.length === 0) { list.innerHTML = `<div class="activity-empty">Nothing logged yet.</div>`; return; }
-      list.innerHTML = "";
-      rows.forEach(r => {
-        const div = document.createElement("div");
-        div.className = "activity-item";
-        const who = scope === "team" ? `${r.fullName} (${r.role}) · ` : "";
-        div.innerHTML = `<div class="a-action">${r.action}</div><div class="a-summary">${r.summary || ""}</div><div class="a-meta">${who}${r.timestamp}</div>`;
-        list.appendChild(div);
-      });
-    } catch (err) {
-      list.innerHTML = `<div class="activity-empty">Couldn't load activity: ${err.message}</div>`;
-    }
+}
+let currentBay = null;
+function openBayForm(bay){
+  currentBay = bay;
+  document.getElementById('ghListWrap').style.display = 'none';
+  document.getElementById('ghFormWrap').style.display = 'block';
+  document.getElementById('ghBayNum').value = bay.bayNum;
+  document.getElementById('ghPurpose').value = bay.purpose;
+  document.getElementById('ghCrop').value = bay.currentCrop || '';
+  document.getElementById('ghOccupancy').value = bay.occupancyPct ? Math.round(bay.occupancyPct*100)/1 : '';
+  document.getElementById('ghDate').value = bay.dateStatusSet || todayStr();
+  document.getElementById('ghNotes').value = bay.notes || '';
+  makePills(document.getElementById('ghStatusPills'), LISTS.greenhouseBayStatus, bay.status);
+}
+document.getElementById('ghBack').addEventListener('click', () => {
+  document.getElementById('ghFormWrap').style.display = 'none';
+  document.getElementById('ghListWrap').style.display = 'block';
+});
+document.getElementById('ghSave').addEventListener('click', async () => {
+  if (!currentBay) return;
+  const btn = document.getElementById('ghSave');
+  btn.disabled = true; btn.textContent = 'Saving…';
+  try{
+    await callServer('updateGreenhouseBay', {
+      rowNum: currentBay.rowNum,
+      bayNum: currentBay.bayNum,
+      currentCrop: document.getElementById('ghCrop').value,
+      occupancyPct: document.getElementById('ghOccupancy').value,
+      status: document.getElementById('ghStatusPills').dataset.selected,
+      dateStatusSet: document.getElementById('ghDate').value,
+      notes: document.getElementById('ghNotes').value
+    });
+    showToast('Bay ' + currentBay.bayNum + ' updated');
+    await loadBays();
+    await refreshBoard();
+    document.getElementById('ghFormWrap').style.display = 'none';
+    document.getElementById('ghListWrap').style.display = 'block';
+  }catch(e){
+    showToast('Save failed: ' + e.message, true);
+  }finally{
+    btn.disabled = false; btn.textContent = 'Save bay update';
   }
+});
+
+/* ========================================================================
+   STORAGE RESERVE
+   ======================================================================== */
+async function populateStorageCrops(){
+  try{
+    const crops = await callServer('getStorageCrops');
+    const sel = document.getElementById('stCrop');
+    sel.innerHTML = crops.map(c => '<option value="'+c+'">'+c+'</option>').join('');
+  }catch(e){ /* non-fatal */ }
+}
+document.getElementById('stSave').addEventListener('click', async () => {
+  const btn = document.getElementById('stSave');
+  btn.disabled = true; btn.textContent = 'Saving…';
+  try{
+    const res = await callServer('addStorageTransaction', {
+      crop: document.getElementById('stCrop').value,
+      dateIn: document.getElementById('stDate').value,
+      qtyIn: document.getElementById('stQtyIn').value,
+      qtyDrawn: document.getElementById('stQtyDrawn').value,
+      storageRoom: document.getElementById('stRoom').value,
+      temp: document.getElementById('stTemp').value,
+      humidity: document.getElementById('stHumidity').value,
+      notes: document.getElementById('stNotes').value
+    });
+    showToast('Storage logged — new balance ' + res.newBalance + ' lb');
+    ['stQtyIn','stQtyDrawn','stRoom','stTemp','stHumidity','stNotes'].forEach(id => document.getElementById(id).value = '');
+  }catch(e){
+    showToast('Save failed: ' + e.message, true);
+  }finally{
+    btn.disabled = false; btn.textContent = 'Log storage transaction';
+  }
+});
+
+/* ========================================================================
+   WEEKLY DEMAND & SCR
+   ======================================================================== */
+async function loadWeeklyDemand(){
+  const d = await callServer('getWeeklyDemand');
+  document.getElementById('wdWeekOf').value = d.weekOf || todayStr();
+  const wrap = document.getElementById('wdRows');
+  wrap.innerHTML = '';
+  d.rows.forEach(row => {
+    const div = document.createElement('div');
+    div.className = 'demand-row';
+    div.dataset.rowNum = row.rowNum;
+    div.dataset.cropCategory = row.cropCategory;
+    div.innerHTML =
+      '<div class="crop-name">'+row.cropCategory+' <span style="float:right;color:#9C907A;font-family:\'IBM Plex Mono\',monospace;font-weight:500;font-size:12px;">SCR '+(row.scr!=='' && row.scr!==undefined && row.scr!==null ? Number(row.scr).toFixed(2) : '—')+'</span></div>'+
+      '<div class="row3">'+
+        '<div><input type="number" min="0" class="wd-a" value="'+(row.chASupply||'')+'"><div class="mini-label">Ch A</div></div>'+
+        '<div><input type="number" min="0" class="wd-b" value="'+(row.chBSupply||'')+'"><div class="mini-label">Ch B</div></div>'+
+        '<div><input type="number" min="0" class="wd-c" value="'+(row.chCSupply||'')+'"><div class="mini-label">Ch C</div></div>'+
+      '</div>'+
+      '<div style="margin-top:6px;"><input type="number" min="0" class="wd-demand" placeholder="Weekly demand (units)" value="'+(row.weeklyDemand||'')+'"></div>';
+    wrap.appendChild(div);
+  });
+}
+document.getElementById('wdSave').addEventListener('click', async () => {
+  const btn = document.getElementById('wdSave');
+  btn.disabled = true; btn.textContent = 'Saving…';
+  try{
+    const rows = Array.from(document.querySelectorAll('#wdRows .demand-row')).map(div => ({
+      rowNum: div.dataset.rowNum,
+      cropCategory: div.dataset.cropCategory,
+      chASupply: div.querySelector('.wd-a').value,
+      chBSupply: div.querySelector('.wd-b').value,
+      chCSupply: div.querySelector('.wd-c').value,
+      weeklyDemand: div.querySelector('.wd-demand').value
+    }));
+    await callServer('saveWeeklyDemand', { weekOf: document.getElementById('wdWeekOf').value, rows: rows });
+    showToast('Weekly demand saved');
+    await loadWeeklyDemand();
+  }catch(e){
+    showToast('Save failed: ' + e.message, true);
+  }finally{
+    btn.disabled = false; btn.textContent = 'Save weekly demand';
+  }
+});
+
+/* ========================================================================
+   DAILY TASK LOG
+   ======================================================================== */
+document.getElementById('tkSave').addEventListener('click', async () => {
+  const btn = document.getElementById('tkSave');
+  const desc = document.getElementById('tkDesc').value.trim();
+  if (!desc){ showToast('Add a task description first.', true); return; }
+  btn.disabled = true; btn.textContent = 'Saving…';
+  try{
+    await callServer('addDailyTaskLog', {
+      date: document.getElementById('tkDate').value,
+      season: document.getElementById('tkSeasonPills').dataset.selected,
+      timeBlock: document.getElementById('tkBlockPills').dataset.selected || '',
+      taskDescription: desc,
+      assignedTo: document.getElementById('tkAssigned').value,
+      status: document.getElementById('tkStatusPills').dataset.selected,
+      notes: document.getElementById('tkNotes').value
+    });
+    showToast('Task logged');
+    document.getElementById('tkDesc').value = '';
+    document.getElementById('tkAssigned').value = '';
+    document.getElementById('tkNotes').value = '';
+  }catch(e){
+    showToast('Save failed: ' + e.message, true);
+  }finally{
+    btn.disabled = false; btn.textContent = 'Log task';
+  }
+});
+document.getElementById('tkBlockPills').addEventListener('click', (e) => {
+  const p = e.target.closest('.pill'); if (!p) return;
+  document.querySelectorAll('#tkBlockPills .pill').forEach(x=>x.classList.remove('active'));
+  p.classList.add('active');
+  document.getElementById('tkBlockPills').dataset.selected = p.dataset.val;
+});
+
+/* ========================================================================
+   ESCALATION LOG
+   ======================================================================== */
+document.getElementById('esSave').addEventListener('click', async () => {
+  const btn = document.getElementById('esSave');
+  const details = document.getElementById('esDetails').value.trim();
+  if (!details){ showToast('Describe what triggered this first.', true); return; }
+  btn.disabled = true; btn.textContent = 'Saving…';
+  try{
+    await callServer('addEscalation', {
+      date: document.getElementById('esDate').value,
+      checkType: document.getElementById('esTypePills').dataset.selected,
+      details: details,
+      metricValue: document.getElementById('esMetric').value,
+      threshold: document.getElementById('esThreshold').value,
+      actionTaken: document.getElementById('esAction').value,
+      resolved: document.getElementById('esResolvedPills').dataset.selected,
+      resolvedDate: document.getElementById('esResolvedDate').value
+    });
+    showToast('Escalation logged');
+    document.getElementById('esDetails').value = '';
+    document.getElementById('esMetric').value = '';
+    document.getElementById('esThreshold').value = '';
+    document.getElementById('esAction').value = '';
+    document.getElementById('esResolvedDate').value = '';
+  }catch(e){
+    showToast('Save failed: ' + e.message, true);
+  }finally{
+    btn.disabled = false; btn.textContent = 'Log escalation';
+  }
+});
+
+boot();
 </script>
 </body>
 </html>
