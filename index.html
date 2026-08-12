@@ -989,7 +989,7 @@ document.getElementById('bedWashConfirm').addEventListener('click', () => {
   if (!washState) return;
   const elapsedMin = (Date.now() - washState.startedAt) / 60000;
   const violation = elapsedMin > 30;
-  washResult = { minutes: Math.round(elapsedMin * 10) / 10, violation: violation };
+  washResult = { minutes: Math.round(elapsedMin * 10) / 10, violation: violation, confirmedAt: Date.now() };
   if (washTickHandle){ clearInterval(washTickHandle); washTickHandle = null; }
   document.getElementById('bedWashRunning').style.display = 'none';
   document.getElementById('bedWashStart').style.display = 'inline-flex';
@@ -1056,6 +1056,8 @@ document.getElementById('bedSave').addEventListener('click', async () => {
     if (washResult){
       payload.washMinutes = washResult.minutes;
       payload.washViolation = washResult.violation;
+      payload.harvestTime = new Date(washState.startedAt).toISOString();
+      payload.washArrivalTime = new Date(washResult.confirmedAt).toISOString();
     }
   }
 
@@ -1063,7 +1065,7 @@ document.getElementById('bedSave').addEventListener('click', async () => {
   btn.disabled = true; btn.textContent = 'Saving…';
   try{
     await callServer('updateBed', payload);
-    showToast(currentBed.bedId + ' updated' + (payload.washViolation ? ' · wash violation logged to Escalations' : ''));
+    showToast(currentBed.bedId + ' updated' + (isHarvest ? ' · logged to Harvest Log' : '') + (payload.washViolation ? ' · wash violation logged to Escalations' : ''));
     await loadBeds();
     await refreshBoard();
     document.getElementById('bedFormWrap').style.display = 'none';
