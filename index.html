@@ -354,6 +354,10 @@
           <label>Crop / variety planted</label>
           <input type="text" id="bedCropVariety" placeholder="e.g. Romaine lettuce">
         </div>
+        <div class="row2">
+          <div class="field"><label>Date planted</label><input type="date" id="bedDatePlanted"></div>
+          <div class="field"><label>Target harvest date</label><input type="text" id="bedTargetHarvest" disabled></div>
+        </div>
         <div class="field">
           <label>Bed state</label>
           <div class="pill-select" id="bedStatePills"></div>
@@ -362,6 +366,22 @@
           <label>Date entered state</label>
           <input type="date" id="bedDate">
         </div>
+
+        <div id="bedHarvestBlock" style="display:none;">
+          <div class="field"><label>Harvest weight (lb)</label><input type="number" id="bedHarvestWeight" min="0" step="0.1" placeholder="0.0"></div>
+          <div class="field">
+            <label>30-minute field-to-wash timer</label>
+            <div class="card" style="padding:12px;margin-bottom:0;">
+              <button class="btn secondary" id="bedWashStart" type="button">Start wash timer</button>
+              <div id="bedWashRunning" style="display:none;">
+                <div class="mono" id="bedWashCountdown" style="font-size:22px;text-align:center;margin:8px 0;">30:00</div>
+                <button class="btn" id="bedWashConfirm" type="button">Confirm washed</button>
+              </div>
+              <div id="bedWashResult" class="mono" style="margin-top:8px;font-size:13px;"></div>
+            </div>
+          </div>
+        </div>
+
         <div class="field">
           <label>Notes</label>
           <textarea id="bedNotes" placeholder="Anything the next shift should know"></textarea>
@@ -516,8 +536,13 @@ var CSV_URLS = {
 };
 
 /* ===== WRITE BACKEND =====
-   Paste your Apps Script Web App /exec URL here (from Code_vegetable.gs,
-   deployed as a Web App — see the setup notes at the top of that file). */
+   Not deployed yet. To connect writes:
+   1. Open the CASN Google Sheet → Extensions → Apps Script.
+   2. Paste in Code_vegetable.gs (provided alongside this file).
+   3. Deploy → New deployment → Web app. Execute as: Me. Who has access: Anyone with the link.
+   4. Copy the resulting /exec URL and paste it below, replacing the placeholder.
+   Until this is set, every save action in this file will fail with a clear
+   "writes not configured" error instead of failing silently. */
 var WRITE_URL = 'https://script.google.com/macros/s/AKfycb.../exec';
 function postToSheet(action, payload){
   if (!WRITE_URL){
@@ -586,6 +611,29 @@ function parsePctToFraction(raw){
   return num > 1 ? num / 100 : num;
 }
 
+/* Published CSV cells for date-formatted columns can come back as M/D/YYYY,
+   YYYY-MM-DD, or a full timestamp depending on the sheet's number format and
+   locale. <input type=date> only accepts YYYY-MM-DD, so every date read from
+   the sheet needs to funnel through this before it touches a date input. */
+function toIsoDate(raw){
+  if (!raw) return '';
+  var s = String(raw).trim();
+  if (!s) return '';
+  var m = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (m) return m[1] + '-' + m[2] + '-' + m[3];
+  var d = new Date(s);
+  if (isNaN(d.getTime())) return '';
+  var mo = String(d.getMonth() + 1).padStart(2, '0');
+  var da = String(d.getDate()).padStart(2, '0');
+  return d.getFullYear() + '-' + mo + '-' + da;
+}
+function formatDateDisplay(raw){
+  var iso = toIsoDate(raw);
+  if (!iso) return '—';
+  var d = new Date(iso + 'T00:00:00');
+  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+}
+
 /* ---------- READS ---------- */
 function getLists(){
   return fetchCsv(CSV_URLS.lists).then(function(data){
@@ -634,9 +682,11 @@ function getBeds(){
         cropVariety: row[cols['Crop / Variety']] || '',
         stateNum: row[cols['State #']],
         stateName: row[cols['State Name']],
-        dateEnteredState: row[cols['Date Entered State']] || '',
+        dateEnteredState: toIsoDate(row[cols['Date Entered State']]),
         daysInState: row[cols['Days in State']],
-        notes: row[cols['Notes']] || ''
+        notes: row[cols['Notes']] || '',
+        datePlanted: toIsoDate(row[cols['Date Planted']]),
+        targetHarvestDate: row[cols['Target Harvest Date']] || ''
       });
     }
     return out;
@@ -893,6 +943,67 @@ document.getElementById('bedSearch').addEventListener('input', (e) => {
 });
 
 let currentBed = null;
+let washState = null; // { startedAt: epochMs } while a timer is running; null otherwise
+let washResult = null; // { minutes: Number, violation: Boolean } once confirmed
+let washTickHandle = null;
+
+function resetWashUi(){
+  washState = null;
+  washResult = null;
+  if (washTickHandle){ clearInterval(washTickHandle); washTickHandle = null; }
+  document.getElementById('bedWashStart').style.display = 'inline-flex';
+  document.getElementById('bedWashRunning').style.display = 'none';
+  document.getElementById('bedWashCountdown').textContent = '30:00';
+  document.getElementById('bedWashCountdown').style.color = '';
+  document.getElementById('bedWashResult').textContent = '';
+}
+
+function updateBedHarvestVisibility(){
+  const stateName = document.getElementById('bedStatePills').dataset.selected;
+  const block = document.getElementById('bedHarvestBlock');
+  const isHarvest = stateName === 'Harvested';
+  block.style.display = isHarvest ? 'block' : 'none';
+  if (!isHarvest) resetWashUi();
+}
+
+document.getElementById('bedWashStart').addEventListener('click', () => {
+  washState = { startedAt: Date.now() };
+  washResult = null;
+  document.getElementById('bedWashStart').style.display = 'none';
+  document.getElementById('bedWashRunning').style.display = 'block';
+  document.getElementById('bedWashResult').textContent = '';
+  const countdownEl = document.getElementById('bedWashCountdown');
+  function tick(){
+    const elapsedMs = Date.now() - washState.startedAt;
+    const remainingSec = Math.max(0, Math.round(1800 - elapsedMs / 1000));
+    const mm = String(Math.floor(remainingSec / 60)).padStart(2, '0');
+    const ss = String(remainingSec % 60).padStart(2, '0');
+    countdownEl.textContent = mm + ':' + ss;
+    countdownEl.style.color = remainingSec === 0 ? 'var(--rust)' : '';
+  }
+  tick();
+  washTickHandle = setInterval(tick, 1000);
+});
+
+document.getElementById('bedWashConfirm').addEventListener('click', () => {
+  if (!washState) return;
+  const elapsedMin = (Date.now() - washState.startedAt) / 60000;
+  const violation = elapsedMin > 30;
+  washResult = { minutes: Math.round(elapsedMin * 10) / 10, violation: violation };
+  if (washTickHandle){ clearInterval(washTickHandle); washTickHandle = null; }
+  document.getElementById('bedWashRunning').style.display = 'none';
+  document.getElementById('bedWashStart').style.display = 'inline-flex';
+  document.getElementById('bedWashStart').textContent = 'Restart wash timer';
+  const resultEl = document.getElementById('bedWashResult');
+  if (violation){
+    resultEl.style.color = 'var(--rust)';
+    resultEl.textContent = 'Washed at ' + washResult.minutes + ' min — over the 30-min window. This will auto-log an escalation on save.';
+  } else {
+    resultEl.style.color = 'var(--ok)';
+    resultEl.textContent = 'Washed at ' + washResult.minutes + ' min — within the 30-min window.';
+  }
+});
+
 function openBedForm(bed){
   currentBed = bed;
   document.getElementById('bedListWrap').style.display = 'none';
@@ -901,34 +1012,63 @@ function openBedForm(bed){
   document.getElementById('bedPad').value = 'Pad ' + bed.pad;
   document.getElementById('bedDefaultCrop').value = bed.defaultCrop;
   document.getElementById('bedCropVariety').value = bed.cropVariety || '';
+  document.getElementById('bedDatePlanted').value = bed.datePlanted || '';
+  document.getElementById('bedTargetHarvest').value = formatDateDisplay(bed.targetHarvestDate);
   document.getElementById('bedDate').value = bed.dateEnteredState || todayStr();
   document.getElementById('bedNotes').value = bed.notes || '';
+  document.getElementById('bedHarvestWeight').value = '';
+  document.getElementById('bedWashStart').textContent = 'Start wash timer';
+  resetWashUi();
   makePills(document.getElementById('bedStatePills'), LISTS.bedStates, bed.stateName);
+  document.querySelectorAll('#bedStatePills .pill').forEach(p => {
+    p.addEventListener('click', updateBedHarvestVisibility);
+  });
+  updateBedHarvestVisibility();
 }
 document.getElementById('bedBack').addEventListener('click', () => {
   document.getElementById('bedFormWrap').style.display = 'none';
   document.getElementById('bedListWrap').style.display = 'block';
+  resetWashUi();
 });
 document.getElementById('bedSave').addEventListener('click', async () => {
   if (!currentBed) return;
   const stateName = document.getElementById('bedStatePills').dataset.selected;
   const stateObj = LISTS.bedStates.find(s => s.name === stateName);
+  const isHarvest = stateName === 'Harvested';
+  const harvestWeightRaw = document.getElementById('bedHarvestWeight').value;
+
+  if (isHarvest && !harvestWeightRaw){
+    showToast('Enter the harvest weight before saving.', true);
+    return;
+  }
+
+  const payload = {
+    rowNum: currentBed.rowNum,
+    bedId: currentBed.bedId,
+    cropVariety: document.getElementById('bedCropVariety').value,
+    stateNum: stateObj.num,
+    dateEnteredState: document.getElementById('bedDate').value,
+    datePlanted: document.getElementById('bedDatePlanted').value,
+    notes: document.getElementById('bedNotes').value
+  };
+  if (isHarvest && harvestWeightRaw){
+    payload.harvestWeightLb = parseFloat(harvestWeightRaw);
+    if (washResult){
+      payload.washMinutes = washResult.minutes;
+      payload.washViolation = washResult.violation;
+    }
+  }
+
   const btn = document.getElementById('bedSave');
   btn.disabled = true; btn.textContent = 'Saving…';
   try{
-    await callServer('updateBed', {
-      rowNum: currentBed.rowNum,
-      bedId: currentBed.bedId,
-      cropVariety: document.getElementById('bedCropVariety').value,
-      stateNum: stateObj.num,
-      dateEnteredState: document.getElementById('bedDate').value,
-      notes: document.getElementById('bedNotes').value
-    });
-    showToast(currentBed.bedId + ' updated');
+    await callServer('updateBed', payload);
+    showToast(currentBed.bedId + ' updated' + (payload.washViolation ? ' · wash violation logged to Escalations' : ''));
     await loadBeds();
     await refreshBoard();
     document.getElementById('bedFormWrap').style.display = 'none';
     document.getElementById('bedListWrap').style.display = 'block';
+    resetWashUi();
   }catch(e){
     showToast('Save failed: ' + e.message, true);
   }finally{
