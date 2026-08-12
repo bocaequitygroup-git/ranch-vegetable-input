@@ -543,7 +543,7 @@ var CSV_URLS = {
    4. Copy the resulting /exec URL and paste it below, replacing the placeholder.
    Until this is set, every save action in this file will fail with a clear
    "writes not configured" error instead of failing silently. */
-var WRITE_URL = 'https://script.google.com/macros/s/AKfycb.../exec';
+var WRITE_URL = 'https://script.google.com/macros/s/AKfycbwJ6_GVi0SdlBoVcqJWZ8UWY99Y3TMIzUxfaow2BBsawpZGXl17aqSQxUmUHCyiR1CV/exec';
 function postToSheet(action, payload){
   if (!WRITE_URL){
     return Promise.reject(new Error('WRITE_URL not set — deploy Code_vegetable.gs as a Web App and paste its /exec URL near the top of the <script> block.'));
