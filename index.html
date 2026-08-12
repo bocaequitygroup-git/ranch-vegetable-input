@@ -518,8 +518,7 @@ var CSV_URLS = {
 /* ===== WRITE BACKEND =====
    Paste your Apps Script Web App /exec URL here (from Code_vegetable.gs,
    deployed as a Web App — see the setup notes at the top of that file). */
-var WRITE_URL = '';
-
+var WRITE_URL = 'https://script.google.com/macros/s/AKfycb.../exec';
 function postToSheet(action, payload){
   if (!WRITE_URL){
     return Promise.reject(new Error('WRITE_URL not set — deploy Code_vegetable.gs as a Web App and paste its /exec URL near the top of the <script> block.'));
