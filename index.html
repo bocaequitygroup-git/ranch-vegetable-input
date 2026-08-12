@@ -500,85 +500,254 @@
 
 <script>
 /* ==========================================================================
-   ENVIRONMENT SHIM — lets this file preview standalone (outside Apps Script)
-   with mock data. When served from Apps Script, google.script.run is real
-   and this shim is skipped entirely.
+   DATA LAYER — reads live from the published Google Sheet CSV endpoints.
+   Writes go through the Apps Script doPost() web app (Code_vegetable.gs),
+   called via plain fetch() POST. No google.script.run anywhere in this file,
+   so it works from any static host (GitHub Pages, etc.) exactly like the
+   Ngapori RAMS portal.
    ========================================================================== */
-const LIVE = (typeof google !== 'undefined' && google.script && google.script.run);
 
-const MOCK = {
-  lists: {
-    bedStates: [{num:1,name:'Available'},{num:2,name:'Planted'},{num:3,name:'Growing'},{num:4,name:'Harvestable'},{num:5,name:'Harvested'},{num:6,name:'Cleanup'},{num:7,name:'Cover Crop / Rest'},{num:8,name:'Replant / Prep'}],
-    channels:[{code:'A',name:'Field Volume Engine'},{code:'B',name:'Greenhouse Stability Engine'},{code:'C',name:'Storage Reserve Engine'},{code:'D',name:'Bridge Layer Deficit Engine'}],
-    cropCategories:['Leafy Greens','African Greens','Brassicas','Root Crops','Tubers & Perennials','Fruiting Crops','Aromatics & Herbs','Organic Grains & Covers'],
-    taskStatus:['Complete','Pending','Skipped','In Progress'],
-    escalationCheckTypes:['SCR Deficit (<1.00)','30-Min Wash Violation','Greenhouse Bay Idle (>5 days)','Storage Humidity/Temp Drift','Pest / Disease Detection','Unassigned Bed Idle'],
-    resolvedOptions:['Y','N'],
-    seasons:['Spring (Mar-Apr)','Summer (May-Aug)','Fall (Sep-Oct)','Winter (Nov-Feb)'],
-    greenhouseBayStatus:['Active','Idle','Maintenance','Sanitizing']
-  },
-  beds: (() => {
-    const pads = [
-      [1,'Leafy Greens'],[2,'Leafy Greens'],[3,'Brassicas'],[4,'Brassicas'],[5,'Root Crops'],
-      [6,'Root Crops'],[7,'Fruiting Crops'],[8,'Fruiting Crops'],[9,'Aromatics & Herbs'],[10,'Aromatics & Herbs']
-    ];
-    const out = [];
-    let rn = 5;
-    pads.forEach(([pad,crop]) => {
-      for (let b=1;b<=20;b++){
-        out.push({rowNum:rn++, bedId:'P'+String(pad).padStart(2,'0')+'-B'+String(b).padStart(2,'0'), pad, defaultCrop:crop, cropVariety:'', stateNum:1, stateName:'Available', dateEnteredState:'', daysInState:'', notes:''});
-      }
-    });
-    return out;
-  })(),
-  bays: [1,2,3,4,5,6,7,8,9,10].map(n => ({rowNum:4+n, bayNum:n, purpose: n<=6?'Winter Greens / Leafy Greens rotation': n<=8?'African Greens': n===9?'Aromatics, Herbs & Microgreen Bench Trays':'Nursery Starts / Germination', currentCrop:'', occupancyPct:'', status:'Active', dateStatusSet:'', notes:''})),
-  storageCrops:['Carrots','Beets','Turnips','Cabbages','Winter Squash','Yams','Sweet Potatoes','Onions'],
-  demand: { weekOf:'', rows: ['Leafy Greens','African Greens','Brassicas','Root Crops','Tubers & Perennials','Fruiting Crops','Aromatics & Herbs','Organic Grains & Covers'].map((c,i)=>({rowNum:7+i, cropCategory:c, chASupply:'', chBSupply:'', chCSupply:'', totalSupply:0, weeklyDemand:'', scr:'', bridgeStatus:''})) },
-  dashboard: { asOf:new Date().toISOString().slice(0,10), bedStateCounts:{Available:200}, totalBeds:200, bayStatusCounts:{Active:10}, totalBays:10 }
+var CSV_URLS = {
+  beds:    'https://docs.google.com/spreadsheets/d/e/2PACX-1vQ2-ZpNFql0EiWej80YcP_V4ymOLHLs_-VLIeN1XO7RJQIbOIPv9sd6zzkv_ZcMeDUeNrhMfjD8dT14/pub?gid=654019529&single=true&output=csv',
+  bays:    'https://docs.google.com/spreadsheets/d/e/2PACX-1vQ2-ZpNFql0EiWej80YcP_V4ymOLHLs_-VLIeN1XO7RJQIbOIPv9sd6zzkv_ZcMeDUeNrhMfjD8dT14/pub?gid=1731229174&single=true&output=csv',
+  storage: 'https://docs.google.com/spreadsheets/d/e/2PACX-1vQ2-ZpNFql0EiWej80YcP_V4ymOLHLs_-VLIeN1XO7RJQIbOIPv9sd6zzkv_ZcMeDUeNrhMfjD8dT14/pub?gid=1040770207&single=true&output=csv',
+  demand:  'https://docs.google.com/spreadsheets/d/e/2PACX-1vQ2-ZpNFql0EiWej80YcP_V4ymOLHLs_-VLIeN1XO7RJQIbOIPv9sd6zzkv_ZcMeDUeNrhMfjD8dT14/pub?gid=972349468&single=true&output=csv',
+  lists:   'https://docs.google.com/spreadsheets/d/e/2PACX-1vQ2-ZpNFql0EiWej80YcP_V4ymOLHLs_-VLIeN1XO7RJQIbOIPv9sd6zzkv_ZcMeDUeNrhMfjD8dT14/pub?gid=15749395&single=true&output=csv'
 };
 
-function callServer(fnName, arg){
-  return new Promise((resolve,reject) => {
-    if (!LIVE){
-      // Mock responses for standalone preview
-      setTimeout(() => {
-        try{ resolve(mockDispatch(fnName, arg)); }catch(e){ reject(e); }
-      }, 180);
-      return;
+/* ===== WRITE BACKEND =====
+   Paste your Apps Script Web App /exec URL here (from Code_vegetable.gs,
+   deployed as a Web App — see the setup notes at the top of that file). */
+var WRITE_URL = '';
+
+function postToSheet(action, payload){
+  if (!WRITE_URL){
+    return Promise.reject(new Error('WRITE_URL not set — deploy Code_vegetable.gs as a Web App and paste its /exec URL near the top of the <script> block.'));
+  }
+  return fetch(WRITE_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'text/plain;charset=utf-8' }, // avoids a CORS preflight against Apps Script
+    body: JSON.stringify({ action: action, payload: payload })
+  }).then(function(r){ return r.json(); })
+    .then(function(j){
+      if (!j || j.ok === false) throw new Error((j && j.error) || 'Write failed');
+      return j;
+    });
+}
+
+/* ---------- CSV parser (handles quoted fields, commas, embedded newlines) ---------- */
+function parseCsv(text){
+  var rows = [], field = '', row = [], inQuotes = false;
+  for (var i = 0; i < text.length; i++){
+    var c = text[i], n = text[i+1];
+    if (inQuotes){
+      if (c === '"' && n === '"'){ field += '"'; i++; }
+      else if (c === '"'){ inQuotes = false; }
+      else field += c;
+    } else {
+      if (c === '"') inQuotes = true;
+      else if (c === ','){ row.push(field); field = ''; }
+      else if (c === '\r'){ continue; }
+      else if (c === '\n'){ row.push(field); rows.push(row); row = []; field = ''; }
+      else field += c;
     }
-    google.script.run
-      .withSuccessHandler(resolve)
-      .withFailureHandler(err => reject(err))
-      [fnName](arg);
+  }
+  if (field !== '' || row.length){ row.push(field); rows.push(row); }
+  return rows;
+}
+function fetchCsv(url){
+  return fetch(url, { cache: 'no-store' }).then(function(r){
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    return r.text();
+  }).then(parseCsv);
+}
+function findHeaderRowIdx(rows, firstCol, maxScan){
+  var limit = Math.min(rows.length, maxScan || 10);
+  for (var i = 0; i < limit; i++){
+    if (rows[i] && String(rows[i][0]).trim() === firstCol) return i;
+  }
+  return -1;
+}
+function headerIndexMap(header){
+  var map = {};
+  header.forEach(function(h, i){ var k = String(h).trim(); if (k) map[k] = i; });
+  return map;
+}
+/* Percent cells can come back from the published CSV either as "45%" or as
+   a raw fraction like "0.45" depending on the sheet's number format — this
+   normalizes either to a 0–1 fraction (what the rest of the UI expects). */
+function parsePctToFraction(raw){
+  if (raw === '' || raw == null) return '';
+  var s = String(raw).trim();
+  if (s === '') return '';
+  var hasPct = s.indexOf('%') !== -1;
+  var num = parseFloat(s.replace('%', ''));
+  if (isNaN(num)) return '';
+  if (hasPct) return num / 100;
+  return num > 1 ? num / 100 : num;
+}
+
+/* ---------- READS ---------- */
+function getLists(){
+  return fetchCsv(CSV_URLS.lists).then(function(data){
+    function col(idx){
+      var out = [];
+      for (var r = 1; r < data.length; r++){
+        var v = data[r] && data[r][idx];
+        if (v !== '' && v != null) out.push(v);
+      }
+      return out;
+    }
+    var bedStates = [], channels = [];
+    for (var r = 1; r < data.length; r++){
+      var row = data[r] || [];
+      if (row[1] !== '' && row[1] != null) bedStates.push({ num: Number(row[0]), name: row[1] });
+      if (row[3] !== '' && row[3] != null) channels.push({ code: row[3], name: row[4] });
+    }
+    return {
+      bedStates: bedStates,
+      channels: channels,
+      cropCategories: col(6),
+      taskStatus: col(8),
+      escalationCheckTypes: col(10),
+      resolvedOptions: col(12),
+      seasons: col(14),
+      greenhouseBayStatus: col(16)
+    };
   });
 }
 
-function mockDispatch(fnName, arg){
-  switch(fnName){
-    case 'getLists': return MOCK.lists;
-    case 'getDashboardSummary': return MOCK.dashboard;
-    case 'getBeds': return MOCK.beds;
-    case 'updateBed': {
-      const b = MOCK.beds.find(x=>x.rowNum===Number(arg.rowNum));
-      if (b){ b.cropVariety=arg.cropVariety; b.stateNum=Number(arg.stateNum); b.stateName=MOCK.lists.bedStates.find(s=>s.num===Number(arg.stateNum)).name; b.dateEnteredState=arg.dateEnteredState; b.notes=arg.notes; MOCK.dashboard.bedStateCounts = tally(MOCK.beds.map(x=>x.stateName)); }
-      return {ok:true};
+function getBeds(){
+  return fetchCsv(CSV_URLS.beds).then(function(rows){
+    var headerIdx = findHeaderRowIdx(rows, 'Bed ID', 10);
+    if (headerIdx < 0) throw new Error('Could not find the "Bed ID" header row in the Bed Master CSV.');
+    var cols = headerIndexMap(rows[headerIdx]);
+    var out = [];
+    for (var i = headerIdx + 1; i < rows.length; i++){
+      var row = rows[i];
+      var bedId = row && row[cols['Bed ID']];
+      if (!bedId) continue;
+      out.push({
+        rowNum: i + 1, // CSV row i (0-indexed) === sheet row i+1 (1-indexed)
+        bedId: bedId,
+        pad: row[cols['Pad #']],
+        defaultCrop: row[cols['Default Crop Category (Pad)']],
+        cropVariety: row[cols['Crop / Variety']] || '',
+        stateNum: row[cols['State #']],
+        stateName: row[cols['State Name']],
+        dateEnteredState: row[cols['Date Entered State']] || '',
+        daysInState: row[cols['Days in State']],
+        notes: row[cols['Notes']] || ''
+      });
     }
-    case 'getGreenhouseBays': return MOCK.bays;
-    case 'updateGreenhouseBay': {
-      const b = MOCK.bays.find(x=>x.bayNum===Number(arg.bayNum));
-      if (b){ b.currentCrop=arg.currentCrop; b.occupancyPct=arg.occupancyPct; b.status=arg.status; b.dateStatusSet=arg.dateStatusSet; b.notes=arg.notes; MOCK.dashboard.bayStatusCounts = tally(MOCK.bays.map(x=>x.status)); }
-      return {ok:true};
+    return out;
+  });
+}
+
+function getGreenhouseBays(){
+  return fetchCsv(CSV_URLS.bays).then(function(rows){
+    var headerIdx = findHeaderRowIdx(rows, 'Bay #', 10);
+    if (headerIdx < 0) throw new Error('Could not find the "Bay #" header row in the Greenhouse Bays CSV.');
+    var cols = headerIndexMap(rows[headerIdx]);
+    var out = [];
+    for (var i = headerIdx + 1; i < rows.length; i++){
+      var row = rows[i];
+      var bayNum = row && row[cols['Bay #']];
+      if (!bayNum) continue;
+      out.push({
+        rowNum: i + 1,
+        bayNum: Number(bayNum),
+        purpose: row[cols['Primary Purpose']],
+        currentCrop: row[cols['Current Crop']] || '',
+        occupancyPct: parsePctToFraction(row[cols['Occupancy %']]),
+        status: row[cols['Status']],
+        dateStatusSet: row[cols['Date Status Set']] || '',
+        notes: row[cols['Notes']] || ''
+      });
     }
-    case 'getStorageCrops': return MOCK.storageCrops;
-    case 'addStorageTransaction': return {ok:true, newBalance:(Number(arg.qtyIn)||0)-(Number(arg.qtyDrawn)||0)};
-    case 'getWeeklyDemand': return MOCK.demand;
-    case 'saveWeeklyDemand': return {ok:true};
-    case 'addDailyTaskLog': return {ok:true};
-    case 'addEscalation': return {ok:true};
-    default: throw new Error('No mock for ' + fnName);
+    return out;
+  });
+}
+
+function getStorageCrops(){
+  return fetchCsv(CSV_URLS.storage).then(function(rows){
+    var headerIdx = findHeaderRowIdx(rows, 'Crop', 10);
+    if (headerIdx < 0) throw new Error('Could not find the "Crop" header row in the Storage Reserve CSV.');
+    var cols = headerIndexMap(rows[headerIdx]);
+    var seen = {};
+    for (var i = headerIdx + 1; i < rows.length; i++){
+      var row = rows[i];
+      var crop = row && row[cols['Crop']];
+      if (crop && String(crop).toUpperCase().indexOf('TOTAL') !== 0) seen[crop] = true;
+    }
+    return Object.keys(seen);
+  });
+}
+
+function getWeeklyDemand(){
+  return fetchCsv(CSV_URLS.demand).then(function(rows){
+    var headerIdx = findHeaderRowIdx(rows, 'Crop Category', 10);
+    if (headerIdx < 0) throw new Error('Could not find the "Crop Category" header row in the Weekly Demand CSV.');
+    var cols = headerIndexMap(rows[headerIdx]);
+    var weekOf = '';
+    for (var w = 0; w < rows.length; w++){
+      if (rows[w] && String(rows[w][0]).trim() === 'Week Of:'){ weekOf = rows[w][1] || ''; break; }
+    }
+    var out = [];
+    for (var i = headerIdx + 1; i < rows.length && (i - headerIdx) <= 40; i++){
+      var row = rows[i];
+      var cropCat = row && row[cols['Crop Category']];
+      if (!cropCat || String(cropCat).toUpperCase().indexOf('MASTER SCR') === 0) break;
+      out.push({
+        rowNum: i + 1,
+        cropCategory: cropCat,
+        chASupply: row[cols['Ch A Supply']],
+        chBSupply: row[cols['Ch B Supply']],
+        chCSupply: row[cols['Ch C Supply']],
+        totalSupply: row[cols['Total Supply']],
+        weeklyDemand: row[cols['Weekly Demand']],
+        scr: row[cols['SCR']],
+        bridgeStatus: row[cols['Bridge Layer Status']]
+      });
+    }
+    return { weekOf: weekOf, rows: out };
+  });
+}
+
+function getDashboardSummary(){
+  return Promise.all([getBeds(), getGreenhouseBays()]).then(function(res){
+    var beds = res[0], bays = res[1];
+    return {
+      asOf: todayStr(),
+      bedStateCounts: tally(beds.map(function(b){ return b.stateName; })),
+      totalBeds: beds.length,
+      bayStatusCounts: tally(bays.map(function(b){ return b.status; })),
+      totalBays: bays.length
+    };
+  });
+}
+function tally(arr){ var o = {}; arr.forEach(function(v){ if (v) o[v] = (o[v]||0) + 1; }); return o; }
+
+/* ---------- DISPATCH — same call sites as before, routed to CSV reads / fetch-POST writes ---------- */
+function callServer(fnName, arg){
+  switch (fnName){
+    case 'getLists': return getLists();
+    case 'getDashboardSummary': return getDashboardSummary();
+    case 'getBeds': return getBeds();
+    case 'getGreenhouseBays': return getGreenhouseBays();
+    case 'getStorageCrops': return getStorageCrops();
+    case 'getWeeklyDemand': return getWeeklyDemand();
+    case 'updateBed':
+    case 'updateGreenhouseBay':
+    case 'addStorageTransaction':
+    case 'saveWeeklyDemand':
+    case 'addDailyTaskLog':
+    case 'addEscalation':
+      return postToSheet(fnName, arg);
+    default:
+      return Promise.reject(new Error('Unknown action: ' + fnName));
   }
 }
-function tally(arr){ const o={}; arr.forEach(v=>{ if(v) o[v]=(o[v]||0)+1; }); return o; }
 
 /* ========================================================================
    APP STATE + NAVIGATION
@@ -633,8 +802,8 @@ async function boot(){
   const badge = document.getElementById('connBadge');
   try{
     LISTS = await callServer('getLists');
-    badge.textContent = LIVE ? 'connected · live sheet' : 'preview mode · sample data';
-    badge.classList.toggle('offline', false);
+    badge.textContent = WRITE_URL ? 'connected · live sheet' : 'reading live sheet · writes not configured';
+    badge.classList.toggle('offline', !WRITE_URL);
   }catch(e){
     badge.textContent = 'offline — check connection';
     badge.classList.add('offline');
