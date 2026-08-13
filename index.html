@@ -321,7 +321,6 @@
       <p style="margin:0 0 10px;font-size:13.5px;color:#6B6250;">Jump straight to a task:</p>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
         <button class="btn secondary" data-goto="beds">Update a bed</button>
-        <button class="btn secondary" data-goto="wash">Wash Station</button>
         <button class="btn secondary" data-goto="greenhouse">Update a bay</button>
         <button class="btn secondary" data-goto="storage">Log storage</button>
         <button class="btn secondary" data-goto="demand">Weekly demand</button>
@@ -369,10 +368,17 @@
         </div>
 
         <div id="bedHarvestBlock" style="display:none;">
-          <div class="card" style="padding:12px;margin-bottom:0;background:var(--wheat-dim);border-color:var(--sage);">
-            <div style="font-family:'Barlow Condensed',sans-serif;font-size:13px;letter-spacing:.04em;text-transform:uppercase;color:var(--sage-dark);font-weight:600;">Next step: Wash Station</div>
-            <div style="font-size:13px;margin-top:4px;color:#6B6250;">Weight, the 30-min wash timer, and routing to Storage or Packed &amp; Staged are logged separately — every harvested bed has to clear Wash Station before the batch counts as accounted for.</div>
-            <button class="btn secondary" type="button" style="margin-top:10px;" data-goto="wash">Go to Wash Station &rarr;</button>
+          <div class="field"><label>Harvest weight (lb)</label><input type="number" id="bedHarvestWeight" min="0" step="0.1" placeholder="0.0"></div>
+          <div class="field">
+            <label>30-minute field-to-wash timer</label>
+            <div class="card" style="padding:12px;margin-bottom:0;">
+              <button class="btn secondary" id="bedWashStart" type="button">Start wash timer</button>
+              <div id="bedWashRunning" style="display:none;">
+                <div class="mono" id="bedWashCountdown" style="font-size:22px;text-align:center;margin:8px 0;">30:00</div>
+                <button class="btn" id="bedWashConfirm" type="button">Confirm washed</button>
+              </div>
+              <div id="bedWashResult" class="mono" style="margin-top:8px;font-size:13px;"></div>
+            </div>
           </div>
         </div>
 
@@ -382,69 +388,6 @@
         </div>
         <button class="btn" id="bedSave">Save bed update</button>
       </div>
-    </div>
-  </section>
-
-  <!-- ============ WASH STATION ============ -->
-  <section class="view" id="view-wash">
-    <div class="view-title"><h2>Wash Station</h2><span class="count-badge mono">Mandatory gateway</span></div>
-    <div class="card">
-      <div class="field">
-        <label>Bed</label>
-        <select id="wsBed"></select>
-      </div>
-      <div class="field"><label>Date</label><input type="date" id="wsDate"></div>
-      <div class="row2">
-        <div class="field"><label>Crop / variety</label><input type="text" id="wsCropVariety"></div>
-        <div class="field">
-          <label>Crop category</label>
-          <select id="wsCropCategory"></select>
-        </div>
-      </div>
-      <div class="field"><label>Batch weight (lb)</label><input type="number" id="wsWeight" min="0" step="0.1" placeholder="0.0"></div>
-      <div class="field">
-        <label>Wash method</label>
-        <div class="pill-select" id="wsMethodPills"></div>
-      </div>
-
-      <div class="field">
-        <label>30-minute field-to-wash timer</label>
-        <div class="card" style="padding:12px;margin-bottom:0;">
-          <button class="btn secondary" id="wsWashStart" type="button">Start wash timer</button>
-          <div id="wsWashRunning" style="display:none;">
-            <div class="mono" id="wsWashCountdown" style="font-size:22px;text-align:center;margin:8px 0;">30:00</div>
-            <button class="btn" id="wsWashConfirm" type="button">Confirm washed</button>
-          </div>
-          <div id="wsWashResult" class="mono" style="margin-top:8px;font-size:13px;"></div>
-        </div>
-      </div>
-
-      <div class="field">
-        <label>Route</label>
-        <div class="pill-select" id="wsRoutePills"></div>
-      </div>
-
-      <div id="wsStorageBlock" style="display:none;">
-        <div class="field"><label>Storage room</label><input type="text" id="wsRoom" placeholder="e.g. Cold Room 2"></div>
-        <div class="row2">
-          <div class="field"><label>Temp (°F)</label><input type="number" id="wsTemp" placeholder="34–38"></div>
-          <div class="field"><label>Humidity %</label><input type="number" id="wsHumidity" min="0" max="100"></div>
-        </div>
-      </div>
-
-      <div id="wsPackedBlock" style="display:none;">
-        <div class="field">
-          <label>Target outlet</label>
-          <select id="wsOutlet"></select>
-        </div>
-        <div class="row2">
-          <div class="field"><label>Crate / unit count</label><input type="number" id="wsCrateCount" min="0"></div>
-          <div class="field"><label>Staging location</label><input type="text" id="wsStagingLoc" placeholder="e.g. Pack shed bay 2"></div>
-        </div>
-      </div>
-
-      <div class="field"><label>Notes</label><textarea id="wsNotes"></textarea></div>
-      <button class="btn" id="wsSave">Log wash + route</button>
     </div>
   </section>
 
@@ -568,7 +511,6 @@
 <nav class="tabbar">
   <button data-view="overview" class="active"><span class="ic">&#9678;</span>Board</button>
   <button data-view="beds"><span class="ic">&#9634;</span>Beds</button>
-  <button data-view="wash"><span class="ic">&#9814;</span>Wash</button>
   <button data-view="greenhouse"><span class="ic">&#9721;</span>Bays</button>
   <button data-view="storage"><span class="ic">&#9707;</span>Storage</button>
   <button data-view="demand"><span class="ic">&#8776;</span>Demand</button>
@@ -717,10 +659,7 @@ function getLists(){
       escalationCheckTypes: col(10),
       resolvedOptions: col(12),
       seasons: col(14),
-      greenhouseBayStatus: col(16),
-      washMethods: col(17),
-      routes: col(19),
-      targetOutlets: col(21)
+      greenhouseBayStatus: col(16)
     };
   });
 }
@@ -849,9 +788,7 @@ function callServer(fnName, arg){
     case 'getWeeklyDemand': return getWeeklyDemand();
     case 'updateBed':
     case 'updateGreenhouseBay':
-    case 'logWashStation':
     case 'addStorageTransaction':
-    case 'addPackedStaging':
     case 'saveWeeklyDemand':
     case 'addDailyTaskLog':
     case 'addEscalation':
@@ -932,20 +869,11 @@ async function boot(){
   document.getElementById('tkDate').value = todayStr();
   document.getElementById('esDate').value = todayStr();
   document.getElementById('stDate').value = todayStr();
-  document.getElementById('wsDate').value = todayStr();
 
   makePills(document.getElementById('tkSeasonPills'), LISTS.seasons);
   makePills(document.getElementById('tkStatusPills'), LISTS.taskStatus);
   makePills(document.getElementById('esTypePills'), LISTS.escalationCheckTypes);
   makePills(document.getElementById('esResolvedPills'), LISTS.resolvedOptions, 'N');
-
-  populateWashBedPicker();
-  document.getElementById('wsCropCategory').innerHTML = LISTS.cropCategories.map(c => '<option value="'+c+'">'+c+'</option>').join('');
-  document.getElementById('wsOutlet').innerHTML = LISTS.targetOutlets.map(o => '<option value="'+o+'">'+o+'</option>').join('');
-  makePills(document.getElementById('wsMethodPills'), LISTS.washMethods);
-  makePills(document.getElementById('wsRoutePills'), LISTS.routes);
-  document.querySelectorAll('#wsRoutePills .pill').forEach(p => p.addEventListener('click', updateWsRouteVisibility));
-  updateWsRouteVisibility();
 }
 
 document.getElementById('refreshBoard').addEventListener('click', refreshBoard);
@@ -986,7 +914,6 @@ async function loadBeds(){
   BEDS_CACHE = await callServer('getBeds');
   document.getElementById('bedCountLabel').textContent = BEDS_CACHE.length + ' beds';
   renderBedList(BEDS_CACHE);
-  if (document.getElementById('wsBed')) populateWashBedPicker();
 }
 function renderBedList(list){
   const wrap = document.getElementById('bedList');
@@ -1016,12 +943,66 @@ document.getElementById('bedSearch').addEventListener('input', (e) => {
 });
 
 let currentBed = null;
+let washState = null; // { startedAt: epochMs } while a timer is running; null otherwise
+let washResult = null; // { minutes: Number, violation: Boolean } once confirmed
+let washTickHandle = null;
+
+function resetWashUi(){
+  washState = null;
+  washResult = null;
+  if (washTickHandle){ clearInterval(washTickHandle); washTickHandle = null; }
+  document.getElementById('bedWashStart').style.display = 'inline-flex';
+  document.getElementById('bedWashRunning').style.display = 'none';
+  document.getElementById('bedWashCountdown').textContent = '30:00';
+  document.getElementById('bedWashCountdown').style.color = '';
+  document.getElementById('bedWashResult').textContent = '';
+}
 
 function updateBedHarvestVisibility(){
   const stateName = document.getElementById('bedStatePills').dataset.selected;
   const block = document.getElementById('bedHarvestBlock');
-  block.style.display = (stateName === 'Harvested') ? 'block' : 'none';
+  const isHarvest = stateName === 'Harvested';
+  block.style.display = isHarvest ? 'block' : 'none';
+  if (!isHarvest) resetWashUi();
 }
+
+document.getElementById('bedWashStart').addEventListener('click', () => {
+  washState = { startedAt: Date.now() };
+  washResult = null;
+  document.getElementById('bedWashStart').style.display = 'none';
+  document.getElementById('bedWashRunning').style.display = 'block';
+  document.getElementById('bedWashResult').textContent = '';
+  const countdownEl = document.getElementById('bedWashCountdown');
+  function tick(){
+    const elapsedMs = Date.now() - washState.startedAt;
+    const remainingSec = Math.max(0, Math.round(1800 - elapsedMs / 1000));
+    const mm = String(Math.floor(remainingSec / 60)).padStart(2, '0');
+    const ss = String(remainingSec % 60).padStart(2, '0');
+    countdownEl.textContent = mm + ':' + ss;
+    countdownEl.style.color = remainingSec === 0 ? 'var(--rust)' : '';
+  }
+  tick();
+  washTickHandle = setInterval(tick, 1000);
+});
+
+document.getElementById('bedWashConfirm').addEventListener('click', () => {
+  if (!washState) return;
+  const elapsedMin = (Date.now() - washState.startedAt) / 60000;
+  const violation = elapsedMin > 30;
+  washResult = { minutes: Math.round(elapsedMin * 10) / 10, violation: violation, confirmedAt: Date.now() };
+  if (washTickHandle){ clearInterval(washTickHandle); washTickHandle = null; }
+  document.getElementById('bedWashRunning').style.display = 'none';
+  document.getElementById('bedWashStart').style.display = 'inline-flex';
+  document.getElementById('bedWashStart').textContent = 'Restart wash timer';
+  const resultEl = document.getElementById('bedWashResult');
+  if (violation){
+    resultEl.style.color = 'var(--rust)';
+    resultEl.textContent = 'Washed at ' + washResult.minutes + ' min — over the 30-min window. This will auto-log an escalation on save.';
+  } else {
+    resultEl.style.color = 'var(--ok)';
+    resultEl.textContent = 'Washed at ' + washResult.minutes + ' min — within the 30-min window.';
+  }
+});
 
 function openBedForm(bed){
   currentBed = bed;
@@ -1035,6 +1016,9 @@ function openBedForm(bed){
   document.getElementById('bedTargetHarvest').value = formatDateDisplay(bed.targetHarvestDate);
   document.getElementById('bedDate').value = bed.dateEnteredState || todayStr();
   document.getElementById('bedNotes').value = bed.notes || '';
+  document.getElementById('bedHarvestWeight').value = '';
+  document.getElementById('bedWashStart').textContent = 'Start wash timer';
+  resetWashUi();
   makePills(document.getElementById('bedStatePills'), LISTS.bedStates, bed.stateName);
   document.querySelectorAll('#bedStatePills .pill').forEach(p => {
     p.addEventListener('click', updateBedHarvestVisibility);
@@ -1044,12 +1028,19 @@ function openBedForm(bed){
 document.getElementById('bedBack').addEventListener('click', () => {
   document.getElementById('bedFormWrap').style.display = 'none';
   document.getElementById('bedListWrap').style.display = 'block';
+  resetWashUi();
 });
 document.getElementById('bedSave').addEventListener('click', async () => {
   if (!currentBed) return;
   const stateName = document.getElementById('bedStatePills').dataset.selected;
   const stateObj = LISTS.bedStates.find(s => s.name === stateName);
   const isHarvest = stateName === 'Harvested';
+  const harvestWeightRaw = document.getElementById('bedHarvestWeight').value;
+
+  if (isHarvest && !harvestWeightRaw){
+    showToast('Enter the harvest weight before saving.', true);
+    return;
+  }
 
   const payload = {
     rowNum: currentBed.rowNum,
@@ -1060,16 +1051,26 @@ document.getElementById('bedSave').addEventListener('click', async () => {
     datePlanted: document.getElementById('bedDatePlanted').value,
     notes: document.getElementById('bedNotes').value
   };
+  if (isHarvest && harvestWeightRaw){
+    payload.harvestWeightLb = parseFloat(harvestWeightRaw);
+    if (washResult){
+      payload.washMinutes = washResult.minutes;
+      payload.washViolation = washResult.violation;
+      payload.harvestTime = new Date(washState.startedAt).toISOString();
+      payload.washArrivalTime = new Date(washResult.confirmedAt).toISOString();
+    }
+  }
 
   const btn = document.getElementById('bedSave');
   btn.disabled = true; btn.textContent = 'Saving…';
   try{
     await callServer('updateBed', payload);
-    showToast(currentBed.bedId + ' updated' + (isHarvest ? ' · head to Wash Station next' : ''));
+    showToast(currentBed.bedId + ' updated' + (isHarvest ? ' · logged to Harvest Log' : '') + (payload.washViolation ? ' · wash violation logged to Escalations' : ''));
     await loadBeds();
     await refreshBoard();
     document.getElementById('bedFormWrap').style.display = 'none';
     document.getElementById('bedListWrap').style.display = 'block';
+    resetWashUi();
   }catch(e){
     showToast('Save failed: ' + e.message, true);
   }finally{
@@ -1171,146 +1172,6 @@ document.getElementById('stSave').addEventListener('click', async () => {
     showToast('Save failed: ' + e.message, true);
   }finally{
     btn.disabled = false; btn.textContent = 'Log storage transaction';
-  }
-});
-
-/* ========================================================================
-   WASH STATION — mandatory gateway between harvest and destination.
-   Bed Update no longer captures weight/wash — everything that used to
-   live on the bed form's harvest block now lives here, plus routing.
-   ======================================================================== */
-function populateWashBedPicker(){
-  const sel = document.getElementById('wsBed');
-  const prev = sel.value;
-  const harvested = BEDS_CACHE.filter(b => b.stateName === 'Harvested');
-  const rest = BEDS_CACHE.filter(b => b.stateName !== 'Harvested');
-  sel.innerHTML =
-    '<option value="">Select a bed…</option>' +
-    (harvested.length ? '<optgroup label="Harvested — needs washing">' +
-      harvested.map(b => '<option value="'+b.rowNum+'">'+b.bedId+' · '+(b.cropVariety||b.defaultCrop)+'</option>').join('') +
-      '</optgroup>' : '') +
-    '<optgroup label="Other beds">' +
-      rest.map(b => '<option value="'+b.rowNum+'">'+b.bedId+' · '+(b.cropVariety||b.defaultCrop)+'</option>').join('') +
-    '</optgroup>';
-  if (prev) sel.value = prev;
-}
-document.getElementById('wsBed').addEventListener('change', () => {
-  const bed = BEDS_CACHE.find(b => String(b.rowNum) === document.getElementById('wsBed').value);
-  document.getElementById('wsCropVariety').value = bed ? (bed.cropVariety || bed.defaultCrop || '') : '';
-});
-
-let wsWashState = null;   // { startedAt } while running
-let wsWashResult = null;  // { minutes, violation, confirmedAt } once confirmed
-let wsWashTickHandle = null;
-function resetWsWashUi(){
-  wsWashState = null; wsWashResult = null;
-  if (wsWashTickHandle){ clearInterval(wsWashTickHandle); wsWashTickHandle = null; }
-  document.getElementById('wsWashStart').style.display = 'inline-flex';
-  document.getElementById('wsWashStart').textContent = 'Start wash timer';
-  document.getElementById('wsWashRunning').style.display = 'none';
-  document.getElementById('wsWashCountdown').textContent = '30:00';
-  document.getElementById('wsWashCountdown').style.color = '';
-  document.getElementById('wsWashResult').textContent = '';
-}
-document.getElementById('wsWashStart').addEventListener('click', () => {
-  wsWashState = { startedAt: Date.now() };
-  wsWashResult = null;
-  document.getElementById('wsWashStart').style.display = 'none';
-  document.getElementById('wsWashRunning').style.display = 'block';
-  document.getElementById('wsWashResult').textContent = '';
-  const countdownEl = document.getElementById('wsWashCountdown');
-  function tick(){
-    const elapsedMs = Date.now() - wsWashState.startedAt;
-    const remainingSec = Math.max(0, Math.round(1800 - elapsedMs / 1000));
-    const mm = String(Math.floor(remainingSec / 60)).padStart(2, '0');
-    const ss = String(remainingSec % 60).padStart(2, '0');
-    countdownEl.textContent = mm + ':' + ss;
-    countdownEl.style.color = remainingSec === 0 ? 'var(--rust)' : '';
-  }
-  tick();
-  wsWashTickHandle = setInterval(tick, 1000);
-});
-document.getElementById('wsWashConfirm').addEventListener('click', () => {
-  if (!wsWashState) return;
-  const elapsedMin = (Date.now() - wsWashState.startedAt) / 60000;
-  const violation = elapsedMin > 30;
-  wsWashResult = { minutes: Math.round(elapsedMin * 10) / 10, violation: violation, confirmedAt: Date.now() };
-  if (wsWashTickHandle){ clearInterval(wsWashTickHandle); wsWashTickHandle = null; }
-  document.getElementById('wsWashRunning').style.display = 'none';
-  document.getElementById('wsWashStart').style.display = 'inline-flex';
-  document.getElementById('wsWashStart').textContent = 'Restart wash timer';
-  const resultEl = document.getElementById('wsWashResult');
-  if (violation){
-    resultEl.style.color = 'var(--rust)';
-    resultEl.textContent = 'Washed at ' + wsWashResult.minutes + ' min — over the 30-min window. This will auto-log an escalation on save.';
-  } else {
-    resultEl.style.color = 'var(--ok)';
-    resultEl.textContent = 'Washed at ' + wsWashResult.minutes + ' min — within the 30-min window.';
-  }
-});
-
-function updateWsRouteVisibility(){
-  const route = document.getElementById('wsRoutePills').dataset.selected;
-  document.getElementById('wsStorageBlock').style.display = (route === 'Bulk Storage') ? 'block' : 'none';
-  document.getElementById('wsPackedBlock').style.display = (route === 'Packed & Staged (RTD)') ? 'block' : 'none';
-}
-
-document.getElementById('wsSave').addEventListener('click', async () => {
-  const bedSel = document.getElementById('wsBed');
-  const bed = BEDS_CACHE.find(b => String(b.rowNum) === bedSel.value);
-  if (!bed){ showToast('Pick a bed first.', true); return; }
-  const cropVariety = document.getElementById('wsCropVariety').value.trim();
-  const weightRaw = document.getElementById('wsWeight').value;
-  const route = document.getElementById('wsRoutePills').dataset.selected;
-  if (!cropVariety){ showToast('Enter the crop / variety.', true); return; }
-  if (!weightRaw){ showToast('Enter the batch weight before saving.', true); return; }
-  if (!wsWashResult){ showToast('Run the wash timer and confirm washed before saving.', true); return; }
-  if (!route){ showToast('Pick a route — Bulk Storage or Packed & Staged.', true); return; }
-  if (route === 'Packed & Staged (RTD)' && !document.getElementById('wsOutlet').value){
-    showToast('Pick a target outlet for Packed & Staged.', true); return;
-  }
-
-  const payload = {
-    bedId: bed.bedId,
-    date: document.getElementById('wsDate').value,
-    cropVariety: cropVariety,
-    cropCategory: document.getElementById('wsCropCategory').value,
-    weightLb: parseFloat(weightRaw),
-    washMethod: document.getElementById('wsMethodPills').dataset.selected,
-    harvestTime: new Date(wsWashState.startedAt).toISOString(),
-    washArrivalTime: new Date(wsWashResult.confirmedAt).toISOString(),
-    route: route,
-    notes: document.getElementById('wsNotes').value
-  };
-  if (route === 'Bulk Storage'){
-    payload.storageRoom = document.getElementById('wsRoom').value;
-    payload.temp = document.getElementById('wsTemp').value;
-    payload.humidity = document.getElementById('wsHumidity').value;
-  } else {
-    payload.targetOutlet = document.getElementById('wsOutlet').value;
-    payload.crateCount = document.getElementById('wsCrateCount').value;
-    payload.stagingLocation = document.getElementById('wsStagingLoc').value;
-  }
-
-  const btn = document.getElementById('wsSave');
-  btn.disabled = true; btn.textContent = 'Saving…';
-  try{
-    const res = await callServer('logWashStation', payload);
-    showToast(bed.bedId + ' washed & routed to ' + route + (res.washViolation ? ' · wash violation logged to Escalations' : ''));
-    document.getElementById('wsWeight').value = '';
-    document.getElementById('wsCrateCount').value = '';
-    document.getElementById('wsStagingLoc').value = '';
-    document.getElementById('wsRoom').value = '';
-    document.getElementById('wsTemp').value = '';
-    document.getElementById('wsHumidity').value = '';
-    document.getElementById('wsNotes').value = '';
-    resetWsWashUi();
-    await loadBeds();
-    await refreshBoard();
-  }catch(e){
-    showToast('Save failed: ' + e.message, true);
-  }finally{
-    btn.disabled = false; btn.textContent = 'Log wash + route';
   }
 });
 
