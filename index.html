@@ -247,6 +247,47 @@
   .demand-row .row3 input{padding:8px;font-size:14px;}
   .demand-row .mini-label{font-size:10px;text-align:center;color:#9C907A;margin-top:2px;text-transform:uppercase;letter-spacing:.05em;}
 
+  /* ---------- Staging & Dispatch ---------- */
+  .rcard{
+    background:#fff;border:1px solid var(--line);border-radius:var(--radius);
+    padding:14px;margin-bottom:12px;
+  }
+  .rcard-head{display:flex;align-items:center;gap:8px;margin-bottom:6px;}
+  .rcard-dot{width:11px;height:11px;border-radius:50%;flex:none;border:1px solid rgba(0,0,0,.15);}
+  .rcard-name{font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:17px;color:var(--soil);flex:1;}
+  .rcard-route{font-size:11px;color:#9C907A;text-transform:uppercase;letter-spacing:.04em;}
+  .rcard-spot{font-size:13px;color:var(--sage-dark);font-weight:600;margin-bottom:8px;}
+  .rcard-totals{
+    display:flex;gap:16px;padding:8px 0;border-top:1px solid var(--line);border-bottom:1px solid var(--line);margin-bottom:8px;
+  }
+  .rcard-totals .t{display:flex;flex-direction:column;}
+  .rcard-totals .t .n{font-family:'IBM Plex Mono',monospace;font-size:18px;font-weight:600;color:var(--soil);}
+  .rcard-totals .t .l{font-size:10px;color:#9C907A;text-transform:uppercase;letter-spacing:.05em;}
+  .rcard-items{font-size:12.5px;color:#6B6250;}
+  .rcard-items .ri{display:flex;justify-content:space-between;padding:3px 0;}
+  .rcard-empty{font-size:12.5px;color:#9C907A;font-style:italic;}
+  .rcard-qr{font-family:'IBM Plex Mono',monospace;font-size:11px;color:#9C907A;margin-top:6px;}
+
+  .ds-manifest-row{
+    display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--line);font-size:13.5px;
+  }
+  .ds-manifest-row:last-child{border-bottom:none;}
+
+  .placard{
+    border:1.5px dashed var(--line);border-radius:8px;padding:14px;text-align:center;margin-bottom:12px;
+    page-break-inside:avoid;
+  }
+  .placard img{width:150px;height:150px;}
+  .placard .p-name{font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:16px;color:var(--soil);margin-top:6px;}
+  .placard .p-spot{font-size:12.5px;color:var(--sage-dark);font-weight:600;}
+  .placard .p-code{font-family:'IBM Plex Mono',monospace;font-size:11px;color:#9C907A;margin-top:4px;}
+
+  @media print{
+    header.masthead,.board,nav.tabbar,#toast,.view-title,#dsScanCard,.btn{display:none !important;}
+    #dsPlacards{display:block !important;}
+    main{padding:0;max-width:none;}
+  }
+
   /* ---------- Bottom tab bar ---------- */
   nav.tabbar{
     position:fixed;bottom:0;left:0;right:0;
@@ -327,6 +368,7 @@
         <button class="btn secondary" data-goto="demand">Weekly demand</button>
         <button class="btn secondary" data-goto="tasks">Log a task</button>
         <button class="btn secondary" data-goto="escalations">Log escalation</button>
+        <button class="btn secondary" data-goto="dispatch">Staging &amp; Dispatch</button>
       </div>
     </div>
   </section>
@@ -437,9 +479,10 @@
           <label>Target outlet</label>
           <select id="wsOutlet"></select>
         </div>
+        <div id="wsOutletPreview" class="card" style="display:none;padding:10px 12px;margin-bottom:14px;background:var(--wheat-dim);border-color:var(--sage);"></div>
         <div class="row2">
           <div class="field"><label>Crate / unit count</label><input type="number" id="wsCrateCount" min="0"></div>
-          <div class="field"><label>Staging location</label><input type="text" id="wsStagingLoc" placeholder="e.g. Pack shed bay 2"></div>
+          <div class="field"><label>Staging location</label><input type="text" id="wsStagingLoc" placeholder="auto-fills from outlet — edit if using an overflow spot"></div>
         </div>
       </div>
 
@@ -561,6 +604,45 @@
     </div>
   </section>
 
+  <!-- ============ STAGING & DISPATCH ============ -->
+  <section class="view" id="view-dispatch">
+    <div class="view-title"><h2>Staging &amp; Dispatch</h2><span class="count-badge mono" id="dsCountLabel"></span></div>
+
+    <div class="card" id="dsScanCard">
+      <div class="field" style="margin-bottom:8px;">
+        <label>Driver pickup — scan or enter bay QR code</label>
+        <div class="row2" style="align-items:start;">
+          <input type="text" id="dsQrInput" class="mono" placeholder="QR-CALLATIS-001" style="grid-column:1/2;">
+          <button class="btn secondary" type="button" id="dsCameraBtn" style="display:none;grid-column:2/3;">Scan with camera</button>
+        </div>
+      </div>
+      <video id="dsCameraVideo" style="display:none;width:100%;border-radius:8px;margin-bottom:10px;" playsinline muted></video>
+      <button class="btn secondary" type="button" id="dsLookupBtn" style="margin-bottom:10px;">Look up order</button>
+      <div id="dsManifestWrap" style="display:none;">
+        <div class="card" style="padding:12px;margin-bottom:10px;background:var(--wheat-dim);border-color:var(--sage);">
+          <div id="dsManifestHead" style="font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:16px;color:var(--soil);margin-bottom:6px;"></div>
+          <div id="dsManifestRows"></div>
+        </div>
+        <div class="field"><label>Confirmed by</label><input type="text" id="dsConfirmedBy" placeholder="Driver / worker name"></div>
+        <button class="btn" id="dsConfirmBtn">Confirm order picked up &amp; dispatched</button>
+      </div>
+      <div id="dsManifestEmpty" class="empty" style="display:none;padding:20px 8px;">
+        <span class="big">&#9888;</span>No pending crates found for that QR code.
+      </div>
+    </div>
+
+    <div id="dsBoard"></div>
+
+    <div class="card">
+      <div class="view-title" style="margin-bottom:8px;">
+        <h2 style="font-size:16px;">Bay QR placards</h2>
+        <button class="btn secondary" type="button" id="dsPrintBtn" style="width:auto;padding:8px 14px;">Print</button>
+      </div>
+      <p style="margin:0 0 10px;font-size:12.5px;color:#6B6250;">One sticker per bay. A driver's phone camera opens this app straight to that bay's pending order.</p>
+      <div id="dsPlacards" style="display:grid;grid-template-columns:1fr 1fr;gap:10px;"></div>
+    </div>
+  </section>
+
 </main>
 
 <div id="toast"></div>
@@ -574,6 +656,7 @@
   <button data-view="demand"><span class="ic">&#8776;</span>Demand</button>
   <button data-view="tasks"><span class="ic">&#10003;</span>Tasks</button>
   <button data-view="escalations"><span class="ic">&#9888;</span>Escalate</button>
+  <button data-view="dispatch"><span class="ic">&#9743;</span>Dispatch</button>
 </nav>
 
 <script>
@@ -585,12 +668,16 @@
    Ngapori RAMS portal.
    ========================================================================== */
 
+/* Restaurant Delivery Map and Packed & Staged (RTD) are published — the
+   Staging & Dispatch view reads live from both. */
 var CSV_URLS = {
-  beds:    'https://docs.google.com/spreadsheets/d/e/2PACX-1vQipaFNMCQDDtV6xtZJqwyVC2likxz23tWSrUF7oYpv0g8K1lg3k8wp3BV-IBccUzrnBsp9KKgJWQPF/pub?gid=800814606&single=true&output=csv',
-  bays:    'https://docs.google.com/spreadsheets/d/e/2PACX-1vQipaFNMCQDDtV6xtZJqwyVC2likxz23tWSrUF7oYpv0g8K1lg3k8wp3BV-IBccUzrnBsp9KKgJWQPF/pub?gid=2092694534&single=true&output=csv',
-  storage: 'https://docs.google.com/spreadsheets/d/e/2PACX-1vQipaFNMCQDDtV6xtZJqwyVC2likxz23tWSrUF7oYpv0g8K1lg3k8wp3BV-IBccUzrnBsp9KKgJWQPF/pub?gid=8979155&single=true&output=csv',
-  demand:  'https://docs.google.com/spreadsheets/d/e/2PACX-1vQipaFNMCQDDtV6xtZJqwyVC2likxz23tWSrUF7oYpv0g8K1lg3k8wp3BV-IBccUzrnBsp9KKgJWQPF/pub?gid=1441279472&single=true&output=csv',
-  lists:   'https://docs.google.com/spreadsheets/d/e/2PACX-1vQipaFNMCQDDtV6xtZJqwyVC2likxz23tWSrUF7oYpv0g8K1lg3k8wp3BV-IBccUzrnBsp9KKgJWQPF/pub?gid=1022487051&single=true&output=csv'
+  beds:        'https://docs.google.com/spreadsheets/d/e/2PACX-1vQipaFNMCQDDtV6xtZJqwyVC2likxz23tWSrUF7oYpv0g8K1lg3k8wp3BV-IBccUzrnBsp9KKgJWQPF/pub?gid=800814606&single=true&output=csv',
+  bays:        'https://docs.google.com/spreadsheets/d/e/2PACX-1vQipaFNMCQDDtV6xtZJqwyVC2likxz23tWSrUF7oYpv0g8K1lg3k8wp3BV-IBccUzrnBsp9KKgJWQPF/pub?gid=2092694534&single=true&output=csv',
+  storage:     'https://docs.google.com/spreadsheets/d/e/2PACX-1vQipaFNMCQDDtV6xtZJqwyVC2likxz23tWSrUF7oYpv0g8K1lg3k8wp3BV-IBccUzrnBsp9KKgJWQPF/pub?gid=8979155&single=true&output=csv',
+  demand:      'https://docs.google.com/spreadsheets/d/e/2PACX-1vQipaFNMCQDDtV6xtZJqwyVC2likxz23tWSrUF7oYpv0g8K1lg3k8wp3BV-IBccUzrnBsp9KKgJWQPF/pub?gid=1441279472&single=true&output=csv',
+  lists:       'https://docs.google.com/spreadsheets/d/e/2PACX-1vQipaFNMCQDDtV6xtZJqwyVC2likxz23tWSrUF7oYpv0g8K1lg3k8wp3BV-IBccUzrnBsp9KKgJWQPF/pub?gid=1022487051&single=true&output=csv',
+  restaurants: 'https://docs.google.com/spreadsheets/d/e/2PACX-1vQipaFNMCQDDtV6xtZJqwyVC2likxz23tWSrUF7oYpv0g8K1lg3k8wp3BV-IBccUzrnBsp9KKgJWQPF/pub?gid=1947017870&single=true&output=csv',
+  packed:      'https://docs.google.com/spreadsheets/d/e/2PACX-1vQipaFNMCQDDtV6xtZJqwyVC2likxz23tWSrUF7oYpv0g8K1lg3k8wp3BV-IBccUzrnBsp9KKgJWQPF/pub?gid=448268097&single=true&output=csv'
 };
 
 /* ===== WRITE BACKEND =====
@@ -720,6 +807,10 @@ function getLists(){
       greenhouseBayStatus: col(16),
       washMethods: col(17),
       routes: col(19),
+      // Kept for reference only — the Wash Station's outlet picker now
+      // sources restaurant names from getRestaurants() (Restaurant
+      // Delivery Map) instead, since this column's values are actually
+      // delivery route names, not restaurant names.
       targetOutlets: col(21)
     };
   });
@@ -824,6 +915,83 @@ function getWeeklyDemand(){
   });
 }
 
+/* ---------- RESTAURANT DELIVERY MAP ----------
+   Reference tab — one row per restaurant with its physical bay (Staging
+   Spot), the static QR Code ID stuck to that bay, and its delivery route.
+   This is what actually tells a worker where to put finished crates, and
+   what the Staging & Dispatch board is built from. */
+function getRestaurants(){
+  if (!CSV_URLS.restaurants || CSV_URLS.restaurants.indexOf('PASTE_') === 0){
+    return Promise.reject(new Error('Restaurant Delivery Map CSV not configured yet — publish that tab and paste its URL into CSV_URLS.restaurants.'));
+  }
+  return fetchCsv(CSV_URLS.restaurants).then(function(rows){
+    var headerIdx = findHeaderRowIdx(rows, 'Restaurant', 10);
+    if (headerIdx < 0) throw new Error('Could not find the "Restaurant" header row in the Restaurant Delivery Map CSV.');
+    var cols = headerIndexMap(rows[headerIdx]);
+    var out = [];
+    for (var i = headerIdx + 1; i < rows.length; i++){
+      var row = rows[i];
+      var name = row && row[cols['Restaurant']];
+      if (!name) continue;
+      out.push({
+        name: name,
+        address: row[cols['Address']] || '',
+        stagingSpot: row[cols['Staging Spot']] || '',
+        qrCodeId: row[cols['QR Code ID']] || '',
+        qrCodeUrl: row[cols['QR Code URL']] || '',
+        route: row[cols['Route']] || '',
+        color: row[cols['Color']] || '',
+        active: String(row[cols['Active']] || '').trim().toLowerCase() === 'yes',
+        contact: row[cols['Contact']] || ''
+      });
+    }
+    return out;
+  });
+}
+
+/* ---------- PACKED & STAGED (RTD) ----------
+   Append-only pack-event ledger, already joined to the Restaurant Delivery
+   Map at write time (see addPackedStaging() in the .gs file) — every row
+   already carries Restaurant / Staging Spot / QR Code ID / Route alongside
+   the pack details. QR Scan Confirmed? flips from 'N' to 'Y' the moment a
+   driver confirms pickup, so "pending" = rows where it's still 'N'. */
+function getPackedStaging(){
+  if (!CSV_URLS.packed || CSV_URLS.packed.indexOf('PASTE_') === 0){
+    return Promise.reject(new Error('Packed & Staged (RTD) CSV not configured yet — publish that tab and paste its URL into CSV_URLS.packed.'));
+  }
+  return fetchCsv(CSV_URLS.packed).then(function(rows){
+    var headerIdx = findHeaderRowIdx(rows, 'Date', 10);
+    if (headerIdx < 0) throw new Error('Could not find the "Date" header row in the Packed & Staged (RTD) CSV.');
+    var cols = headerIndexMap(rows[headerIdx]);
+    var out = [];
+    for (var i = headerIdx + 1; i < rows.length; i++){
+      var row = rows[i];
+      var date = row && row[cols['Date']];
+      var targetOutlet = row && row[cols['Target Outlet (Restaurant)']];
+      if (!date && !targetOutlet) continue;
+      out.push({
+        rowNum: i + 1,
+        date: toIsoDate(date),
+        bedId: row[cols['Bed ID']] || '',
+        cropVariety: row[cols['Crop / Variety']] || '',
+        targetOutlet: targetOutlet || '',
+        crateCount: Number(row[cols['Crate/Unit Count']]) || 0,
+        weightLb: Number(row[cols['Weight (lb)']]) || 0,
+        stagingLocation: row[cols['Staging Location']] || '',
+        notes: row[cols['Notes']] || '',
+        restaurant: row[cols['Restaurant']] || targetOutlet || '',
+        stagingSpot: row[cols['Staging Spot']] || '',
+        qrCodeId: row[cols['QR Code ID']] || '',
+        qrScanConfirmed: String(row[cols['QR Scan Confirmed?']] || '').trim().toUpperCase() === 'Y',
+        stagingConfirmTime: row[cols['Staging Confirm Time']] || '',
+        route: row[cols['Route']] || '',
+        confirmedBy: row[cols['Confirmed By']] || ''
+      });
+    }
+    return out;
+  });
+}
+
 function getDashboardSummary(){
   return Promise.all([getBeds(), getGreenhouseBays()]).then(function(res){
     var beds = res[0], bays = res[1];
@@ -847,6 +1015,8 @@ function callServer(fnName, arg){
     case 'getGreenhouseBays': return getGreenhouseBays();
     case 'getStorageCrops': return getStorageCrops();
     case 'getWeeklyDemand': return getWeeklyDemand();
+    case 'getRestaurants': return getRestaurants();
+    case 'getPackedStaging': return getPackedStaging();
     case 'updateBed':
     case 'updateGreenhouseBay':
     case 'logWashStation':
@@ -855,6 +1025,7 @@ function callServer(fnName, arg){
     case 'saveWeeklyDemand':
     case 'addDailyTaskLog':
     case 'addEscalation':
+    case 'confirmDispatch':
       return postToSheet(fnName, arg);
     default:
       return Promise.reject(new Error('Unknown action: ' + fnName));
@@ -867,6 +1038,8 @@ function callServer(fnName, arg){
 let LISTS = null;
 let BEDS_CACHE = [];
 let BAYS_CACHE = [];
+let RESTAURANTS_CACHE = [];
+let PACKED_CACHE = [];
 
 function showToast(msg, isErr){
   const t = document.getElementById('toast');
@@ -941,11 +1114,22 @@ async function boot(){
 
   populateWashBedPicker();
   document.getElementById('wsCropCategory').innerHTML = LISTS.cropCategories.map(c => '<option value="'+c+'">'+c+'</option>').join('');
-  document.getElementById('wsOutlet').innerHTML = LISTS.targetOutlets.map(o => '<option value="'+o+'">'+o+'</option>').join('');
   makePills(document.getElementById('wsMethodPills'), LISTS.washMethods);
   makePills(document.getElementById('wsRoutePills'), LISTS.routes);
   document.querySelectorAll('#wsRoutePills .pill').forEach(p => p.addEventListener('click', updateWsRouteVisibility));
   updateWsRouteVisibility();
+
+  await populateWashOutlets();
+  await loadDispatchBoard();
+
+  // A QR placard opens this page as .../index.html?qr=QR-CALLATIS-001 —
+  // jump straight to Staging & Dispatch with that code ready to look up.
+  const qrParam = new URLSearchParams(window.location.search).get('qr');
+  if (qrParam){
+    switchView('dispatch');
+    const qrInput = document.getElementById('dsQrInput');
+    if (qrInput){ qrInput.value = qrParam; lookupDispatchManifest(); }
+  }
 }
 
 document.getElementById('refreshBoard').addEventListener('click', refreshBoard);
@@ -1199,6 +1383,44 @@ document.getElementById('wsBed').addEventListener('change', () => {
   document.getElementById('wsCropVariety').value = bed ? (bed.cropVariety || bed.defaultCrop || '') : '';
 });
 
+/* Target outlet options come from the Restaurant Delivery Map (not the
+   Lists tab's stale "Target Outlet" column, which actually held delivery
+   route names, not restaurant names) — this is the same source the
+   Staging & Dispatch board reads from, so a batch logged here always maps
+   to a real bay. */
+async function populateWashOutlets(){
+  const sel = document.getElementById('wsOutlet');
+  try{
+    RESTAURANTS_CACHE = await callServer('getRestaurants');
+    const active = RESTAURANTS_CACHE.filter(r => r.active);
+    sel.innerHTML = '<option value="">Select a restaurant…</option>' +
+      active.map(r => '<option value="'+r.name+'">'+r.name+'</option>').join('');
+  }catch(e){
+    sel.innerHTML = '<option value="">Restaurant Delivery Map not configured yet</option>';
+  }
+  updateWsOutletPreview();
+}
+function updateWsOutletPreview(){
+  const sel = document.getElementById('wsOutlet');
+  const preview = document.getElementById('wsOutletPreview');
+  const stagingLocInput = document.getElementById('wsStagingLoc');
+  const r = RESTAURANTS_CACHE.find(x => x.name === sel.value);
+  if (!r){ preview.style.display = 'none'; return; }
+  preview.style.display = 'block';
+  preview.innerHTML =
+    '<div style="font-family:\'Barlow Condensed\',sans-serif;font-size:13px;letter-spacing:.04em;text-transform:uppercase;color:var(--sage-dark);font-weight:600;">Drop crates at</div>'+
+    '<div style="font-size:15px;font-weight:600;color:var(--soil);margin-top:2px;">'+r.stagingSpot+'</div>'+
+    '<div class="mono" style="font-size:12px;color:#6B6250;margin-top:4px;">QR '+r.qrCodeId+' · '+r.route+'</div>';
+  if (!stagingLocInput.value || stagingLocInput.dataset.autofilled === '1'){
+    stagingLocInput.value = r.stagingSpot;
+    stagingLocInput.dataset.autofilled = '1';
+  }
+}
+document.getElementById('wsOutlet').addEventListener('change', updateWsOutletPreview);
+document.getElementById('wsStagingLoc').addEventListener('input', () => {
+  document.getElementById('wsStagingLoc').dataset.autofilled = '0';
+});
+
 let wsWashState = null;   // { startedAt } while running
 let wsWashResult = null;  // { minutes, violation, confirmedAt } once confirmed
 let wsWashTickHandle = null;
@@ -1296,10 +1518,14 @@ document.getElementById('wsSave').addEventListener('click', async () => {
   btn.disabled = true; btn.textContent = 'Saving…';
   try{
     const res = await callServer('logWashStation', payload);
-    showToast(bed.bedId + ' washed & routed to ' + route + (res.washViolation ? ' · wash violation logged to Escalations' : ''));
+    const routeMsg = route === 'Packed & Staged (RTD)'
+      ? ' · staged at ' + (res.stagingSpot || payload.stagingLocation) + (res.unmapped ? ' (outlet not found in Restaurant Delivery Map — check the name)' : '')
+      : ' · routed to ' + route;
+    showToast(bed.bedId + ' washed' + routeMsg + (res.washViolation ? ' · wash violation logged to Escalations' : ''));
     document.getElementById('wsWeight').value = '';
     document.getElementById('wsCrateCount').value = '';
     document.getElementById('wsStagingLoc').value = '';
+    document.getElementById('wsStagingLoc').dataset.autofilled = '0';
     document.getElementById('wsRoom').value = '';
     document.getElementById('wsTemp').value = '';
     document.getElementById('wsHumidity').value = '';
@@ -1307,6 +1533,7 @@ document.getElementById('wsSave').addEventListener('click', async () => {
     resetWsWashUi();
     await loadBeds();
     await refreshBoard();
+    await loadDispatchBoard();
   }catch(e){
     showToast('Save failed: ' + e.message, true);
   }finally{
@@ -1426,6 +1653,198 @@ document.getElementById('esSave').addEventListener('click', async () => {
     btn.disabled = false; btn.textContent = 'Log escalation';
   }
 });
+
+/* ========================================================================
+   STAGING & DISPATCH
+   Restaurant-by-restaurant board of what's currently packed and sitting in
+   a bay awaiting pickup, plus the driver-facing QR confirm tool. Both read
+   straight off the CSV (Restaurant Delivery Map + Packed & Staged (RTD));
+   only the final confirm tap writes, via confirmDispatch().
+   ======================================================================== */
+
+async function loadDispatchBoard(){
+  const board = document.getElementById('dsBoard');
+  try{
+    const [restaurants, packed] = await Promise.all([
+      RESTAURANTS_CACHE.length ? Promise.resolve(RESTAURANTS_CACHE) : callServer('getRestaurants'),
+      callServer('getPackedStaging')
+    ]);
+    RESTAURANTS_CACHE = restaurants;
+    PACKED_CACHE = packed;
+    document.getElementById('dsCountLabel').textContent = restaurants.filter(r => r.active).length + ' restaurants';
+    renderDispatchCards();
+    renderPlacards();
+    setupCameraButtonVisibility();
+  }catch(e){
+    board.innerHTML = '<div class="empty"><span class="big">&#9888;</span>'+e.message+'</div>';
+    document.getElementById('dsPlacards').innerHTML = '';
+  }
+}
+
+function renderDispatchCards(){
+  const board = document.getElementById('dsBoard');
+  board.innerHTML = '';
+  const active = RESTAURANTS_CACHE.filter(r => r.active);
+  if (!active.length){
+    board.innerHTML = '<div class="empty"><span class="big">&#9634;</span>No active restaurants in the Delivery Map.</div>';
+    return;
+  }
+  active.forEach(r => {
+    const pending = PACKED_CACHE.filter(p => p.targetOutlet === r.name && !p.qrScanConfirmed);
+    const totalCrates = pending.reduce((s,p) => s + (p.crateCount||0), 0);
+    const totalWeight = pending.reduce((s,p) => s + (p.weightLb||0), 0);
+    const byItem = {};
+    pending.forEach(p => {
+      const key = p.cropVariety || 'Unlabeled';
+      if (!byItem[key]) byItem[key] = { crates: 0, weight: 0 };
+      byItem[key].crates += p.crateCount||0;
+      byItem[key].weight += p.weightLb||0;
+    });
+
+    const card = document.createElement('div');
+    card.className = 'rcard';
+    let itemsHtml = '<div class="rcard-empty">Nothing staged right now.</div>';
+    const keys = Object.keys(byItem);
+    if (keys.length){
+      itemsHtml = '<div class="rcard-items">' + keys.map(k =>
+        '<div class="ri"><span>'+k+'</span><span class="mono">'+byItem[k].crates+' crates / '+Math.round(byItem[k].weight)+' lb</span></div>'
+      ).join('') + '</div>';
+    }
+    card.innerHTML =
+      '<div class="rcard-head">'+
+        '<span class="rcard-dot" style="background:'+(r.color||'#7C8B6F')+';"></span>'+
+        '<span class="rcard-name">'+r.name+'</span>'+
+        '<span class="rcard-route">'+r.route+'</span>'+
+      '</div>'+
+      '<div class="rcard-spot">'+r.stagingSpot+'</div>'+
+      '<div class="rcard-totals">'+
+        '<div class="t"><span class="n">'+totalCrates+'</span><span class="l">Crates staged</span></div>'+
+        '<div class="t"><span class="n">'+Math.round(totalWeight)+'</span><span class="l">Lbs staged</span></div>'+
+      '</div>'+
+      itemsHtml +
+      '<div class="rcard-qr">QR '+r.qrCodeId+'</div>';
+    board.appendChild(card);
+  });
+}
+
+function renderPlacards(){
+  const wrap = document.getElementById('dsPlacards');
+  wrap.innerHTML = '';
+  const active = RESTAURANTS_CACHE.filter(r => r.active);
+  const baseUrl = window.location.origin + window.location.pathname;
+  active.forEach(r => {
+    if (!r.qrCodeId) return;
+    const dispatchUrl = baseUrl + '?qr=' + encodeURIComponent(r.qrCodeId);
+    const qrImg = 'https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=' + encodeURIComponent(dispatchUrl);
+    const div = document.createElement('div');
+    div.className = 'placard';
+    div.innerHTML =
+      '<img src="'+qrImg+'" alt="QR for '+r.name+'">'+
+      '<div class="p-name">'+r.name+'</div>'+
+      '<div class="p-spot">'+r.stagingSpot+'</div>'+
+      '<div class="p-code">'+r.qrCodeId+'</div>';
+    wrap.appendChild(div);
+  });
+}
+
+/* Driver scans (or types) the QR Code ID stuck on the bay. We look up
+   every not-yet-confirmed Packed & Staged row carrying that code straight
+   from the cached CSV data — no server round trip until they actually
+   confirm — so the manifest shown is exactly what confirmDispatch() is
+   about to close out. */
+let dsCurrentQr = null;
+function lookupDispatchManifest(){
+  const code = document.getElementById('dsQrInput').value.trim();
+  document.getElementById('dsManifestWrap').style.display = 'none';
+  document.getElementById('dsManifestEmpty').style.display = 'none';
+  if (!code){ showToast('Enter or scan a QR code first.', true); return; }
+  const pending = PACKED_CACHE.filter(p => p.qrCodeId === code && !p.qrScanConfirmed);
+  if (!pending.length){
+    document.getElementById('dsManifestEmpty').style.display = 'block';
+    dsCurrentQr = null;
+    return;
+  }
+  dsCurrentQr = code;
+  const restaurant = pending[0].restaurant;
+  const totalCrates = pending.reduce((s,p) => s + (p.crateCount||0), 0);
+  const totalWeight = pending.reduce((s,p) => s + (p.weightLb||0), 0);
+  document.getElementById('dsManifestHead').textContent = restaurant + ' — ' + totalCrates + ' crates / ' + Math.round(totalWeight) + ' lb';
+  document.getElementById('dsManifestRows').innerHTML = pending.map(p =>
+    '<div class="ds-manifest-row"><span>'+(p.cropVariety||'Unlabeled')+' · '+p.bedId+'</span><span class="mono">'+p.crateCount+' crates / '+Math.round(p.weightLb)+' lb</span></div>'
+  ).join('');
+  document.getElementById('dsManifestWrap').style.display = 'block';
+}
+document.getElementById('dsLookupBtn').addEventListener('click', lookupDispatchManifest);
+document.getElementById('dsQrInput').addEventListener('keydown', (e) => { if (e.key === 'Enter') lookupDispatchManifest(); });
+
+document.getElementById('dsConfirmBtn').addEventListener('click', async () => {
+  if (!dsCurrentQr){ showToast('Look up an order first.', true); return; }
+  const btn = document.getElementById('dsConfirmBtn');
+  btn.disabled = true; btn.textContent = 'Confirming…';
+  try{
+    const res = await callServer('confirmDispatch', {
+      qrCodeId: dsCurrentQr,
+      confirmedBy: document.getElementById('dsConfirmedBy').value
+    });
+    showToast(res.restaurant + ' — ' + res.rowsConfirmed + ' item(s) confirmed picked up & dispatched');
+    document.getElementById('dsQrInput').value = '';
+    document.getElementById('dsConfirmedBy').value = '';
+    document.getElementById('dsManifestWrap').style.display = 'none';
+    dsCurrentQr = null;
+    await loadDispatchBoard();
+  }catch(e){
+    showToast('Confirm failed: ' + e.message, true);
+  }finally{
+    btn.disabled = false; btn.textContent = 'Confirm order picked up & dispatched';
+  }
+});
+
+/* Optional live camera scan using the browser's built-in BarcodeDetector
+   (supported on Chrome/Android; no external library, no network dependency
+   — degrades gracefully to manual entry everywhere else). */
+let dsCameraStream = null;
+function setupCameraButtonVisibility(){
+  const btn = document.getElementById('dsCameraBtn');
+  if ('BarcodeDetector' in window){ btn.style.display = 'inline-flex'; }
+}
+document.getElementById('dsCameraBtn').addEventListener('click', async () => {
+  const video = document.getElementById('dsCameraVideo');
+  const btn = document.getElementById('dsCameraBtn');
+  if (dsCameraStream){ stopCameraScan(); return; }
+  try{
+    dsCameraStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
+    video.srcObject = dsCameraStream;
+    video.style.display = 'block';
+    await video.play();
+    btn.textContent = 'Stop camera';
+    const detector = new window.BarcodeDetector({ formats: ['qr_code'] });
+    const scanLoop = async () => {
+      if (!dsCameraStream) return;
+      try{
+        const codes = await detector.detect(video);
+        if (codes.length){
+          document.getElementById('dsQrInput').value = codes[0].rawValue;
+          stopCameraScan();
+          lookupDispatchManifest();
+          return;
+        }
+      }catch(err){ /* keep trying */ }
+      requestAnimationFrame(scanLoop);
+    };
+    scanLoop();
+  }catch(e){
+    showToast('Camera unavailable: ' + e.message, true);
+    stopCameraScan();
+  }
+});
+function stopCameraScan(){
+  const video = document.getElementById('dsCameraVideo');
+  if (dsCameraStream){ dsCameraStream.getTracks().forEach(t => t.stop()); dsCameraStream = null; }
+  video.style.display = 'none';
+  document.getElementById('dsCameraBtn').textContent = 'Scan with camera';
+}
+
+document.getElementById('dsPrintBtn').addEventListener('click', () => window.print());
 
 boot();
 </script>
