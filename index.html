@@ -29,7 +29,7 @@
     color:var(--ink);
     font-family:'Inter',system-ui,sans-serif;
     -webkit-font-smoothing:antialiased;
-    padding-bottom:84px;
+    padding-bottom:24px;
   }
   h1,h2,h3,.label-font{
     font-family:'Barlow Condensed',sans-serif;
@@ -147,6 +147,12 @@
   .view-title{
     display:flex;align-items:baseline;justify-content:space-between;margin-bottom:12px;
   }
+  .view-title .view-title-left{display:flex;align-items:center;gap:4px;}
+  .back-btn{
+    background:none;border:none;color:var(--sage-dark);font-size:22px;line-height:1;
+    cursor:pointer;padding:4px 6px 4px 0;margin-right:2px;font-family:'Barlow Condensed',sans-serif;
+  }
+  .back-btn:active{color:var(--rust);}
   .view-title h2{font-size:22px;margin:0;color:var(--soil);}
   .view-title .count-badge{
     font-family:'IBM Plex Mono',monospace;font-size:12px;color:var(--sage-dark);
@@ -288,24 +294,28 @@
     main{padding:0;max-width:none;}
   }
 
-  /* ---------- Bottom tab bar ---------- */
+  /* ---------- Top tab bar (moved up from bottom for visibility) ---------- */
   nav.tabbar{
-    position:fixed;bottom:0;left:0;right:0;
-    background:var(--soil);
+    position:sticky;top:0;left:0;right:0;
+    background:var(--cream);
     display:flex;
-    border-top:3px solid var(--sage);
+    overflow-x:auto;
+    -webkit-overflow-scrolling:touch;
+    border-bottom:3px solid var(--sage);
+    box-shadow:0 3px 10px rgba(43,38,32,.12);
     z-index:20;
-    padding-bottom:env(safe-area-inset-bottom);
   }
   nav.tabbar button{
-    flex:1;background:none;border:none;color:#9C907A;
-    padding:9px 2px 8px;display:flex;flex-direction:column;align-items:center;gap:3px;
+    flex:0 0 auto;
+    min-width:72px;
+    background:none;border:none;color:#8A7F65;
+    padding:9px 6px 8px;display:flex;flex-direction:column;align-items:center;gap:3px;
     font-family:'Barlow Condensed',sans-serif;font-size:10.5px;letter-spacing:.02em;
     text-transform:uppercase;cursor:pointer;
   }
   nav.tabbar button .ic{font-size:18px;line-height:1;}
-  nav.tabbar button.active{color:var(--wheat);}
-  nav.tabbar button.active .ic{color:var(--sage);}
+  nav.tabbar button.active{color:var(--soil);background:var(--wheat-dim);}
+  nav.tabbar button.active .ic{color:var(--sage-dark);}
 
   /* ---------- Toast ---------- */
   #toast{
@@ -336,6 +346,18 @@
   <div class="sub">Work-order level data entry — beds, bays, storage, demand, tasks &amp; escalations</div>
   <span id="connBadge" class="mono">connecting…</span>
 </header>
+
+<nav class="tabbar">
+  <button data-view="overview" class="active"><span class="ic">&#9678;</span>Board</button>
+  <button data-view="beds"><span class="ic">&#9634;</span>Beds</button>
+  <button data-view="wash"><span class="ic">&#9814;</span>Wash</button>
+  <button data-view="greenhouse"><span class="ic">&#9721;</span>Bays</button>
+  <button data-view="storage"><span class="ic">&#9707;</span>Storage</button>
+  <button data-view="demand"><span class="ic">&#8776;</span>Demand</button>
+  <button data-view="tasks"><span class="ic">&#10003;</span>Tasks</button>
+  <button data-view="escalations"><span class="ic">&#9888;</span>Escalate</button>
+  <button data-view="dispatch"><span class="ic">&#9743;</span>Dispatch</button>
+</nav>
 
 <div class="board">
   <div class="board-title">
@@ -375,7 +397,7 @@
 
   <!-- ============ BED MASTER ============ -->
   <section class="view" id="view-beds">
-    <div class="view-title"><h2>Bed Master</h2><span class="count-badge mono" id="bedCountLabel"></span></div>
+    <div class="view-title"><div class="view-title-left"><button class="back-btn" data-goto="overview" aria-label="Back to board">&larr;</button><h2>Bed Master</h2></div><span class="count-badge mono" id="bedCountLabel"></span></div>
     <div id="bedListWrap">
       <div class="search-bar">
         <input type="text" id="bedSearch" placeholder="Search bed ID or crop…">
@@ -429,7 +451,7 @@
 
   <!-- ============ WASH STATION ============ -->
   <section class="view" id="view-wash">
-    <div class="view-title"><h2>Wash Station</h2><span class="count-badge mono">Mandatory gateway</span></div>
+    <div class="view-title"><div class="view-title-left"><button class="back-btn" data-goto="overview" aria-label="Back to board">&larr;</button><h2>Wash Station</h2></div><span class="count-badge mono">Mandatory gateway</span></div>
     <div class="card">
       <div class="field">
         <label>Bed</label>
@@ -493,7 +515,7 @@
 
   <!-- ============ GREENHOUSE ============ -->
   <section class="view" id="view-greenhouse">
-    <div class="view-title"><h2>Greenhouse Bays</h2><span class="count-badge mono">10 bays</span></div>
+    <div class="view-title"><div class="view-title-left"><button class="back-btn" data-goto="overview" aria-label="Back to board">&larr;</button><h2>Greenhouse Bays</h2></div><span class="count-badge mono">10 bays</span></div>
     <div id="ghListWrap">
       <div class="card" style="padding:4px 10px;"><div id="ghList"></div></div>
     </div>
@@ -519,7 +541,7 @@
 
   <!-- ============ STORAGE ============ -->
   <section class="view" id="view-storage">
-    <div class="view-title"><h2>Storage Reserve</h2><span class="count-badge mono">Channel C</span></div>
+    <div class="view-title"><div class="view-title-left"><button class="back-btn" data-goto="overview" aria-label="Back to board">&larr;</button><h2>Storage Reserve</h2></div><span class="count-badge mono">Channel C</span></div>
     <div class="card">
       <div class="field">
         <label>Crop</label>
@@ -542,7 +564,7 @@
 
   <!-- ============ WEEKLY DEMAND ============ -->
   <section class="view" id="view-demand">
-    <div class="view-title"><h2>Weekly Demand &amp; SCR</h2><span class="count-badge mono">Set every Monday</span></div>
+    <div class="view-title"><div class="view-title-left"><button class="back-btn" data-goto="overview" aria-label="Back to board">&larr;</button><h2>Weekly Demand &amp; SCR</h2></div><span class="count-badge mono">Set every Monday</span></div>
     <div class="card">
       <div class="field"><label>Week of</label><input type="date" id="wdWeekOf"></div>
     </div>
@@ -552,7 +574,7 @@
 
   <!-- ============ DAILY TASK LOG ============ -->
   <section class="view" id="view-tasks">
-    <div class="view-title"><h2>Daily Task Log</h2></div>
+    <div class="view-title"><div class="view-title-left"><button class="back-btn" data-goto="overview" aria-label="Back to board">&larr;</button><h2>Daily Task Log</h2></div></div>
     <div class="card">
       <div class="field"><label>Date</label><input type="date" id="tkDate"></div>
       <div class="field">
@@ -582,7 +604,7 @@
 
   <!-- ============ ESCALATION LOG ============ -->
   <section class="view" id="view-escalations">
-    <div class="view-title"><h2>Escalation Log</h2><span class="count-badge mono">17:00 daily check</span></div>
+    <div class="view-title"><div class="view-title-left"><button class="back-btn" data-goto="overview" aria-label="Back to board">&larr;</button><h2>Escalation Log</h2></div><span class="count-badge mono">17:00 daily check</span></div>
     <div class="card">
       <div class="field"><label>Date</label><input type="date" id="esDate"></div>
       <div class="field">
@@ -606,7 +628,7 @@
 
   <!-- ============ STAGING & DISPATCH ============ -->
   <section class="view" id="view-dispatch">
-    <div class="view-title"><h2>Staging &amp; Dispatch</h2><span class="count-badge mono" id="dsCountLabel"></span></div>
+    <div class="view-title"><div class="view-title-left"><button class="back-btn" data-goto="overview" aria-label="Back to board">&larr;</button><h2>Staging &amp; Dispatch</h2></div><span class="count-badge mono" id="dsCountLabel"></span></div>
 
     <div class="card" id="dsScanCard">
       <div class="field" style="margin-bottom:8px;">
@@ -646,18 +668,6 @@
 </main>
 
 <div id="toast"></div>
-
-<nav class="tabbar">
-  <button data-view="overview" class="active"><span class="ic">&#9678;</span>Board</button>
-  <button data-view="beds"><span class="ic">&#9634;</span>Beds</button>
-  <button data-view="wash"><span class="ic">&#9814;</span>Wash</button>
-  <button data-view="greenhouse"><span class="ic">&#9721;</span>Bays</button>
-  <button data-view="storage"><span class="ic">&#9707;</span>Storage</button>
-  <button data-view="demand"><span class="ic">&#8776;</span>Demand</button>
-  <button data-view="tasks"><span class="ic">&#10003;</span>Tasks</button>
-  <button data-view="escalations"><span class="ic">&#9888;</span>Escalate</button>
-  <button data-view="dispatch"><span class="ic">&#9743;</span>Dispatch</button>
-</nav>
 
 <script>
 /* ==========================================================================
