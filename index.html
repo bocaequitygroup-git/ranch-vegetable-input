@@ -424,6 +424,11 @@
           <div class="field"><label>Target harvest date</label><input type="text" id="bedTargetHarvest" disabled></div>
         </div>
         <div class="field">
+          <label>Cohort ID</label>
+          <input type="text" id="bedCohortId" placeholder="e.g. MCH-26-C01 — set in Cohort Planner tab" list="cohortIdOptions">
+          <datalist id="cohortIdOptions"></datalist>
+        </div>
+        <div class="field">
           <label>Bed state</label>
           <div class="pill-select" id="bedStatePills"></div>
         </div>
@@ -848,7 +853,8 @@ function getBeds(){
         daysInState: row[cols['Days in State']],
         notes: row[cols['Notes']] || '',
         datePlanted: toIsoDate(row[cols['Date Planted']]),
-        targetHarvestDate: row[cols['Target Harvest Date']] || ''
+        targetHarvestDate: row[cols['Target Harvest Date']] || '',
+        cohortId: row[cols['Cohort ID']] || ''
       });
     }
     return out;
@@ -1194,7 +1200,7 @@ function renderBedList(list){
     row.className = 'list-item';
     row.innerHTML =
       '<div><div class="li-id">'+bed.bedId+'</div>'+
-      '<div class="li-meta">'+(bed.cropVariety || bed.defaultCrop)+' · Pad '+bed.pad+(bed.daysInState!=='' && bed.daysInState!==undefined ? ' · '+bed.daysInState+'d' : '')+'</div></div>'+
+      '<div class="li-meta">'+(bed.cropVariety || bed.defaultCrop)+' · Pad '+bed.pad+(bed.daysInState!=='' && bed.daysInState!==undefined ? ' · '+bed.daysInState+'d' : '')+(bed.cohortId ? ' · '+bed.cohortId : '')+'</div></div>'+
       '<span class="state-tag">'+bed.stateName+'</span>';
     row.addEventListener('click', () => openBedForm(bed));
     wrap.appendChild(row);
@@ -1229,6 +1235,14 @@ function openBedForm(bed){
   document.getElementById('bedTargetHarvest').value = formatDateDisplay(bed.targetHarvestDate);
   document.getElementById('bedDate').value = bed.dateEnteredState || todayStr();
   document.getElementById('bedNotes').value = bed.notes || '';
+  document.getElementById('bedCohortId').value = bed.cohortId || '';
+  // Suggest cohort IDs already in use elsewhere on the field board — saves
+  // retyping "MCH-26-C01" on every bed in the same planting wave. Not a
+  // hard picker: the Cohort Planner tab is the source of truth, this is
+  // just autocomplete against what's already assigned.
+  var knownCohorts = Array.from(new Set(BEDS_CACHE.map(b => b.cohortId).filter(Boolean))).sort();
+  document.getElementById('cohortIdOptions').innerHTML =
+    knownCohorts.map(c => '<option value="'+c+'">').join('');
   makePills(document.getElementById('bedStatePills'), LISTS.bedStates, bed.stateName);
   document.querySelectorAll('#bedStatePills .pill').forEach(p => {
     p.addEventListener('click', updateBedHarvestVisibility);
@@ -1252,6 +1266,7 @@ document.getElementById('bedSave').addEventListener('click', async () => {
     stateNum: stateObj.num,
     dateEnteredState: document.getElementById('bedDate').value,
     datePlanted: document.getElementById('bedDatePlanted').value,
+    cohortId: document.getElementById('bedCohortId').value,
     notes: document.getElementById('bedNotes').value
   };
 
@@ -1381,10 +1396,10 @@ function populateWashBedPicker(){
   sel.innerHTML =
     '<option value="">Select a bed…</option>' +
     (harvested.length ? '<optgroup label="Harvested — needs washing">' +
-      harvested.map(b => '<option value="'+b.rowNum+'">'+b.bedId+' · '+(b.cropVariety||b.defaultCrop)+'</option>').join('') +
+      harvested.map(b => '<option value="'+b.rowNum+'">'+b.bedId+' · '+(b.cropVariety||b.defaultCrop)+(b.cohortId?' · '+b.cohortId:'')+'</option>').join('') +
       '</optgroup>' : '') +
     '<optgroup label="Other beds">' +
-      rest.map(b => '<option value="'+b.rowNum+'">'+b.bedId+' · '+(b.cropVariety||b.defaultCrop)+'</option>').join('') +
+      rest.map(b => '<option value="'+b.rowNum+'">'+b.bedId+' · '+(b.cropVariety||b.defaultCrop)+(b.cohortId?' · '+b.cohortId:'')+'</option>').join('') +
     '</optgroup>';
   if (prev) sel.value = prev;
 }
