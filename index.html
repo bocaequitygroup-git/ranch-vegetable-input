@@ -462,6 +462,10 @@
         <label>Bed</label>
         <select id="wsBed"></select>
       </div>
+      <div class="field" id="wsCohortWrap" style="display:none;">
+        <label>Cohort</label>
+        <input type="text" id="wsCohortId" class="mono" disabled>
+      </div>
       <div class="field"><label>Date</label><input type="date" id="wsDate"></div>
       <div class="row2">
         <div class="field"><label>Crop / variety</label><input type="text" id="wsCropVariety"></div>
@@ -692,7 +696,8 @@ var CSV_URLS = {
   demand:      'https://docs.google.com/spreadsheets/d/e/2PACX-1vQipaFNMCQDDtV6xtZJqwyVC2likxz23tWSrUF7oYpv0g8K1lg3k8wp3BV-IBccUzrnBsp9KKgJWQPF/pub?gid=1441279472&single=true&output=csv',
   lists:       'https://docs.google.com/spreadsheets/d/e/2PACX-1vQipaFNMCQDDtV6xtZJqwyVC2likxz23tWSrUF7oYpv0g8K1lg3k8wp3BV-IBccUzrnBsp9KKgJWQPF/pub?gid=1022487051&single=true&output=csv',
   restaurants: 'https://docs.google.com/spreadsheets/d/e/2PACX-1vQipaFNMCQDDtV6xtZJqwyVC2likxz23tWSrUF7oYpv0g8K1lg3k8wp3BV-IBccUzrnBsp9KKgJWQPF/pub?gid=1947017870&single=true&output=csv',
-  packed:      'https://docs.google.com/spreadsheets/d/e/2PACX-1vQipaFNMCQDDtV6xtZJqwyVC2likxz23tWSrUF7oYpv0g8K1lg3k8wp3BV-IBccUzrnBsp9KKgJWQPF/pub?gid=448268097&single=true&output=csv'
+  packed:      'https://docs.google.com/spreadsheets/d/e/2PACX-1vQipaFNMCQDDtV6xtZJqwyVC2likxz23tWSrUF7oYpv0g8K1lg3k8wp3BV-IBccUzrnBsp9KKgJWQPF/pub?gid=448268097&single=true&output=csv',
+  cohortPlanner: 'https://docs.google.com/spreadsheets/d/e/2PACX-1vQipaFNMCQDDtV6xtZJqwyVC2likxz23tWSrUF7oYpv0g8K1lg3k8wp3BV-IBccUzrnBsp9KKgJWQPF/pub?gid=1867374884&single=true&output=csv'
 };
 
 /* ===== WRITE BACKEND =====
@@ -861,15 +866,15 @@ function getBeds(){
   });
 }
 
-// Cohort IDs aren't published as their own CSV — no new "Publish to web"
-// step required. Instead the autocomplete list is built from whatever
-// Cohort IDs are already sitting on other beds in Bed Master (the same
-// CSV getBeds() already fetches). Trade-off: a brand-new cohort that
-// hasn't been assigned to a single bed yet won't show up here until
-// someone types it once — for that first-ever entry, free-typing a new
-// value is expected and fine, it just won't autocomplete against itself.
+// Cohort ID autocomplete draws from two sources, merged and deduped:
+// Cohort Planner (the authoritative source — cohorts get defined here
+// BEFORE any bed is planted) and Bed Master (covers any cohort that's
+// already in use on a bed but, for whatever reason, isn't in Cohort
+// Planner). Merging means a brand-new cohort shows up the moment it's
+// added to Cohort Planner, without needing a bed assigned to it first.
 function getKnownCohortIds(){
   const seen = {};
+  COHORT_CACHE.forEach(c => { if (c.cohortId) seen[c.cohortId] = true; });
   BEDS_CACHE.forEach(b => { if (b.cohortId) seen[b.cohortId] = true; });
   return Object.keys(seen).sort();
 }
@@ -877,6 +882,15 @@ function refreshCohortIdDatalist(){
   const dl = document.getElementById('cohortIdOptions');
   if (!dl) return;
   dl.innerHTML = getKnownCohortIds().map(id => '<option value="'+id+'"></option>').join('');
+}
+async function loadCohortPlanner(){
+  try{
+    COHORT_CACHE = await callServer('getCohortPlanner');
+  }catch(e){
+    COHORT_CACHE = [];
+    showToast('Could not load Cohort Planner: ' + e.message, true);
+  }
+  refreshCohortIdDatalist();
 }
 
 function getGreenhouseBays(){
@@ -983,6 +997,40 @@ function getRestaurants(){
   });
 }
 
+/* ---------- COHORT PLANNER ----------
+   Reference tab — one row per planting wave, defined BEFORE beds are
+   planted. This is the authoritative source of Cohort IDs (Bed Master's
+   own Cohort ID dropdown is sourced from this same tab's Cohort ID
+   column). Never written to from this front end — Founder/manager
+   maintains it directly in the sheet. */
+function getCohortPlanner(){
+  if (!CSV_URLS.cohortPlanner || CSV_URLS.cohortPlanner.indexOf('PASTE_') === 0){
+    return Promise.reject(new Error('Cohort Planner CSV not configured yet — publish that tab and paste its URL into CSV_URLS.cohortPlanner.'));
+  }
+  return fetchCsv(CSV_URLS.cohortPlanner).then(function(rows){
+    var headerIdx = findHeaderRowIdx(rows, 'Crop / Variety', 10);
+    if (headerIdx < 0) throw new Error('Could not find the "Crop / Variety" header row in the Cohort Planner CSV.');
+    var cols = headerIndexMap(rows[headerIdx]);
+    var out = [];
+    for (var i = headerIdx + 1; i < rows.length; i++){
+      var row = rows[i];
+      var cohortId = row && row[cols['Cohort ID']];
+      if (!cohortId) continue;
+      out.push({
+        rowNum: i + 1,
+        cropVariety: row[cols['Crop / Variety']] || '',
+        cohortId: cohortId,
+        bedsIncluded: row[cols['Beds Included (reference only)']] || '',
+        plantingDate: toIsoDate(row[cols['Planting Date (target)']]),
+        harvestWindow: row[cols['Harvest Window (start–end)']] || '',
+        notes: row[cols['Notes']] || ''
+      });
+    }
+    return out;
+  });
+}
+
+
 /* ---------- PACKED & STAGED (RTD) ----------
    Append-only pack-event ledger, already joined to the Restaurant Delivery
    Map at write time (see addPackedStaging() in the .gs file) — every row
@@ -1019,7 +1067,8 @@ function getPackedStaging(){
         qrScanConfirmed: String(row[cols['QR Scan Confirmed?']] || '').trim().toUpperCase() === 'Y',
         stagingConfirmTime: row[cols['Staging Confirm Time']] || '',
         route: row[cols['Route']] || '',
-        confirmedBy: row[cols['Confirmed By']] || ''
+        confirmedBy: row[cols['Confirmed By']] || '',
+        cohortId: row[cols['Cohort ID']] || ''
       });
     }
     return out;
@@ -1051,6 +1100,7 @@ function callServer(fnName, arg){
     case 'getWeeklyDemand': return getWeeklyDemand();
     case 'getRestaurants': return getRestaurants();
     case 'getPackedStaging': return getPackedStaging();
+    case 'getCohortPlanner': return getCohortPlanner();
     case 'updateBed':
     case 'updateGreenhouseBay':
     case 'logWashStation':
@@ -1071,6 +1121,7 @@ function callServer(fnName, arg){
    ======================================================================== */
 let LISTS = null;
 let BEDS_CACHE = [];
+let COHORT_CACHE = [];
 let BAYS_CACHE = [];
 let RESTAURANTS_CACHE = [];
 let PACKED_CACHE = [];
@@ -1135,6 +1186,7 @@ async function boot(){
   await loadBeds();
   await loadBays();
   await loadWeeklyDemand();
+  await loadCohortPlanner();
 
   document.getElementById('tkDate').value = todayStr();
   document.getElementById('esDate').value = todayStr();
@@ -1218,7 +1270,7 @@ function renderBedList(list){
     row.className = 'list-item';
     row.innerHTML =
       '<div><div class="li-id">'+bed.bedId+'</div>'+
-      '<div class="li-meta">'+(bed.cropVariety || bed.defaultCrop)+' · Pad '+bed.pad+(bed.daysInState!=='' && bed.daysInState!==undefined ? ' · '+bed.daysInState+'d' : '')+'</div></div>'+
+      '<div class="li-meta">'+(bed.cropVariety || bed.defaultCrop)+' · Pad '+bed.pad+(bed.daysInState!=='' && bed.daysInState!==undefined ? ' · '+bed.daysInState+'d' : '')+(bed.cohortId ? ' · '+bed.cohortId : '')+'</div></div>'+
       '<span class="state-tag">'+bed.stateName+'</span>';
     row.addEventListener('click', () => openBedForm(bed));
     wrap.appendChild(row);
@@ -1418,6 +1470,14 @@ function populateWashBedPicker(){
 document.getElementById('wsBed').addEventListener('change', () => {
   const bed = BEDS_CACHE.find(b => String(b.rowNum) === document.getElementById('wsBed').value);
   document.getElementById('wsCropVariety').value = bed ? (bed.cropVariety || bed.defaultCrop || '') : '';
+  const cohortWrap = document.getElementById('wsCohortWrap');
+  if (bed && bed.cohortId){
+    document.getElementById('wsCohortId').value = bed.cohortId;
+    cohortWrap.style.display = 'block';
+  } else {
+    document.getElementById('wsCohortId').value = '';
+    cohortWrap.style.display = 'none';
+  }
 });
 
 /* Target outlet options come from the Restaurant Delivery Map (not the
@@ -1807,7 +1867,7 @@ function lookupDispatchManifest(){
   const totalWeight = pending.reduce((s,p) => s + (p.weightLb||0), 0);
   document.getElementById('dsManifestHead').textContent = restaurant + ' — ' + totalCrates + ' crates / ' + Math.round(totalWeight) + ' lb';
   document.getElementById('dsManifestRows').innerHTML = pending.map(p =>
-    '<div class="ds-manifest-row"><span>'+(p.cropVariety||'Unlabeled')+' · '+p.bedId+'</span><span class="mono">'+p.crateCount+' crates / '+Math.round(p.weightLb)+' lb</span></div>'
+    '<div class="ds-manifest-row"><span>'+(p.cropVariety||'Unlabeled')+' · '+p.bedId+(p.cohortId ? ' · '+p.cohortId : '')+'</span><span class="mono">'+p.crateCount+' crates / '+Math.round(p.weightLb)+' lb</span></div>'
   ).join('');
   document.getElementById('dsManifestWrap').style.display = 'block';
 }
