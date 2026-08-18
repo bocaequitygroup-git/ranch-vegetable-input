@@ -419,14 +419,14 @@
           <label>Crop / variety planted</label>
           <input type="text" id="bedCropVariety" placeholder="e.g. Romaine lettuce">
         </div>
+        <div class="field">
+          <label>Cohort ID</label>
+          <input type="text" id="bedCohortId" list="cohortIdOptions" class="mono" placeholder="e.g. C-2026-08" autocomplete="off">
+          <datalist id="cohortIdOptions"></datalist>
+        </div>
         <div class="row2">
           <div class="field"><label>Date planted</label><input type="date" id="bedDatePlanted"></div>
           <div class="field"><label>Target harvest date</label><input type="text" id="bedTargetHarvest" disabled></div>
-        </div>
-        <div class="field">
-          <label>Cohort ID</label>
-          <input type="text" id="bedCohortId" placeholder="e.g. MCH-26-C01 — set in Cohort Planner tab" list="cohortIdOptions">
-          <datalist id="cohortIdOptions"></datalist>
         </div>
         <div class="field">
           <label>Bed state</label>
@@ -861,6 +861,24 @@ function getBeds(){
   });
 }
 
+// Cohort IDs aren't published as their own CSV — no new "Publish to web"
+// step required. Instead the autocomplete list is built from whatever
+// Cohort IDs are already sitting on other beds in Bed Master (the same
+// CSV getBeds() already fetches). Trade-off: a brand-new cohort that
+// hasn't been assigned to a single bed yet won't show up here until
+// someone types it once — for that first-ever entry, free-typing a new
+// value is expected and fine, it just won't autocomplete against itself.
+function getKnownCohortIds(){
+  const seen = {};
+  BEDS_CACHE.forEach(b => { if (b.cohortId) seen[b.cohortId] = true; });
+  return Object.keys(seen).sort();
+}
+function refreshCohortIdDatalist(){
+  const dl = document.getElementById('cohortIdOptions');
+  if (!dl) return;
+  dl.innerHTML = getKnownCohortIds().map(id => '<option value="'+id+'"></option>').join('');
+}
+
 function getGreenhouseBays(){
   return fetchCsv(CSV_URLS.bays).then(function(rows){
     var headerIdx = findHeaderRowIdx(rows, 'Bay #', 10);
@@ -1200,7 +1218,7 @@ function renderBedList(list){
     row.className = 'list-item';
     row.innerHTML =
       '<div><div class="li-id">'+bed.bedId+'</div>'+
-      '<div class="li-meta">'+(bed.cropVariety || bed.defaultCrop)+' · Pad '+bed.pad+(bed.daysInState!=='' && bed.daysInState!==undefined ? ' · '+bed.daysInState+'d' : '')+(bed.cohortId ? ' · '+bed.cohortId : '')+'</div></div>'+
+      '<div class="li-meta">'+(bed.cropVariety || bed.defaultCrop)+' · Pad '+bed.pad+(bed.daysInState!=='' && bed.daysInState!==undefined ? ' · '+bed.daysInState+'d' : '')+'</div></div>'+
       '<span class="state-tag">'+bed.stateName+'</span>';
     row.addEventListener('click', () => openBedForm(bed));
     wrap.appendChild(row);
@@ -1231,18 +1249,12 @@ function openBedForm(bed){
   document.getElementById('bedPad').value = 'Pad ' + bed.pad;
   document.getElementById('bedDefaultCrop').value = bed.defaultCrop;
   document.getElementById('bedCropVariety').value = bed.cropVariety || '';
+  refreshCohortIdDatalist();
+  document.getElementById('bedCohortId').value = bed.cohortId || '';
   document.getElementById('bedDatePlanted').value = bed.datePlanted || '';
   document.getElementById('bedTargetHarvest').value = formatDateDisplay(bed.targetHarvestDate);
   document.getElementById('bedDate').value = bed.dateEnteredState || todayStr();
   document.getElementById('bedNotes').value = bed.notes || '';
-  document.getElementById('bedCohortId').value = bed.cohortId || '';
-  // Suggest cohort IDs already in use elsewhere on the field board — saves
-  // retyping "MCH-26-C01" on every bed in the same planting wave. Not a
-  // hard picker: the Cohort Planner tab is the source of truth, this is
-  // just autocomplete against what's already assigned.
-  var knownCohorts = Array.from(new Set(BEDS_CACHE.map(b => b.cohortId).filter(Boolean))).sort();
-  document.getElementById('cohortIdOptions').innerHTML =
-    knownCohorts.map(c => '<option value="'+c+'">').join('');
   makePills(document.getElementById('bedStatePills'), LISTS.bedStates, bed.stateName);
   document.querySelectorAll('#bedStatePills .pill').forEach(p => {
     p.addEventListener('click', updateBedHarvestVisibility);
@@ -1263,10 +1275,10 @@ document.getElementById('bedSave').addEventListener('click', async () => {
     rowNum: currentBed.rowNum,
     bedId: currentBed.bedId,
     cropVariety: document.getElementById('bedCropVariety').value,
+    cohortId: document.getElementById('bedCohortId').value,
     stateNum: stateObj.num,
     dateEnteredState: document.getElementById('bedDate').value,
     datePlanted: document.getElementById('bedDatePlanted').value,
-    cohortId: document.getElementById('bedCohortId').value,
     notes: document.getElementById('bedNotes').value
   };
 
@@ -1396,10 +1408,10 @@ function populateWashBedPicker(){
   sel.innerHTML =
     '<option value="">Select a bed…</option>' +
     (harvested.length ? '<optgroup label="Harvested — needs washing">' +
-      harvested.map(b => '<option value="'+b.rowNum+'">'+b.bedId+' · '+(b.cropVariety||b.defaultCrop)+(b.cohortId?' · '+b.cohortId:'')+'</option>').join('') +
+      harvested.map(b => '<option value="'+b.rowNum+'">'+b.bedId+' · '+(b.cropVariety||b.defaultCrop)+(b.cohortId ? ' · '+b.cohortId : '')+'</option>').join('') +
       '</optgroup>' : '') +
     '<optgroup label="Other beds">' +
-      rest.map(b => '<option value="'+b.rowNum+'">'+b.bedId+' · '+(b.cropVariety||b.defaultCrop)+(b.cohortId?' · '+b.cohortId:'')+'</option>').join('') +
+      rest.map(b => '<option value="'+b.rowNum+'">'+b.bedId+' · '+(b.cropVariety||b.defaultCrop)+(b.cohortId ? ' · '+b.cohortId : '')+'</option>').join('') +
     '</optgroup>';
   if (prev) sel.value = prev;
 }
