@@ -7,10 +7,20 @@
     Pack-shed scale weigh-in -> cold-chain clock closes, net weight logged
     Pack & Stage -> prints the Lineage QR label
 
-  Talks to the server via google.script.run (this file is served by
-  Code.gs's doGet, so it runs inside the same Apps Script project - no
-  separate fetch/auth needed). doPost in Code.gs still exists separately
-  for any external client that wants to call the deployed /exec URL.
+  NETWORKING: talks to the server over fetch() against the deployed Web
+  App /exec URL (APP_URL below), POSTing {action, data} and reading back
+  {status, result|message} from doPost in Code.gs - the same
+  read-CSV/write-via-WebApp pattern used across the other ranch/PM
+  portals. This means the file works identically whether it's served
+  by Apps Script itself (doGet) or hosted anywhere else (GitHub Pages,
+  a static host, etc.) - unlike google.script.run, which only works
+  when Apps Script is the one serving the page.
+
+  IMPORTANT: if you ever create a NEW deployment (not just a new
+  version of this one), Web App URLs can change - update APP_URL below
+  to match. Also confirm the deployment's "Who has access" is set to
+  "Anyone" - if it's "Anyone with Google account", fetch() calls from a
+  logged-out browser/tablet will fail.
 -->
 <!DOCTYPE html>
 <html>
@@ -206,6 +216,31 @@
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html5-qrcode/2.3.8/html5-qrcode.min.js"></script>
 <script>
+  // ── SERVER CONNECTION ────────────────────────────────────────────────
+  // Update this if you ever create a NEW deployment (Deploy > Manage
+  // deployments > New deployment gets a new URL; New version on an
+  // EXISTING deployment keeps the same URL and does not need this changed).
+  var APP_URL = 'https://script.google.com/macros/s/AKfycbxRXSebPQ3dW76DA3tOUrAA7PAE4jBry53-Jt8dXEheJzbSg1_CRPPMiKpZfoZnGptS/exec';
+
+  // Calls doPost in Code.gs with {action, data}. No explicit Content-Type
+  // header is set on purpose - leaving it as the fetch default
+  // (text/plain) keeps this a CORS "simple request" so the browser skips
+  // an OPTIONS preflight, which Apps Script Web Apps don't handle.
+  // doPost doesn't care about the header anyway; it just JSON.parses the
+  // raw body. Returns a Promise that resolves with the result on
+  // {status: 'SUCCESS'} and rejects with an Error on {status: 'ERROR'}.
+  function callServer(action, data) {
+    return fetch(APP_URL, {
+      method: 'POST',
+      body: JSON.stringify({ action: action, data: data || {} })
+    })
+      .then(function (res) { return res.json(); })
+      .then(function (json) {
+        if (json.status === 'SUCCESS') return json.result;
+        throw new Error(json.message || 'Server error');
+      });
+  }
+
   // ── SESSION STATE ────────────────────────────────────────────────────
   var session = { userId: null, fullName: null, role: null };
   var cropList = [];
@@ -234,17 +269,16 @@
     if (!userId || !pin) { showError('loginError', 'Enter both User ID and PIN.'); return; }
     clearError('loginError');
     el('loginBtn').disabled = true;
-    google.script.run
-      .withSuccessHandler(function (res) {
+    callServer('login', { userId: userId, pin: pin })
+      .then(function (res) {
         el('loginBtn').disabled = false;
         session.userId = res.userId; session.fullName = res.fullName; session.role = res.role;
         onLoginSuccess();
       })
-      .withFailureHandler(function (err) {
+      .catch(function (err) {
         el('loginBtn').disabled = false;
         showError('loginError', err.message || String(err));
-      })
-      .authenticateUser(userId, pin);
+      });
   };
 
   function onLoginSuccess() {
@@ -259,7 +293,7 @@
 
   el('logoutBtn').onclick = function () {
     if (session.userId) {
-      google.script.run.logoutUser(session.userId); // fire-and-forget: records LOGOUT in LOGIN_LOG
+      callServer('logout', { userId: session.userId }).catch(function () { /* fire-and-forget */ });
     }
     session = { userId: null, fullName: null, role: null };
     el('tabBar').classList.add('hidden');
@@ -285,16 +319,16 @@
 
   // ── LOOKUP DATA (crops, restaurants) ───────────────────────────────
   function loadCropList() {
-    google.script.run.withSuccessHandler(function (list) { cropList = list; }).getCropReferenceList();
+    callServer('getCropReferenceList', {}).then(function (list) { cropList = list; });
   }
   function loadRestaurantList() {
-    google.script.run.withSuccessHandler(function (list) {
+    callServer('getRestaurantList', {}).then(function (list) {
       var sel = el('packRestaurant');
       sel.innerHTML = '';
       list.forEach(function (r) {
         var o = document.createElement('option'); o.value = r; o.textContent = r; sel.appendChild(o);
       });
-    }).getRestaurantList();
+    });
   }
 
   // ── SCAN (manual + camera) ──────────────────────────────────────────
@@ -345,13 +379,12 @@
   function runScan(code) {
     clearError('scanError');
     el('scanResult').innerHTML = '<div class="card muted">Looking up…</div>';
-    google.script.run
-      .withSuccessHandler(renderScanResult)
-      .withFailureHandler(function (err) {
+    callServer('scan', { qrPayload: code })
+      .then(renderScanResult)
+      .catch(function (err) {
         el('scanResult').innerHTML = '';
         showError('scanError', err.message || String(err));
-      })
-      .processScan(code);
+      });
   }
 
   function renderScanResult(ctx) {
@@ -404,25 +437,23 @@
     if (next === 'TAP_PLANTED') {
       el('tapPlantedBtn').onclick = function () {
         el('tapPlantedBtn').disabled = true;
-        google.script.run
-          .withSuccessHandler(function () { runScan('BED:' + bed.Bed_ID); })
-          .withFailureHandler(function (err) {
+        callServer('tapPlanted', { cohortId: cohort.Cohort_ID, workerId: session.userId })
+          .then(function () { runScan('BED:' + bed.Bed_ID); })
+          .catch(function (err) {
             el('tapPlantedBtn').disabled = false;
             showError('tapPlantedError', err.message || String(err));
-          })
-          .tapPlanted(cohort.Cohort_ID, session.userId);
+          });
       };
     }
     if (next === 'START_HARVEST') {
       el('startHarvestBtn').onclick = function () {
         el('startHarvestBtn').disabled = true;
-        google.script.run
-          .withSuccessHandler(function (res) { renderHarvestStarted(res); })
-          .withFailureHandler(function (err) {
+        callServer('startHarvestScan', { bedId: bed.Bed_ID, cohortId: cohort.Cohort_ID, workerId: session.userId })
+          .then(function (res) { renderHarvestStarted(res); })
+          .catch(function (err) {
             el('startHarvestBtn').disabled = false;
             showError('startHarvestError', err.message || String(err));
-          })
-          .startHarvestScan({ bedId: bed.Bed_ID, cohortId: cohort.Cohort_ID, workerId: session.userId });
+          });
       };
     }
   }
@@ -468,20 +499,19 @@
   function wireCreateCohortForm(bed) {
     el('tapPrepBtn').onclick = function () {
       el('tapPrepBtn').disabled = true;
-      google.script.run
-        .withSuccessHandler(function () { runScan('BED:' + bed.Bed_ID); })
-        .withFailureHandler(function (err) {
+      callServer('createCohortAndTapPrep', {
+        bedId: bed.Bed_ID,
+        cropId: el('newCropId').value,
+        variety: el('newVariety').value,
+        targetPlantingDate: el('newTargetPlanting').value,
+        targetHarvestDate: el('newTargetHarvest').value,
+        targetQtyLbs: el('newTargetQty').value,
+        workerId: session.userId
+      })
+        .then(function () { runScan('BED:' + bed.Bed_ID); })
+        .catch(function (err) {
           el('tapPrepBtn').disabled = false;
           showError('createCohortError', err.message || String(err));
-        })
-        .createCohortAndTapPrep({
-          bedId: bed.Bed_ID,
-          cropId: el('newCropId').value,
-          variety: el('newVariety').value,
-          targetPlantingDate: el('newTargetPlanting').value,
-          targetHarvestDate: el('newTargetHarvest').value,
-          targetQtyLbs: el('newTargetQty').value,
-          workerId: session.userId
         });
     };
   }
@@ -544,16 +574,15 @@
     }
     clearError('weighinError');
     el('weighInBtn').disabled = true;
-    google.script.run
-      .withSuccessHandler(function (res) {
+    callServer('completePackShedWeighIn', payload)
+      .then(function (res) {
         el('weighInBtn').disabled = false;
         renderWeighInResult(res);
       })
-      .withFailureHandler(function (err) {
+      .catch(function (err) {
         el('weighInBtn').disabled = false;
         showError('weighinError', err.message || String(err));
-      })
-      .completePackShedWeighIn(payload);
+      });
   };
 
   function renderWeighInResult(res) {
@@ -585,16 +614,15 @@
     }
     clearError('packError');
     el('packBtn').disabled = true;
-    google.script.run
-      .withSuccessHandler(function (res) {
+    callServer('submitPackedStaging', payload)
+      .then(function (res) {
         el('packBtn').disabled = false;
         renderPackResult(res);
       })
-      .withFailureHandler(function (err) {
+      .catch(function (err) {
         el('packBtn').disabled = false;
         showError('packError', err.message || String(err));
-      })
-      .submitPackedStaging(payload);
+      });
   };
 
   function renderPackResult(res) {
