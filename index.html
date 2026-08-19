@@ -1,1949 +1,616 @@
+<!--
+  NGAPORI RANCH VPOS - WorkerApp.html (Phase 2)
+  Tablet-facing field app implementing the 3-tap physical-anchor workflow:
+    Scan Lane Sign -> Cohort Creator -> Tap PREP -> Tap PLANTED
+    (Growing happens automatically in the background - see AutoLifecycle.gs)
+    Scan Lane Sign at harvest -> cold-chain clock starts
+    Pack-shed scale weigh-in -> cold-chain clock closes, net weight logged
+    Pack & Stage -> prints the Lineage QR label
+
+  Talks to the server via google.script.run (this file is served by
+  Code.gs's doGet, so it runs inside the same Apps Script project - no
+  separate fetch/auth needed). doPost in Code.gs still exists separately
+  for any external client that wants to call the deployed /exec URL.
+-->
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
-<title>Ngapori Ranch — Field Board</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap" rel="stylesheet">
-<style>
-  :root{
-    --soil:#2B2620;
-    --soil-2:#3A332B;
-    --sage:#7C8B6F;
-    --sage-dark:#5E6B54;
-    --wheat:#D9C89E;
-    --wheat-dim:#EDE3C8;
-    --rust:#A63D2F;
-    --rust-dark:#832F24;
-    --cream:#F6F1E4;
-    --ink:#22201B;
-    --line:#DCD0AC;
-    --ok:#5E7A4E;
-    --radius:10px;
-  }
-  *{box-sizing:border-box;}
-  html,body{margin:0;padding:0;}
-  body{
-    background:var(--cream);
-    color:var(--ink);
-    font-family:'Inter',system-ui,sans-serif;
-    -webkit-font-smoothing:antialiased;
-    padding-bottom:24px;
-  }
-  h1,h2,h3,.label-font{
-    font-family:'Barlow Condensed',sans-serif;
-    text-transform:uppercase;
-    letter-spacing:.04em;
-  }
-  .mono{font-family:'IBM Plex Mono',monospace;}
-
-  /* ---------- Header / masthead ---------- */
-  header.masthead{
-    background:var(--soil);
-    color:var(--wheat-dim);
-    padding:18px 16px 14px;
-    border-bottom:4px solid var(--sage);
-  }
-  header.masthead .eyebrow{
-    font-family:'Barlow Condensed',sans-serif;
-    font-size:12px;
-    letter-spacing:.18em;
-    color:var(--sage);
-    font-weight:600;
-    text-transform:uppercase;
-  }
-  header.masthead h1{
-    margin:2px 0 0;
-    font-size:28px;
-    font-weight:700;
-    color:var(--cream);
-    line-height:1.05;
-  }
-  header.masthead .sub{
-    font-size:12.5px;
-    color:#BDB093;
-    margin-top:4px;
-  }
-  #connBadge{
-    display:inline-block;
-    margin-top:8px;
-    font-family:'IBM Plex Mono',monospace;
-    font-size:11px;
-    padding:3px 8px;
-    border-radius:20px;
-    background:rgba(124,139,111,.18);
-    border:1px solid var(--sage);
-    color:var(--wheat);
-  }
-  #connBadge.offline{
-    background:rgba(166,61,47,.18);
-    border-color:var(--rust);
-    color:#EBC9C2;
-  }
-
-  /* ---------- Field board tally strip (signature element) ---------- */
-  .board{
-    margin:14px 16px 0;
-    background:var(--soil-2);
-    border-radius:var(--radius);
-    padding:12px 12px 10px;
-    overflow-x:auto;
-    white-space:nowrap;
-    -webkit-overflow-scrolling:touch;
-    border:1px solid #4A4238;
-  }
-  .board .board-title{
-    color:#BDB093;
-    font-size:11px;
-    letter-spacing:.14em;
-    font-weight:600;
-    margin-bottom:8px;
-    display:flex;
-    justify-content:space-between;
-    align-items:center;
-  }
-  .board .board-title button{
-    background:none;border:none;color:var(--sage);font-family:'Barlow Condensed',sans-serif;
-    font-size:12px;letter-spacing:.08em;text-transform:uppercase;cursor:pointer;padding:2px 4px;
-  }
-  .chip-row{display:inline-flex;gap:8px;}
-  .chip{
-    display:inline-flex;
-    flex-direction:column;
-    align-items:center;
-    justify-content:center;
-    min-width:74px;
-    padding:8px 10px;
-    border-radius:8px;
-    background:var(--soil);
-    border:1px solid #4A4238;
-  }
-  .chip .n{
-    font-family:'IBM Plex Mono',monospace;
-    font-size:20px;
-    font-weight:600;
-    color:var(--wheat);
-    line-height:1;
-  }
-  .chip .l{
-    font-size:9.5px;
-    color:#9C907A;
-    text-transform:uppercase;
-    letter-spacing:.06em;
-    margin-top:4px;
-    white-space:normal;
-    text-align:center;
-    max-width:70px;
-  }
-  .chip.alert .n{color:#E7A79B;}
-
-  /* ---------- Main content ---------- */
-  main{padding:16px;max-width:640px;margin:0 auto;}
-  section.view{display:none;}
-  section.view.active{display:block;animation:fadeIn .18s ease;}
-  @keyframes fadeIn{from{opacity:0;transform:translateY(4px);}to{opacity:1;transform:translateY(0);}}
-
-  .view-title{
-    display:flex;align-items:baseline;justify-content:space-between;margin-bottom:12px;
-  }
-  .view-title .view-title-left{display:flex;align-items:center;gap:4px;}
-  .back-btn{
-    background:none;border:none;color:var(--sage-dark);font-size:22px;line-height:1;
-    cursor:pointer;padding:4px 6px 4px 0;margin-right:2px;font-family:'Barlow Condensed',sans-serif;
-  }
-  .back-btn:active{color:var(--rust);}
-  .view-title h2{font-size:22px;margin:0;color:var(--soil);}
-  .view-title .count-badge{
-    font-family:'IBM Plex Mono',monospace;font-size:12px;color:var(--sage-dark);
-  }
-
-  .card{
-    background:#fff;
-    border:1px solid var(--line);
-    border-radius:var(--radius);
-    padding:14px;
-    margin-bottom:12px;
-  }
-
-  .field{margin-bottom:14px;}
-  .field label{
-    display:block;
-    font-family:'Barlow Condensed',sans-serif;
-    font-size:13px;
-    letter-spacing:.05em;
-    text-transform:uppercase;
-    color:var(--sage-dark);
-    font-weight:600;
-    margin-bottom:5px;
-  }
-  input,select,textarea{
-    width:100%;
-    padding:11px 10px;
-    border-radius:8px;
-    border:1.5px solid var(--line);
-    background:var(--wheat-dim);
-    font-family:'Inter',sans-serif;
-    font-size:16px;
-    color:var(--ink);
-  }
-  input:focus,select:focus,textarea:focus{
-    outline:2px solid var(--sage);
-    outline-offset:1px;
-    background:#fff;
-  }
-  textarea{resize:vertical;min-height:60px;}
-  .row2{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
-
-  .btn{
-    display:inline-flex;align-items:center;justify-content:center;gap:6px;
-    width:100%;
-    padding:13px 14px;
-    border-radius:9px;
-    border:none;
-    font-family:'Barlow Condensed',sans-serif;
-    font-size:16px;
-    font-weight:600;
-    letter-spacing:.04em;
-    text-transform:uppercase;
-    cursor:pointer;
-    background:var(--sage);
-    color:#fff;
-  }
-  .btn:active{background:var(--sage-dark);}
-  .btn.secondary{background:var(--wheat-dim);color:var(--soil);border:1.5px solid var(--line);}
-  .btn.danger{background:var(--rust);}
-  .btn:disabled{opacity:.55;cursor:default;}
-
-  .pill-select{display:flex;flex-wrap:wrap;gap:6px;}
-  .pill{
-    padding:7px 12px;border-radius:20px;border:1.5px solid var(--line);
-    background:var(--wheat-dim);font-size:13px;cursor:pointer;color:var(--ink);
-    font-family:'Barlow Condensed',sans-serif;letter-spacing:.02em;text-transform:uppercase;
-  }
-  .pill.active{background:var(--sage);border-color:var(--sage);color:#fff;}
-
-  .list-item{
-    display:flex;justify-content:space-between;align-items:center;
-    padding:12px 4px;border-bottom:1px solid var(--line);cursor:pointer;
-  }
-  .list-item:last-child{border-bottom:none;}
-  .list-item .li-id{font-family:'IBM Plex Mono',monospace;font-weight:600;font-size:14px;}
-  .list-item .li-meta{font-size:12px;color:#8A7F65;margin-top:2px;}
-  .state-tag{
-    font-size:11px;padding:3px 9px;border-radius:20px;font-family:'Barlow Condensed',sans-serif;
-    text-transform:uppercase;letter-spacing:.04em;font-weight:600;background:var(--wheat-dim);color:var(--sage-dark);
-    border:1px solid var(--line);
-  }
-
-  .search-bar{
-    display:flex;gap:8px;margin-bottom:10px;
-  }
-  .search-bar input{flex:1;}
-
-  .empty{
-    text-align:center;padding:40px 16px;color:#9C907A;font-size:14px;
-  }
-  .empty .big{font-size:34px;display:block;margin-bottom:8px;}
-
-  .demand-row{border-bottom:1px solid var(--line);padding:10px 0;}
-  .demand-row:last-child{border-bottom:none;}
-  .demand-row .crop-name{font-family:'Barlow Condensed',sans-serif;font-weight:600;font-size:15px;margin-bottom:6px;color:var(--soil);}
-  .demand-row .row3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;}
-  .demand-row .row3 input{padding:8px;font-size:14px;}
-  .demand-row .mini-label{font-size:10px;text-align:center;color:#9C907A;margin-top:2px;text-transform:uppercase;letter-spacing:.05em;}
-
-  /* ---------- Staging & Dispatch ---------- */
-  .rcard{
-    background:#fff;border:1px solid var(--line);border-radius:var(--radius);
-    padding:14px;margin-bottom:12px;
-  }
-  .rcard-head{display:flex;align-items:center;gap:8px;margin-bottom:6px;}
-  .rcard-dot{width:11px;height:11px;border-radius:50%;flex:none;border:1px solid rgba(0,0,0,.15);}
-  .rcard-name{font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:17px;color:var(--soil);flex:1;}
-  .rcard-route{font-size:11px;color:#9C907A;text-transform:uppercase;letter-spacing:.04em;}
-  .rcard-spot{font-size:13px;color:var(--sage-dark);font-weight:600;margin-bottom:8px;}
-  .rcard-totals{
-    display:flex;gap:16px;padding:8px 0;border-top:1px solid var(--line);border-bottom:1px solid var(--line);margin-bottom:8px;
-  }
-  .rcard-totals .t{display:flex;flex-direction:column;}
-  .rcard-totals .t .n{font-family:'IBM Plex Mono',monospace;font-size:18px;font-weight:600;color:var(--soil);}
-  .rcard-totals .t .l{font-size:10px;color:#9C907A;text-transform:uppercase;letter-spacing:.05em;}
-  .rcard-items{font-size:12.5px;color:#6B6250;}
-  .rcard-items .ri{display:flex;justify-content:space-between;padding:3px 0;}
-  .rcard-empty{font-size:12.5px;color:#9C907A;font-style:italic;}
-  .rcard-qr{font-family:'IBM Plex Mono',monospace;font-size:11px;color:#9C907A;margin-top:6px;}
-
-  .ds-manifest-row{
-    display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--line);font-size:13.5px;
-  }
-  .ds-manifest-row:last-child{border-bottom:none;}
-
-  .placard{
-    border:1.5px dashed var(--line);border-radius:8px;padding:14px;text-align:center;margin-bottom:12px;
-    page-break-inside:avoid;
-  }
-  .placard img{width:150px;height:150px;}
-  .placard .p-name{font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:16px;color:var(--soil);margin-top:6px;}
-  .placard .p-spot{font-size:12.5px;color:var(--sage-dark);font-weight:600;}
-  .placard .p-code{font-family:'IBM Plex Mono',monospace;font-size:11px;color:#9C907A;margin-top:4px;}
-
-  @media print{
-    header.masthead,.board,nav.tabbar,#toast,.view-title,#dsScanCard,.btn{display:none !important;}
-    #dsPlacards{display:block !important;}
-    main{padding:0;max-width:none;}
-  }
-
-  /* ---------- Top tab bar (moved up from bottom for visibility) ---------- */
-  nav.tabbar{
-    position:sticky;top:0;left:0;right:0;
-    background:var(--cream);
-    display:flex;
-    overflow-x:auto;
-    -webkit-overflow-scrolling:touch;
-    border-bottom:3px solid var(--sage);
-    box-shadow:0 3px 10px rgba(43,38,32,.12);
-    z-index:20;
-  }
-  nav.tabbar button{
-    flex:0 0 auto;
-    min-width:72px;
-    background:none;border:none;color:#8A7F65;
-    padding:9px 6px 8px;display:flex;flex-direction:column;align-items:center;gap:3px;
-    font-family:'Barlow Condensed',sans-serif;font-size:10.5px;letter-spacing:.02em;
-    text-transform:uppercase;cursor:pointer;
-  }
-  nav.tabbar button .ic{font-size:18px;line-height:1;}
-  nav.tabbar button.active{color:var(--soil);background:var(--wheat-dim);}
-  nav.tabbar button.active .ic{color:var(--sage-dark);}
-
-  /* ---------- Toast ---------- */
-  #toast{
-    position:fixed;left:16px;right:16px;bottom:92px;
-    background:var(--soil);color:var(--cream);
-    padding:12px 16px;border-radius:9px;
-    font-size:14px;text-align:center;
-    box-shadow:0 6px 20px rgba(0,0,0,.25);
-    opacity:0;transform:translateY(10px);pointer-events:none;
-    transition:all .25s ease;
-    z-index:30;
-    border-left:4px solid var(--sage);
-  }
-  #toast.show{opacity:1;transform:translateY(0);}
-  #toast.err{border-left-color:var(--rust);}
-
-  @media (min-width:700px){
-    main{padding:24px;}
-    .row3{grid-template-columns:repeat(3,1fr);}
-  }
-</style>
+  <base target="_top">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <style>
+    :root {
+      --green: #2e7d32;
+      --green-dark: #1b5e20;
+      --amber: #e65100;
+      --red: #c62828;
+      --gray-bg: #f4f6f4;
+      --card-bg: #ffffff;
+      --text: #1c1c1c;
+      --muted: #6b6b6b;
+      --border: #dfe3df;
+    }
+    * { box-sizing: border-box; }
+    html, body {
+      margin: 0; padding: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+      background: var(--gray-bg);
+      color: var(--text);
+      -webkit-tap-highlight-color: transparent;
+    }
+    #app { max-width: 520px; margin: 0 auto; min-height: 100vh; display: flex; flex-direction: column; }
+    header {
+      background: var(--green-dark); color: #fff;
+      padding: 14px 16px; display: flex; align-items: center; justify-content: space-between;
+      position: sticky; top: 0; z-index: 10;
+    }
+    header .title { font-size: 17px; font-weight: 700; }
+    header .who { font-size: 12px; opacity: 0.85; }
+    main { flex: 1; padding: 16px; padding-bottom: 90px; }
+    .card {
+      background: var(--card-bg); border: 1px solid var(--border); border-radius: 12px;
+      padding: 16px; margin-bottom: 14px;
+    }
+    .card h2 { margin: 0 0 4px; font-size: 15px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; }
+    .card .big { font-size: 22px; font-weight: 700; margin: 2px 0; }
+    label { display: block; font-size: 13px; color: var(--muted); margin: 10px 0 4px; }
+    input[type=text], input[type=number], input[type=password], input[type=date], select {
+      width: 100%; padding: 12px; font-size: 16px; border: 1px solid var(--border); border-radius: 8px;
+      background: #fff;
+    }
+    button {
+      width: 100%; padding: 16px; font-size: 17px; font-weight: 700; border: none; border-radius: 10px;
+      margin-top: 12px; cursor: pointer; color: #fff; background: var(--green);
+    }
+    button.secondary { background: #fff; color: var(--green-dark); border: 2px solid var(--green); }
+    button.amber { background: var(--amber); }
+    button.small { width: auto; padding: 8px 14px; font-size: 13px; margin-top: 0; }
+    button:disabled { opacity: 0.5; }
+    .badge { display: inline-block; padding: 4px 10px; border-radius: 20px; font-size: 12px; font-weight: 700; color: #fff; }
+    .badge.pass { background: var(--green); }
+    .badge.fail { background: var(--red); }
+    .badge.state { background: #455a64; }
+    .error-box { background: #fdecea; border: 1px solid var(--red); color: var(--red); padding: 12px; border-radius: 8px; margin-bottom: 12px; font-size: 14px; }
+    .muted { color: var(--muted); font-size: 13px; }
+    .timer { font-size: 34px; font-weight: 800; color: var(--amber); text-align: center; margin: 10px 0; }
+    nav.tabs {
+      position: fixed; bottom: 0; left: 0; right: 0; background: #fff; border-top: 1px solid var(--border);
+      display: flex; max-width: 520px; margin: 0 auto;
+    }
+    nav.tabs button {
+      flex: 1; background: none; color: var(--muted); font-size: 12px; font-weight: 600;
+      border-radius: 0; margin: 0; padding: 10px 4px;
+    }
+    nav.tabs button.active { color: var(--green-dark); border-top: 3px solid var(--green); }
+    .hidden { display: none !important; }
+    #qrReader { width: 100%; margin-top: 10px; border-radius: 8px; overflow: hidden; }
+    .qr-label-img { display: block; margin: 14px auto; width: 220px; height: 220px; }
+    .row2 { display: flex; gap: 10px; }
+    .row2 > div { flex: 1; }
+  </style>
 </head>
 <body>
+<div id="app">
 
-<header class="masthead">
-  <div class="eyebrow">Ngapori Ranch · Vegetable CASN</div>
-  <h1>Field Board</h1>
-  <div class="sub">Work-order level data entry — beds, bays, storage, demand, tasks &amp; escalations</div>
-  <span id="connBadge" class="mono">connecting…</span>
-</header>
+  <header>
+    <div>
+      <div class="title">Ngapori Ranch Field OS</div>
+      <div class="who" id="whoLine">Not logged in</div>
+    </div>
+    <button class="small secondary" id="logoutBtn" style="display:none;width:auto;color:#fff;border-color:#fff;">Log out</button>
+  </header>
 
-<nav class="tabbar">
-  <button data-view="overview" class="active"><span class="ic">&#9678;</span>Board</button>
-  <button data-view="beds"><span class="ic">&#9634;</span>Beds</button>
-  <button data-view="wash"><span class="ic">&#9814;</span>Wash</button>
-  <button data-view="greenhouse"><span class="ic">&#9721;</span>Bays</button>
-  <button data-view="storage"><span class="ic">&#9707;</span>Storage</button>
-  <button data-view="demand"><span class="ic">&#8776;</span>Demand</button>
-  <button data-view="tasks"><span class="ic">&#10003;</span>Tasks</button>
-  <button data-view="escalations"><span class="ic">&#9888;</span>Escalate</button>
-  <button data-view="dispatch"><span class="ic">&#9743;</span>Dispatch</button>
-</nav>
+  <main>
 
-<div class="board">
-  <div class="board-title">
-    <span>Bed state tally · 200 beds</span>
-    <button id="refreshBoard" type="button">Refresh</button>
-  </div>
-  <div class="chip-row" id="chipRow">
-    <div class="chip"><span class="n">—</span><span class="l">Loading</span></div>
-  </div>
+    <!-- ===================== LOGIN ===================== -->
+    <section id="screen-login" class="card">
+      <h2>Worker Login</h2>
+      <div id="loginError"></div>
+      <label>User ID</label>
+      <input type="text" id="loginUserId" placeholder="USR-001" autocapitalize="characters">
+      <label>PIN</label>
+      <input type="password" id="loginPin" inputmode="numeric" placeholder="••••">
+      <button id="loginBtn">Log In</button>
+    </section>
+
+    <!-- ===================== SCAN TAB ===================== -->
+    <section id="screen-scan" class="hidden">
+      <div class="card">
+        <h2>Scan Lane Sign</h2>
+        <div id="scanError"></div>
+        <label>Enter code, or use camera below</label>
+        <input type="text" id="manualCode" placeholder="BED:B2-03 or COH:COH-SUK-2026-001" autocapitalize="characters">
+        <div class="row2">
+          <div><button id="lookupBtn">Look Up</button></div>
+          <div><button class="secondary" id="cameraToggleBtn">Scan Camera</button></div>
+        </div>
+        <div id="qrReader" class="hidden"></div>
+      </div>
+
+      <div id="scanResult"></div>
+    </section>
+
+    <!-- ===================== PACK-SHED WEIGH-IN TAB ===================== -->
+    <section id="screen-weighin" class="hidden">
+      <div class="card">
+        <h2>Pack-Shed Weigh-In</h2>
+        <p class="muted">Closes the cold-chain clock a field scan started. If you know the Harvest ID, enter it; otherwise the oldest pending harvest for the cohort is used.</p>
+        <div id="weighinError"></div>
+        <label>Cohort ID</label>
+        <input type="text" id="weighCohortId" placeholder="COH-SUK-2026-001">
+        <label>Harvest ID (optional)</label>
+        <input type="text" id="weighHarvestId" placeholder="HRV-20260818-071500">
+
+        <label>Gross Weight (lbs)</label>
+        <input type="number" step="0.1" id="grossWeight" placeholder="24.5">
+        <button class="secondary" id="connectScaleBtn">Connect Bluetooth Scale</button>
+        <div class="muted" id="scaleStatus" style="margin-top:6px;"></div>
+
+        <label>Tare Weight (lbs)</label>
+        <input type="number" step="0.1" id="tareWeight" placeholder="2.0" value="0">
+
+        <div class="row2">
+          <div>
+            <label>Crate Count</label>
+            <input type="number" id="crateCount" placeholder="3">
+          </div>
+          <div>
+            <label>Quality Grade</label>
+            <select id="qualityGrade">
+              <option value="A">A</option>
+              <option value="B">B</option>
+              <option value="C">C</option>
+            </select>
+          </div>
+        </div>
+
+        <button id="weighInBtn">Weigh In</button>
+      </div>
+      <div id="weighinResult"></div>
+    </section>
+
+    <!-- ===================== PACK & STAGE TAB ===================== -->
+    <section id="screen-pack" class="hidden">
+      <div class="card">
+        <h2>Pack &amp; Stage</h2>
+        <div id="packError"></div>
+        <label>Cohort ID</label>
+        <input type="text" id="packCohortId" placeholder="COH-SUK-2026-001">
+        <label>Restaurant</label>
+        <select id="packRestaurant"></select>
+        <div class="row2">
+          <div>
+            <label>Received Wt (lbs)</label>
+            <input type="number" step="0.1" id="receivedWeight">
+          </div>
+          <div>
+            <label>Packed Wt (lbs)</label>
+            <input type="number" step="0.1" id="packedWeight">
+          </div>
+        </div>
+        <label>Case Count</label>
+        <input type="number" id="caseCount">
+        <button id="packBtn">Pack &amp; Print Label</button>
+      </div>
+      <div id="packResult"></div>
+    </section>
+
+  </main>
+
+  <nav class="tabs hidden" id="tabBar">
+    <button data-tab="scan" class="active">Scan</button>
+    <button data-tab="weighin">Pack-Shed</button>
+    <button data-tab="pack">Pack &amp; Stage</button>
+  </nav>
+
 </div>
 
-<main>
-
-  <!-- ============ OVERVIEW ============ -->
-  <section class="view active" id="view-overview">
-    <div class="view-title"><h2>Overview</h2><span class="count-badge mono" id="asOfLabel"></span></div>
-    <div class="card">
-      <div class="field" style="margin-bottom:8px;">
-        <label>Greenhouse bays</label>
-      </div>
-      <div class="chip-row" id="bayChips" style="display:flex;flex-wrap:wrap;"></div>
-    </div>
-    <div class="card">
-      <p style="margin:0 0 10px;font-size:13.5px;color:#6B6250;">Jump straight to a task:</p>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
-        <button class="btn secondary" data-goto="beds">Update a bed</button>
-        <button class="btn secondary" data-goto="wash">Wash Station</button>
-        <button class="btn secondary" data-goto="greenhouse">Update a bay</button>
-        <button class="btn secondary" data-goto="storage">Log storage</button>
-        <button class="btn secondary" data-goto="demand">Weekly demand</button>
-        <button class="btn secondary" data-goto="tasks">Log a task</button>
-        <button class="btn secondary" data-goto="escalations">Log escalation</button>
-        <button class="btn secondary" data-goto="dispatch">Staging &amp; Dispatch</button>
-      </div>
-    </div>
-  </section>
-
-  <!-- ============ BED MASTER ============ -->
-  <section class="view" id="view-beds">
-    <div class="view-title"><div class="view-title-left"><button class="back-btn" data-goto="overview" aria-label="Back to board">&larr;</button><h2>Bed Master</h2></div><span class="count-badge mono" id="bedCountLabel"></span></div>
-    <div id="bedListWrap">
-      <div class="search-bar">
-        <input type="text" id="bedSearch" placeholder="Search bed ID or crop…">
-      </div>
-      <div class="card" style="padding:4px 10px;">
-        <div id="bedList"></div>
-      </div>
-    </div>
-
-    <div id="bedFormWrap" style="display:none;">
-      <div class="card">
-        <button class="btn secondary" style="margin-bottom:14px;" id="bedBack">&larr; Back to bed list</button>
-        <div class="field"><label>Bed ID</label><input type="text" id="bedId" disabled class="mono"></div>
-        <div class="row2">
-          <div class="field"><label>Pad</label><input type="text" id="bedPad" disabled></div>
-          <div class="field"><label>Default crop</label><input type="text" id="bedDefaultCrop" disabled></div>
-        </div>
-        <div class="field">
-          <label>Crop / variety planted</label>
-          <input type="text" id="bedCropVariety" placeholder="e.g. Romaine lettuce">
-        </div>
-        <div class="field">
-          <label>Cohort ID</label>
-          <input type="text" id="bedCohortId" list="cohortIdOptions" class="mono" placeholder="e.g. C-2026-08" autocomplete="off">
-          <datalist id="cohortIdOptions"></datalist>
-        </div>
-        <div class="row2">
-          <div class="field"><label>Date planted</label><input type="date" id="bedDatePlanted"></div>
-          <div class="field"><label>Target harvest date</label><input type="text" id="bedTargetHarvest" disabled></div>
-        </div>
-        <div class="field">
-          <label>Bed state</label>
-          <div class="pill-select" id="bedStatePills"></div>
-        </div>
-        <div class="field">
-          <label>Date entered state</label>
-          <input type="date" id="bedDate">
-        </div>
-
-        <div id="bedHarvestBlock" style="display:none;">
-          <div class="card" style="padding:12px;margin-bottom:0;background:var(--wheat-dim);border-color:var(--sage);">
-            <div style="font-family:'Barlow Condensed',sans-serif;font-size:13px;letter-spacing:.04em;text-transform:uppercase;color:var(--sage-dark);font-weight:600;">Next step: Wash Station</div>
-            <div style="font-size:13px;margin-top:4px;color:#6B6250;">Weight, the 30-min wash timer, and routing to Storage or Packed &amp; Staged are logged separately — every harvested bed has to clear Wash Station before the batch counts as accounted for.</div>
-            <button class="btn secondary" type="button" style="margin-top:10px;" data-goto="wash">Go to Wash Station &rarr;</button>
-          </div>
-        </div>
-
-        <div class="field">
-          <label>Notes</label>
-          <textarea id="bedNotes" placeholder="Anything the next shift should know"></textarea>
-        </div>
-        <button class="btn" id="bedSave">Save bed update</button>
-      </div>
-    </div>
-  </section>
-
-  <!-- ============ WASH STATION ============ -->
-  <section class="view" id="view-wash">
-    <div class="view-title"><div class="view-title-left"><button class="back-btn" data-goto="overview" aria-label="Back to board">&larr;</button><h2>Wash Station</h2></div><span class="count-badge mono">Mandatory gateway</span></div>
-    <div class="card">
-      <div class="field">
-        <label>Bed</label>
-        <select id="wsBed"></select>
-      </div>
-      <div class="field" id="wsCohortWrap" style="display:none;">
-        <label>Cohort</label>
-        <input type="text" id="wsCohortId" class="mono" disabled>
-      </div>
-      <div class="field"><label>Date</label><input type="date" id="wsDate"></div>
-      <div class="row2">
-        <div class="field"><label>Crop / variety</label><input type="text" id="wsCropVariety"></div>
-        <div class="field">
-          <label>Crop category</label>
-          <select id="wsCropCategory"></select>
-        </div>
-      </div>
-      <div class="field"><label>Batch weight (lb)</label><input type="number" id="wsWeight" min="0" step="0.1" placeholder="0.0"></div>
-      <div class="field">
-        <label>Wash method</label>
-        <div class="pill-select" id="wsMethodPills"></div>
-      </div>
-
-      <div class="field">
-        <label>30-minute field-to-wash timer</label>
-        <div class="card" style="padding:12px;margin-bottom:0;">
-          <button class="btn secondary" id="wsWashStart" type="button">Start wash timer</button>
-          <div id="wsWashRunning" style="display:none;">
-            <div class="mono" id="wsWashCountdown" style="font-size:22px;text-align:center;margin:8px 0;">30:00</div>
-            <button class="btn" id="wsWashConfirm" type="button">Confirm washed</button>
-          </div>
-          <div id="wsWashResult" class="mono" style="margin-top:8px;font-size:13px;"></div>
-        </div>
-      </div>
-
-      <div class="field">
-        <label>Route</label>
-        <div class="pill-select" id="wsRoutePills"></div>
-      </div>
-
-      <div id="wsStorageBlock" style="display:none;">
-        <div class="field"><label>Storage room</label><input type="text" id="wsRoom" placeholder="e.g. Cold Room 2"></div>
-        <div class="row2">
-          <div class="field"><label>Temp (°F)</label><input type="number" id="wsTemp" placeholder="34–38"></div>
-          <div class="field"><label>Humidity %</label><input type="number" id="wsHumidity" min="0" max="100"></div>
-        </div>
-      </div>
-
-      <div id="wsPackedBlock" style="display:none;">
-        <div class="field">
-          <label>Target outlet</label>
-          <select id="wsOutlet"></select>
-        </div>
-        <div id="wsOutletPreview" class="card" style="display:none;padding:10px 12px;margin-bottom:14px;background:var(--wheat-dim);border-color:var(--sage);"></div>
-        <div class="row2">
-          <div class="field"><label>Crate / unit count</label><input type="number" id="wsCrateCount" min="0"></div>
-          <div class="field"><label>Staging location</label><input type="text" id="wsStagingLoc" placeholder="auto-fills from outlet — edit if using an overflow spot"></div>
-        </div>
-      </div>
-
-      <div class="field"><label>Notes</label><textarea id="wsNotes"></textarea></div>
-      <button class="btn" id="wsSave">Log wash + route</button>
-    </div>
-  </section>
-
-  <!-- ============ GREENHOUSE ============ -->
-  <section class="view" id="view-greenhouse">
-    <div class="view-title"><div class="view-title-left"><button class="back-btn" data-goto="overview" aria-label="Back to board">&larr;</button><h2>Greenhouse Bays</h2></div><span class="count-badge mono">10 bays</span></div>
-    <div id="ghListWrap">
-      <div class="card" style="padding:4px 10px;"><div id="ghList"></div></div>
-    </div>
-    <div id="ghFormWrap" style="display:none;">
-      <div class="card">
-        <button class="btn secondary" style="margin-bottom:14px;" id="ghBack">&larr; Back to bay list</button>
-        <div class="row2">
-          <div class="field"><label>Bay #</label><input type="text" id="ghBayNum" disabled class="mono"></div>
-          <div class="field"><label>Purpose</label><input type="text" id="ghPurpose" disabled></div>
-        </div>
-        <div class="field"><label>Current crop</label><input type="text" id="ghCrop" placeholder="e.g. Spinach"></div>
-        <div class="field"><label>Occupancy %</label><input type="number" id="ghOccupancy" min="0" max="100" placeholder="0–100"></div>
-        <div class="field">
-          <label>Status</label>
-          <div class="pill-select" id="ghStatusPills"></div>
-        </div>
-        <div class="field"><label>Date status set</label><input type="date" id="ghDate"></div>
-        <div class="field"><label>Notes</label><textarea id="ghNotes"></textarea></div>
-        <button class="btn" id="ghSave">Save bay update</button>
-      </div>
-    </div>
-  </section>
-
-  <!-- ============ STORAGE ============ -->
-  <section class="view" id="view-storage">
-    <div class="view-title"><div class="view-title-left"><button class="back-btn" data-goto="overview" aria-label="Back to board">&larr;</button><h2>Storage Reserve</h2></div><span class="count-badge mono">Channel C</span></div>
-    <div class="card">
-      <div class="field">
-        <label>Crop</label>
-        <select id="stCrop"></select>
-      </div>
-      <div class="field"><label>Date</label><input type="date" id="stDate"></div>
-      <div class="row2">
-        <div class="field"><label>Qty in (lb)</label><input type="number" id="stQtyIn" min="0" placeholder="0"></div>
-        <div class="field"><label>Qty drawn (lb)</label><input type="number" id="stQtyDrawn" min="0" placeholder="0"></div>
-      </div>
-      <div class="field"><label>Storage room</label><input type="text" id="stRoom" placeholder="e.g. Cold Room 2"></div>
-      <div class="row2">
-        <div class="field"><label>Temp (°F)</label><input type="number" id="stTemp" placeholder="34–38"></div>
-        <div class="field"><label>Humidity %</label><input type="number" id="stHumidity" min="0" max="100"></div>
-      </div>
-      <div class="field"><label>Notes</label><textarea id="stNotes"></textarea></div>
-      <button class="btn" id="stSave">Log storage transaction</button>
-    </div>
-  </section>
-
-  <!-- ============ WEEKLY DEMAND ============ -->
-  <section class="view" id="view-demand">
-    <div class="view-title"><div class="view-title-left"><button class="back-btn" data-goto="overview" aria-label="Back to board">&larr;</button><h2>Weekly Demand &amp; SCR</h2></div><span class="count-badge mono">Set every Monday</span></div>
-    <div class="card">
-      <div class="field"><label>Week of</label><input type="date" id="wdWeekOf"></div>
-    </div>
-    <div class="card" id="wdRows"></div>
-    <button class="btn" id="wdSave">Save weekly demand</button>
-  </section>
-
-  <!-- ============ DAILY TASK LOG ============ -->
-  <section class="view" id="view-tasks">
-    <div class="view-title"><div class="view-title-left"><button class="back-btn" data-goto="overview" aria-label="Back to board">&larr;</button><h2>Daily Task Log</h2></div></div>
-    <div class="card">
-      <div class="field"><label>Date</label><input type="date" id="tkDate"></div>
-      <div class="field">
-        <label>Season</label>
-        <div class="pill-select" id="tkSeasonPills"></div>
-      </div>
-      <div class="field">
-        <label>Time block</label>
-        <div class="pill-select" id="tkBlockPills">
-          <div class="pill" data-val="06:00-08:00">06:00–08:00</div>
-          <div class="pill" data-val="08:00-11:00">08:00–11:00</div>
-          <div class="pill" data-val="11:00-14:00">11:00–14:00</div>
-          <div class="pill" data-val="14:00-17:00">14:00–17:00</div>
-          <div class="pill" data-val="17:00-18:00">17:00–18:00</div>
-        </div>
-      </div>
-      <div class="field"><label>Task description</label><textarea id="tkDesc" placeholder="What was done"></textarea></div>
-      <div class="field"><label>Assigned to</label><input type="text" id="tkAssigned" placeholder="Worker name"></div>
-      <div class="field">
-        <label>Status</label>
-        <div class="pill-select" id="tkStatusPills"></div>
-      </div>
-      <div class="field"><label>Notes</label><textarea id="tkNotes"></textarea></div>
-      <button class="btn" id="tkSave">Log task</button>
-    </div>
-  </section>
-
-  <!-- ============ ESCALATION LOG ============ -->
-  <section class="view" id="view-escalations">
-    <div class="view-title"><div class="view-title-left"><button class="back-btn" data-goto="overview" aria-label="Back to board">&larr;</button><h2>Escalation Log</h2></div><span class="count-badge mono">17:00 daily check</span></div>
-    <div class="card">
-      <div class="field"><label>Date</label><input type="date" id="esDate"></div>
-      <div class="field">
-        <label>Check type</label>
-        <div class="pill-select" id="esTypePills"></div>
-      </div>
-      <div class="field"><label>Details</label><textarea id="esDetails" placeholder="What triggered this"></textarea></div>
-      <div class="row2">
-        <div class="field"><label>Metric value</label><input type="text" id="esMetric" placeholder="e.g. 0.86"></div>
-        <div class="field"><label>Threshold</label><input type="text" id="esThreshold" placeholder="e.g. 1.00"></div>
-      </div>
-      <div class="field"><label>Action taken</label><textarea id="esAction"></textarea></div>
-      <div class="field">
-        <label>Resolved</label>
-        <div class="pill-select" id="esResolvedPills"></div>
-      </div>
-      <div class="field"><label>Resolved date</label><input type="date" id="esResolvedDate"></div>
-      <button class="btn danger" id="esSave">Log escalation</button>
-    </div>
-  </section>
-
-  <!-- ============ STAGING & DISPATCH ============ -->
-  <section class="view" id="view-dispatch">
-    <div class="view-title"><div class="view-title-left"><button class="back-btn" data-goto="overview" aria-label="Back to board">&larr;</button><h2>Staging &amp; Dispatch</h2></div><span class="count-badge mono" id="dsCountLabel"></span></div>
-
-    <div class="card" id="dsScanCard">
-      <div class="field" style="margin-bottom:8px;">
-        <label>Driver pickup — scan or enter bay QR code</label>
-        <div class="row2" style="align-items:start;">
-          <input type="text" id="dsQrInput" class="mono" placeholder="QR-CALLATIS-001" style="grid-column:1/2;">
-          <button class="btn secondary" type="button" id="dsCameraBtn" style="display:none;grid-column:2/3;">Scan with camera</button>
-        </div>
-      </div>
-      <video id="dsCameraVideo" style="display:none;width:100%;border-radius:8px;margin-bottom:10px;" playsinline muted></video>
-      <button class="btn secondary" type="button" id="dsLookupBtn" style="margin-bottom:10px;">Look up order</button>
-      <div id="dsManifestWrap" style="display:none;">
-        <div class="card" style="padding:12px;margin-bottom:10px;background:var(--wheat-dim);border-color:var(--sage);">
-          <div id="dsManifestHead" style="font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:16px;color:var(--soil);margin-bottom:6px;"></div>
-          <div id="dsManifestRows"></div>
-        </div>
-        <div class="field"><label>Confirmed by</label><input type="text" id="dsConfirmedBy" placeholder="Driver / worker name"></div>
-        <button class="btn" id="dsConfirmBtn">Confirm order picked up &amp; dispatched</button>
-      </div>
-      <div id="dsManifestEmpty" class="empty" style="display:none;padding:20px 8px;">
-        <span class="big">&#9888;</span>No pending crates found for that QR code.
-      </div>
-    </div>
-
-    <div id="dsBoard"></div>
-
-    <div class="card">
-      <div class="view-title" style="margin-bottom:8px;">
-        <h2 style="font-size:16px;">Bay QR placards</h2>
-        <button class="btn secondary" type="button" id="dsPrintBtn" style="width:auto;padding:8px 14px;">Print</button>
-      </div>
-      <p style="margin:0 0 10px;font-size:12.5px;color:#6B6250;">One sticker per bay. A driver's phone camera opens this app straight to that bay's pending order.</p>
-      <div id="dsPlacards" style="display:grid;grid-template-columns:1fr 1fr;gap:10px;"></div>
-    </div>
-  </section>
-
-</main>
-
-<div id="toast"></div>
-
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html5-qrcode/2.3.8/html5-qrcode.min.js"></script>
 <script>
-/* ==========================================================================
-   DATA LAYER — reads live from the published Google Sheet CSV endpoints.
-   Writes go through the Apps Script doPost() web app (Code_vegetable.gs),
-   called via plain fetch() POST. No google.script.run anywhere in this file,
-   so it works from any static host (GitHub Pages, etc.) exactly like the
-   Ngapori RAMS portal.
-   ========================================================================== */
+  // ── SESSION STATE ────────────────────────────────────────────────────
+  var session = { userId: null, fullName: null, role: null };
+  var cropList = [];
+  var html5QrScanner = null;
+  var cameraOn = false;
 
-/* Restaurant Delivery Map and Packed & Staged (RTD) are published — the
-   Staging & Dispatch view reads live from both. */
-var CSV_URLS = {
-  beds:        'https://docs.google.com/spreadsheets/d/e/2PACX-1vQipaFNMCQDDtV6xtZJqwyVC2likxz23tWSrUF7oYpv0g8K1lg3k8wp3BV-IBccUzrnBsp9KKgJWQPF/pub?gid=800814606&single=true&output=csv',
-  bays:        'https://docs.google.com/spreadsheets/d/e/2PACX-1vQipaFNMCQDDtV6xtZJqwyVC2likxz23tWSrUF7oYpv0g8K1lg3k8wp3BV-IBccUzrnBsp9KKgJWQPF/pub?gid=2092694534&single=true&output=csv',
-  storage:     'https://docs.google.com/spreadsheets/d/e/2PACX-1vQipaFNMCQDDtV6xtZJqwyVC2likxz23tWSrUF7oYpv0g8K1lg3k8wp3BV-IBccUzrnBsp9KKgJWQPF/pub?gid=8979155&single=true&output=csv',
-  demand:      'https://docs.google.com/spreadsheets/d/e/2PACX-1vQipaFNMCQDDtV6xtZJqwyVC2likxz23tWSrUF7oYpv0g8K1lg3k8wp3BV-IBccUzrnBsp9KKgJWQPF/pub?gid=1441279472&single=true&output=csv',
-  lists:       'https://docs.google.com/spreadsheets/d/e/2PACX-1vQipaFNMCQDDtV6xtZJqwyVC2likxz23tWSrUF7oYpv0g8K1lg3k8wp3BV-IBccUzrnBsp9KKgJWQPF/pub?gid=1022487051&single=true&output=csv',
-  restaurants: 'https://docs.google.com/spreadsheets/d/e/2PACX-1vQipaFNMCQDDtV6xtZJqwyVC2likxz23tWSrUF7oYpv0g8K1lg3k8wp3BV-IBccUzrnBsp9KKgJWQPF/pub?gid=1947017870&single=true&output=csv',
-  packed:      'https://docs.google.com/spreadsheets/d/e/2PACX-1vQipaFNMCQDDtV6xtZJqwyVC2likxz23tWSrUF7oYpv0g8K1lg3k8wp3BV-IBccUzrnBsp9KKgJWQPF/pub?gid=448268097&single=true&output=csv',
-  cohortPlanner: 'https://docs.google.com/spreadsheets/d/e/2PACX-1vQipaFNMCQDDtV6xtZJqwyVC2likxz23tWSrUF7oYpv0g8K1lg3k8wp3BV-IBccUzrnBsp9KKgJWQPF/pub?gid=1867374884&single=true&output=csv'
-};
-
-/* ===== WRITE BACKEND =====
-   Not deployed yet. To connect writes:
-   1. Open the CASN Google Sheet → Extensions → Apps Script.
-   2. Paste in Code_vegetable.gs (provided alongside this file).
-   3. Deploy → New deployment → Web app. Execute as: Me. Who has access: Anyone with the link.
-   4. Copy the resulting /exec URL and paste it below, replacing the placeholder.
-   Until this is set, every save action in this file will fail with a clear
-   "writes not configured" error instead of failing silently. */
-var WRITE_URL = 'https://script.google.com/macros/s/AKfycbzHkboPnyB8qHABMIr3xAnnhOAYUlCL46CSCyx6M-3eCPYtVYeD2Se20fMtso3YRIrpqA/exec';
-function postToSheet(action, payload){
-  if (!WRITE_URL){
-    return Promise.reject(new Error('WRITE_URL not set — deploy Code_vegetable.gs as a Web App and paste its /exec URL near the top of the <script> block.'));
+  function el(id) { return document.getElementById(id); }
+  function showError(containerId, message) {
+    el(containerId).innerHTML = '<div class="error-box">' + escapeHtml(message) + '</div>';
   }
-  return fetch(WRITE_URL, {
-    method: 'POST',
-    headers: { 'Content-Type': 'text/plain;charset=utf-8' }, // avoids a CORS preflight against Apps Script
-    body: JSON.stringify({ action: action, payload: payload })
-  }).then(function(r){ return r.json(); })
-    .then(function(j){
-      if (!j || j.ok === false) throw new Error((j && j.error) || 'Write failed');
-      return j;
+  function clearError(containerId) { el(containerId).innerHTML = ''; }
+  function escapeHtml(s) {
+    return String(s).replace(/[&<>"']/g, function (c) {
+      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
     });
-}
-
-/* ---------- CSV parser (handles quoted fields, commas, embedded newlines) ---------- */
-function parseCsv(text){
-  var rows = [], field = '', row = [], inQuotes = false;
-  for (var i = 0; i < text.length; i++){
-    var c = text[i], n = text[i+1];
-    if (inQuotes){
-      if (c === '"' && n === '"'){ field += '"'; i++; }
-      else if (c === '"'){ inQuotes = false; }
-      else field += c;
-    } else {
-      if (c === '"') inQuotes = true;
-      else if (c === ','){ row.push(field); field = ''; }
-      else if (c === '\r'){ continue; }
-      else if (c === '\n'){ row.push(field); rows.push(row); row = []; field = ''; }
-      else field += c;
-    }
   }
-  if (field !== '' || row.length){ row.push(field); rows.push(row); }
-  return rows;
-}
-function fetchCsv(url){
-  return fetch(url, { cache: 'no-store' }).then(function(r){
-    if (!r.ok) throw new Error('HTTP ' + r.status);
-    return r.text();
-  }).then(parseCsv);
-}
-function findHeaderRowIdx(rows, firstCol, maxScan){
-  var limit = Math.min(rows.length, maxScan || 10);
-  for (var i = 0; i < limit; i++){
-    if (rows[i] && String(rows[i][0]).trim() === firstCol) return i;
-  }
-  return -1;
-}
-function headerIndexMap(header){
-  var map = {};
-  header.forEach(function(h, i){ var k = String(h).trim(); if (k) map[k] = i; });
-  return map;
-}
-/* Percent cells can come back from the published CSV either as "45%" or as
-   a raw fraction like "0.45" depending on the sheet's number format — this
-   normalizes either to a 0–1 fraction (what the rest of the UI expects). */
-function parsePctToFraction(raw){
-  if (raw === '' || raw == null) return '';
-  var s = String(raw).trim();
-  if (s === '') return '';
-  var hasPct = s.indexOf('%') !== -1;
-  var num = parseFloat(s.replace('%', ''));
-  if (isNaN(num)) return '';
-  if (hasPct) return num / 100;
-  return num > 1 ? num / 100 : num;
-}
-
-/* Published CSV cells for date-formatted columns can come back as M/D/YYYY,
-   YYYY-MM-DD, or a full timestamp depending on the sheet's number format and
-   locale. <input type=date> only accepts YYYY-MM-DD, so every date read from
-   the sheet needs to funnel through this before it touches a date input. */
-function toIsoDate(raw){
-  if (!raw) return '';
-  var s = String(raw).trim();
-  if (!s) return '';
-  var m = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
-  if (m) return m[1] + '-' + m[2] + '-' + m[3];
-  var d = new Date(s);
-  if (isNaN(d.getTime())) return '';
-  var mo = String(d.getMonth() + 1).padStart(2, '0');
-  var da = String(d.getDate()).padStart(2, '0');
-  return d.getFullYear() + '-' + mo + '-' + da;
-}
-function formatDateDisplay(raw){
-  var iso = toIsoDate(raw);
-  if (!iso) return '—';
-  var d = new Date(iso + 'T00:00:00');
-  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
-}
-
-/* ---------- READS ---------- */
-function getLists(){
-  return fetchCsv(CSV_URLS.lists).then(function(data){
-    function col(idx){
-      var out = [];
-      for (var r = 1; r < data.length; r++){
-        var v = data[r] && data[r][idx];
-        if (v !== '' && v != null) out.push(v);
-      }
-      return out;
-    }
-    var bedStates = [], channels = [];
-    for (var r = 1; r < data.length; r++){
-      var row = data[r] || [];
-      if (row[1] !== '' && row[1] != null) bedStates.push({ num: Number(row[0]), name: row[1] });
-      if (row[3] !== '' && row[3] != null) channels.push({ code: row[3], name: row[4] });
-    }
-    return {
-      bedStates: bedStates,
-      channels: channels,
-      cropCategories: col(6),
-      taskStatus: col(8),
-      escalationCheckTypes: col(10),
-      resolvedOptions: col(12),
-      seasons: col(14),
-      greenhouseBayStatus: col(16),
-      washMethods: col(17),
-      routes: col(19),
-      // Kept for reference only — the Wash Station's outlet picker now
-      // sources restaurant names from getRestaurants() (Restaurant
-      // Delivery Map) instead, since this column's values are actually
-      // delivery route names, not restaurant names.
-      targetOutlets: col(21)
-    };
-  });
-}
-
-function getBeds(){
-  return fetchCsv(CSV_URLS.beds).then(function(rows){
-    var headerIdx = findHeaderRowIdx(rows, 'Bed ID', 10);
-    if (headerIdx < 0) throw new Error('Could not find the "Bed ID" header row in the Bed Master CSV.');
-    var cols = headerIndexMap(rows[headerIdx]);
-    var out = [];
-    for (var i = headerIdx + 1; i < rows.length; i++){
-      var row = rows[i];
-      var bedId = row && row[cols['Bed ID']];
-      if (!bedId) continue;
-      out.push({
-        rowNum: i + 1, // CSV row i (0-indexed) === sheet row i+1 (1-indexed)
-        bedId: bedId,
-        pad: row[cols['Pad #']],
-        defaultCrop: row[cols['Default Crop Category (Pad)']],
-        cropVariety: row[cols['Crop / Variety']] || '',
-        stateNum: row[cols['State #']],
-        stateName: row[cols['State Name']],
-        dateEnteredState: toIsoDate(row[cols['Date Entered State']]),
-        daysInState: row[cols['Days in State']],
-        notes: row[cols['Notes']] || '',
-        datePlanted: toIsoDate(row[cols['Date Planted']]),
-        targetHarvestDate: row[cols['Target Harvest Date']] || '',
-        cohortId: row[cols['Cohort ID']] || ''
-      });
-    }
-    return out;
-  });
-}
-
-// Cohort ID autocomplete draws from two sources, merged and deduped:
-// Cohort Planner (the authoritative source — cohorts get defined here
-// BEFORE any bed is planted) and Bed Master (covers any cohort that's
-// already in use on a bed but, for whatever reason, isn't in Cohort
-// Planner). Merging means a brand-new cohort shows up the moment it's
-// added to Cohort Planner, without needing a bed assigned to it first.
-function getKnownCohortIds(){
-  const seen = {};
-  COHORT_CACHE.forEach(c => { if (c.cohortId) seen[c.cohortId] = true; });
-  BEDS_CACHE.forEach(b => { if (b.cohortId) seen[b.cohortId] = true; });
-  return Object.keys(seen).sort();
-}
-function refreshCohortIdDatalist(){
-  const dl = document.getElementById('cohortIdOptions');
-  if (!dl) return;
-  dl.innerHTML = getKnownCohortIds().map(id => '<option value="'+id+'"></option>').join('');
-}
-async function loadCohortPlanner(){
-  try{
-    COHORT_CACHE = await callServer('getCohortPlanner');
-  }catch(e){
-    COHORT_CACHE = [];
-    showToast('Could not load Cohort Planner: ' + e.message, true);
-  }
-  refreshCohortIdDatalist();
-}
-
-function getGreenhouseBays(){
-  return fetchCsv(CSV_URLS.bays).then(function(rows){
-    var headerIdx = findHeaderRowIdx(rows, 'Bay #', 10);
-    if (headerIdx < 0) throw new Error('Could not find the "Bay #" header row in the Greenhouse Bays CSV.');
-    var cols = headerIndexMap(rows[headerIdx]);
-    var out = [];
-    for (var i = headerIdx + 1; i < rows.length; i++){
-      var row = rows[i];
-      var bayNum = row && row[cols['Bay #']];
-      if (!bayNum) continue;
-      out.push({
-        rowNum: i + 1,
-        bayNum: Number(bayNum),
-        purpose: row[cols['Primary Purpose']],
-        currentCrop: row[cols['Current Crop']] || '',
-        occupancyPct: parsePctToFraction(row[cols['Occupancy %']]),
-        status: row[cols['Status']],
-        dateStatusSet: row[cols['Date Status Set']] || '',
-        notes: row[cols['Notes']] || ''
-      });
-    }
-    return out;
-  });
-}
-
-function getStorageCrops(){
-  return fetchCsv(CSV_URLS.storage).then(function(rows){
-    var headerIdx = findHeaderRowIdx(rows, 'Crop', 10);
-    if (headerIdx < 0) throw new Error('Could not find the "Crop" header row in the Storage Reserve CSV.');
-    var cols = headerIndexMap(rows[headerIdx]);
-    var seen = {};
-    for (var i = headerIdx + 1; i < rows.length; i++){
-      var row = rows[i];
-      var crop = row && row[cols['Crop']];
-      if (crop && String(crop).toUpperCase().indexOf('TOTAL') !== 0) seen[crop] = true;
-    }
-    return Object.keys(seen);
-  });
-}
-
-function getWeeklyDemand(){
-  return fetchCsv(CSV_URLS.demand).then(function(rows){
-    var headerIdx = findHeaderRowIdx(rows, 'Crop Category', 10);
-    if (headerIdx < 0) throw new Error('Could not find the "Crop Category" header row in the Weekly Demand CSV.');
-    var cols = headerIndexMap(rows[headerIdx]);
-    var weekOf = '';
-    for (var w = 0; w < rows.length; w++){
-      if (rows[w] && String(rows[w][0]).trim() === 'Week Of:'){ weekOf = rows[w][1] || ''; break; }
-    }
-    var out = [];
-    for (var i = headerIdx + 1; i < rows.length && (i - headerIdx) <= 40; i++){
-      var row = rows[i];
-      var cropCat = row && row[cols['Crop Category']];
-      if (!cropCat || String(cropCat).toUpperCase().indexOf('MASTER SCR') === 0) break;
-      out.push({
-        rowNum: i + 1,
-        cropCategory: cropCat,
-        chASupply: row[cols['Ch A Supply']],
-        chBSupply: row[cols['Ch B Supply']],
-        chCSupply: row[cols['Ch C Supply']],
-        totalSupply: row[cols['Total Supply']],
-        weeklyDemand: row[cols['Weekly Demand']],
-        scr: row[cols['SCR']],
-        bridgeStatus: row[cols['Bridge Layer Status']]
-      });
-    }
-    return { weekOf: weekOf, rows: out };
-  });
-}
-
-/* ---------- RESTAURANT DELIVERY MAP ----------
-   Reference tab — one row per restaurant with its physical bay (Staging
-   Spot), the static QR Code ID stuck to that bay, and its delivery route.
-   This is what actually tells a worker where to put finished crates, and
-   what the Staging & Dispatch board is built from. */
-function getRestaurants(){
-  if (!CSV_URLS.restaurants || CSV_URLS.restaurants.indexOf('PASTE_') === 0){
-    return Promise.reject(new Error('Restaurant Delivery Map CSV not configured yet — publish that tab and paste its URL into CSV_URLS.restaurants.'));
-  }
-  return fetchCsv(CSV_URLS.restaurants).then(function(rows){
-    var headerIdx = findHeaderRowIdx(rows, 'Restaurant', 10);
-    if (headerIdx < 0) throw new Error('Could not find the "Restaurant" header row in the Restaurant Delivery Map CSV.');
-    var cols = headerIndexMap(rows[headerIdx]);
-    var out = [];
-    for (var i = headerIdx + 1; i < rows.length; i++){
-      var row = rows[i];
-      var name = row && row[cols['Restaurant']];
-      if (!name) continue;
-      out.push({
-        name: name,
-        address: row[cols['Address']] || '',
-        stagingSpot: row[cols['Staging Spot']] || '',
-        qrCodeId: row[cols['QR Code ID']] || '',
-        qrCodeUrl: row[cols['QR Code URL']] || '',
-        route: row[cols['Route']] || '',
-        color: row[cols['Color']] || '',
-        active: String(row[cols['Active']] || '').trim().toLowerCase() === 'yes',
-        contact: row[cols['Contact']] || ''
-      });
-    }
-    return out;
-  });
-}
-
-/* ---------- COHORT PLANNER ----------
-   Reference tab — one row per planting wave, defined BEFORE beds are
-   planted. This is the authoritative source of Cohort IDs (Bed Master's
-   own Cohort ID dropdown is sourced from this same tab's Cohort ID
-   column). Never written to from this front end — Founder/manager
-   maintains it directly in the sheet. */
-function getCohortPlanner(){
-  if (!CSV_URLS.cohortPlanner || CSV_URLS.cohortPlanner.indexOf('PASTE_') === 0){
-    return Promise.reject(new Error('Cohort Planner CSV not configured yet — publish that tab and paste its URL into CSV_URLS.cohortPlanner.'));
-  }
-  return fetchCsv(CSV_URLS.cohortPlanner).then(function(rows){
-    var headerIdx = findHeaderRowIdx(rows, 'Crop / Variety', 10);
-    if (headerIdx < 0) throw new Error('Could not find the "Crop / Variety" header row in the Cohort Planner CSV.');
-    var cols = headerIndexMap(rows[headerIdx]);
-    var out = [];
-    for (var i = headerIdx + 1; i < rows.length; i++){
-      var row = rows[i];
-      var cohortId = row && row[cols['Cohort ID']];
-      if (!cohortId) continue;
-      out.push({
-        rowNum: i + 1,
-        cropVariety: row[cols['Crop / Variety']] || '',
-        cohortId: cohortId,
-        bedsIncluded: row[cols['Beds Included (reference only)']] || '',
-        plantingDate: toIsoDate(row[cols['Planting Date (target)']]),
-        harvestWindow: row[cols['Harvest Window (start–end)']] || '',
-        notes: row[cols['Notes']] || ''
-      });
-    }
-    return out;
-  });
-}
-
-
-/* ---------- PACKED & STAGED (RTD) ----------
-   Append-only pack-event ledger, already joined to the Restaurant Delivery
-   Map at write time (see addPackedStaging() in the .gs file) — every row
-   already carries Restaurant / Staging Spot / QR Code ID / Route alongside
-   the pack details. QR Scan Confirmed? flips from 'N' to 'Y' the moment a
-   driver confirms pickup, so "pending" = rows where it's still 'N'. */
-function getPackedStaging(){
-  if (!CSV_URLS.packed || CSV_URLS.packed.indexOf('PASTE_') === 0){
-    return Promise.reject(new Error('Packed & Staged (RTD) CSV not configured yet — publish that tab and paste its URL into CSV_URLS.packed.'));
-  }
-  return fetchCsv(CSV_URLS.packed).then(function(rows){
-    var headerIdx = findHeaderRowIdx(rows, 'Date', 10);
-    if (headerIdx < 0) throw new Error('Could not find the "Date" header row in the Packed & Staged (RTD) CSV.');
-    var cols = headerIndexMap(rows[headerIdx]);
-    var out = [];
-    for (var i = headerIdx + 1; i < rows.length; i++){
-      var row = rows[i];
-      var date = row && row[cols['Date']];
-      var targetOutlet = row && row[cols['Target Outlet (Restaurant)']];
-      if (!date && !targetOutlet) continue;
-      out.push({
-        rowNum: i + 1,
-        date: toIsoDate(date),
-        bedId: row[cols['Bed ID']] || '',
-        cropVariety: row[cols['Crop / Variety']] || '',
-        targetOutlet: targetOutlet || '',
-        crateCount: Number(row[cols['Crate/Unit Count']]) || 0,
-        weightLb: Number(row[cols['Weight (lb)']]) || 0,
-        stagingLocation: row[cols['Staging Location']] || '',
-        notes: row[cols['Notes']] || '',
-        restaurant: row[cols['Restaurant']] || targetOutlet || '',
-        stagingSpot: row[cols['Staging Spot']] || '',
-        qrCodeId: row[cols['QR Code ID']] || '',
-        qrScanConfirmed: String(row[cols['QR Scan Confirmed?']] || '').trim().toUpperCase() === 'Y',
-        stagingConfirmTime: row[cols['Staging Confirm Time']] || '',
-        route: row[cols['Route']] || '',
-        confirmedBy: row[cols['Confirmed By']] || '',
-        cohortId: row[cols['Cohort ID']] || ''
-      });
-    }
-    return out;
-  });
-}
-
-function getDashboardSummary(){
-  return Promise.all([getBeds(), getGreenhouseBays()]).then(function(res){
-    var beds = res[0], bays = res[1];
-    return {
-      asOf: todayStr(),
-      bedStateCounts: tally(beds.map(function(b){ return b.stateName; })),
-      totalBeds: beds.length,
-      bayStatusCounts: tally(bays.map(function(b){ return b.status; })),
-      totalBays: bays.length
-    };
-  });
-}
-function tally(arr){ var o = {}; arr.forEach(function(v){ if (v) o[v] = (o[v]||0) + 1; }); return o; }
-
-/* ---------- DISPATCH — same call sites as before, routed to CSV reads / fetch-POST writes ---------- */
-function callServer(fnName, arg){
-  switch (fnName){
-    case 'getLists': return getLists();
-    case 'getDashboardSummary': return getDashboardSummary();
-    case 'getBeds': return getBeds();
-    case 'getGreenhouseBays': return getGreenhouseBays();
-    case 'getStorageCrops': return getStorageCrops();
-    case 'getWeeklyDemand': return getWeeklyDemand();
-    case 'getRestaurants': return getRestaurants();
-    case 'getPackedStaging': return getPackedStaging();
-    case 'getCohortPlanner': return getCohortPlanner();
-    case 'updateBed':
-    case 'updateGreenhouseBay':
-    case 'logWashStation':
-    case 'addStorageTransaction':
-    case 'addPackedStaging':
-    case 'saveWeeklyDemand':
-    case 'addDailyTaskLog':
-    case 'addEscalation':
-    case 'confirmDispatch':
-      return postToSheet(fnName, arg);
-    default:
-      return Promise.reject(new Error('Unknown action: ' + fnName));
-  }
-}
-
-/* ========================================================================
-   APP STATE + NAVIGATION
-   ======================================================================== */
-let LISTS = null;
-let BEDS_CACHE = [];
-let COHORT_CACHE = [];
-let BAYS_CACHE = [];
-let RESTAURANTS_CACHE = [];
-let PACKED_CACHE = [];
-
-function showToast(msg, isErr){
-  const t = document.getElementById('toast');
-  t.textContent = msg;
-  t.className = 'show' + (isErr ? ' err' : '');
-  clearTimeout(showToast._t);
-  showToast._t = setTimeout(() => { t.className=''; }, 2600);
-}
-
-function switchView(name){
-  document.querySelectorAll('section.view').forEach(s => s.classList.remove('active'));
-  document.getElementById('view-'+name).classList.add('active');
-  document.querySelectorAll('nav.tabbar button').forEach(b => b.classList.toggle('active', b.dataset.view===name));
-  window.scrollTo({top:0,behavior:'instant'});
-}
-document.querySelectorAll('nav.tabbar button').forEach(b => b.addEventListener('click', () => switchView(b.dataset.view)));
-document.querySelectorAll('[data-goto]').forEach(b => b.addEventListener('click', () => switchView(b.dataset.goto)));
-
-function todayStr(){ return new Date().toISOString().slice(0,10); }
-
-function makePills(container, options, defaultVal){
-  container.innerHTML = '';
-  let selected = defaultVal || (options[0] && (options[0].name || options[0]));
-  options.forEach(opt => {
-    const val = opt.name || opt;
-    const label = opt.name || opt;
-    const pill = document.createElement('div');
-    pill.className = 'pill' + (val===selected ? ' active':'');
-    pill.textContent = label;
-    pill.dataset.val = val;
-    pill.addEventListener('click', () => {
-      container.querySelectorAll('.pill').forEach(p=>p.classList.remove('active'));
-      pill.classList.add('active');
-      container.dataset.selected = val;
-    });
-    container.appendChild(pill);
-  });
-  container.dataset.selected = selected;
-}
-
-/* ========================================================================
-   BOOT
-   ======================================================================== */
-async function boot(){
-  const badge = document.getElementById('connBadge');
-  try{
-    LISTS = await callServer('getLists');
-    badge.textContent = WRITE_URL ? 'connected · live sheet' : 'reading live sheet · writes not configured';
-    badge.classList.toggle('offline', !WRITE_URL);
-  }catch(e){
-    badge.textContent = 'offline — check connection';
-    badge.classList.add('offline');
-    showToast('Could not load reference lists: ' + e.message, true);
-    return;
+  function fmtDate(d) {
+    if (!d) return '—';
+    try { return new Date(d).toLocaleDateString(); } catch (e) { return String(d); }
   }
 
-  populateStorageCrops();
-  await refreshBoard();
-  await loadBeds();
-  await loadBays();
-  await loadWeeklyDemand();
-  await loadCohortPlanner();
-
-  document.getElementById('tkDate').value = todayStr();
-  document.getElementById('esDate').value = todayStr();
-  document.getElementById('stDate').value = todayStr();
-  document.getElementById('wsDate').value = todayStr();
-
-  makePills(document.getElementById('tkSeasonPills'), LISTS.seasons);
-  makePills(document.getElementById('tkStatusPills'), LISTS.taskStatus);
-  makePills(document.getElementById('esTypePills'), LISTS.escalationCheckTypes);
-  makePills(document.getElementById('esResolvedPills'), LISTS.resolvedOptions, 'N');
-
-  populateWashBedPicker();
-  document.getElementById('wsCropCategory').innerHTML = LISTS.cropCategories.map(c => '<option value="'+c+'">'+c+'</option>').join('');
-  makePills(document.getElementById('wsMethodPills'), LISTS.washMethods);
-  makePills(document.getElementById('wsRoutePills'), LISTS.routes);
-  document.querySelectorAll('#wsRoutePills .pill').forEach(p => p.addEventListener('click', updateWsRouteVisibility));
-  updateWsRouteVisibility();
-
-  await populateWashOutlets();
-  await loadDispatchBoard();
-
-  // A QR placard opens this page as .../index.html?qr=QR-CALLATIS-001 —
-  // jump straight to Staging & Dispatch with that code ready to look up.
-  const qrParam = new URLSearchParams(window.location.search).get('qr');
-  if (qrParam){
-    switchView('dispatch');
-    const qrInput = document.getElementById('dsQrInput');
-    if (qrInput){ qrInput.value = qrParam; lookupDispatchManifest(); }
-  }
-}
-
-document.getElementById('refreshBoard').addEventListener('click', refreshBoard);
-
-async function refreshBoard(){
-  try{
-    const d = await callServer('getDashboardSummary');
-    document.getElementById('asOfLabel').textContent = 'as of ' + d.asOf;
-    const chipRow = document.getElementById('chipRow');
-    chipRow.innerHTML = '';
-    const order = ['Available','Planted','Growing','Harvestable','Harvested','Cleanup','Cover Crop / Rest','Replant / Prep'];
-    order.forEach(name => {
-      const n = d.bedStateCounts[name] || 0;
-      const chip = document.createElement('div');
-      chip.className = 'chip' + (name!=='Available' && name!=='Harvestable' && n>0 ? '' : '');
-      chip.innerHTML = '<span class="n">'+n+'</span><span class="l">'+name+'</span>';
-      chipRow.appendChild(chip);
-    });
-
-    const bayChips = document.getElementById('bayChips');
-    bayChips.innerHTML = '';
-    Object.keys(d.bayStatusCounts).forEach(status => {
-      const chip = document.createElement('div');
-      chip.className = 'chip' + (status!=='Active' ? ' alert' : '');
-      chip.style.marginBottom='8px';
-      chip.innerHTML = '<span class="n">'+d.bayStatusCounts[status]+'</span><span class="l">'+status+'</span>';
-      bayChips.appendChild(chip);
-    });
-  }catch(e){
-    showToast('Dashboard refresh failed: ' + e.message, true);
-  }
-}
-
-/* ========================================================================
-   BED MASTER
-   ======================================================================== */
-async function loadBeds(){
-  BEDS_CACHE = await callServer('getBeds');
-  document.getElementById('bedCountLabel').textContent = BEDS_CACHE.length + ' beds';
-  renderBedList(BEDS_CACHE);
-  if (document.getElementById('wsBed')) populateWashBedPicker();
-}
-function renderBedList(list){
-  const wrap = document.getElementById('bedList');
-  wrap.innerHTML = '';
-  if (!list.length){
-    wrap.innerHTML = '<div class="empty"><span class="big">&#9634;</span>No beds match.</div>';
-    return;
-  }
-  list.forEach(bed => {
-    const row = document.createElement('div');
-    row.className = 'list-item';
-    row.innerHTML =
-      '<div><div class="li-id">'+bed.bedId+'</div>'+
-      '<div class="li-meta">'+(bed.cropVariety || bed.defaultCrop)+' · Pad '+bed.pad+(bed.daysInState!=='' && bed.daysInState!==undefined ? ' · '+bed.daysInState+'d' : '')+(bed.cohortId ? ' · '+bed.cohortId : '')+'</div></div>'+
-      '<span class="state-tag">'+bed.stateName+'</span>';
-    row.addEventListener('click', () => openBedForm(bed));
-    wrap.appendChild(row);
-  });
-}
-document.getElementById('bedSearch').addEventListener('input', (e) => {
-  const q = e.target.value.trim().toLowerCase();
-  const filtered = !q ? BEDS_CACHE : BEDS_CACHE.filter(b =>
-    b.bedId.toLowerCase().includes(q) ||
-    (b.cropVariety||'').toLowerCase().includes(q) ||
-    (b.defaultCrop||'').toLowerCase().includes(q));
-  renderBedList(filtered);
-});
-
-let currentBed = null;
-
-function updateBedHarvestVisibility(){
-  const stateName = document.getElementById('bedStatePills').dataset.selected;
-  const block = document.getElementById('bedHarvestBlock');
-  block.style.display = (stateName === 'Harvested') ? 'block' : 'none';
-}
-
-function openBedForm(bed){
-  currentBed = bed;
-  document.getElementById('bedListWrap').style.display = 'none';
-  document.getElementById('bedFormWrap').style.display = 'block';
-  document.getElementById('bedId').value = bed.bedId;
-  document.getElementById('bedPad').value = 'Pad ' + bed.pad;
-  document.getElementById('bedDefaultCrop').value = bed.defaultCrop;
-  document.getElementById('bedCropVariety').value = bed.cropVariety || '';
-  refreshCohortIdDatalist();
-  document.getElementById('bedCohortId').value = bed.cohortId || '';
-  document.getElementById('bedDatePlanted').value = bed.datePlanted || '';
-  document.getElementById('bedTargetHarvest').value = formatDateDisplay(bed.targetHarvestDate);
-  document.getElementById('bedDate').value = bed.dateEnteredState || todayStr();
-  document.getElementById('bedNotes').value = bed.notes || '';
-  makePills(document.getElementById('bedStatePills'), LISTS.bedStates, bed.stateName);
-  document.querySelectorAll('#bedStatePills .pill').forEach(p => {
-    p.addEventListener('click', updateBedHarvestVisibility);
-  });
-  updateBedHarvestVisibility();
-}
-document.getElementById('bedBack').addEventListener('click', () => {
-  document.getElementById('bedFormWrap').style.display = 'none';
-  document.getElementById('bedListWrap').style.display = 'block';
-});
-document.getElementById('bedSave').addEventListener('click', async () => {
-  if (!currentBed) return;
-  const stateName = document.getElementById('bedStatePills').dataset.selected;
-  const stateObj = LISTS.bedStates.find(s => s.name === stateName);
-  const isHarvest = stateName === 'Harvested';
-
-  const payload = {
-    rowNum: currentBed.rowNum,
-    bedId: currentBed.bedId,
-    cropVariety: document.getElementById('bedCropVariety').value,
-    cohortId: document.getElementById('bedCohortId').value,
-    stateNum: stateObj.num,
-    dateEnteredState: document.getElementById('bedDate').value,
-    datePlanted: document.getElementById('bedDatePlanted').value,
-    notes: document.getElementById('bedNotes').value
+  // ── LOGIN ────────────────────────────────────────────────────────────
+  el('loginBtn').onclick = function () {
+    var userId = el('loginUserId').value.trim();
+    var pin = el('loginPin').value.trim();
+    if (!userId || !pin) { showError('loginError', 'Enter both User ID and PIN.'); return; }
+    clearError('loginError');
+    el('loginBtn').disabled = true;
+    google.script.run
+      .withSuccessHandler(function (res) {
+        el('loginBtn').disabled = false;
+        session.userId = res.userId; session.fullName = res.fullName; session.role = res.role;
+        onLoginSuccess();
+      })
+      .withFailureHandler(function (err) {
+        el('loginBtn').disabled = false;
+        showError('loginError', err.message || String(err));
+      })
+      .authenticateUser(userId, pin);
   };
 
-  const btn = document.getElementById('bedSave');
-  btn.disabled = true; btn.textContent = 'Saving…';
-  try{
-    await callServer('updateBed', payload);
-    showToast(currentBed.bedId + ' updated' + (isHarvest ? ' · head to Wash Station next' : ''));
-    await loadBeds();
-    await refreshBoard();
-    document.getElementById('bedFormWrap').style.display = 'none';
-    document.getElementById('bedListWrap').style.display = 'block';
-  }catch(e){
-    showToast('Save failed: ' + e.message, true);
-  }finally{
-    btn.disabled = false; btn.textContent = 'Save bed update';
-  }
-});
-
-/* ========================================================================
-   GREENHOUSE BAYS
-   ======================================================================== */
-async function loadBays(){
-  BAYS_CACHE = await callServer('getGreenhouseBays');
-  renderBayList();
-}
-function renderBayList(){
-  const wrap = document.getElementById('ghList');
-  wrap.innerHTML = '';
-  BAYS_CACHE.forEach(bay => {
-    const row = document.createElement('div');
-    row.className = 'list-item';
-    row.innerHTML =
-      '<div><div class="li-id">Bay '+bay.bayNum+'</div>'+
-      '<div class="li-meta">'+(bay.currentCrop || bay.purpose)+'</div></div>'+
-      '<span class="state-tag">'+bay.status+'</span>';
-    row.addEventListener('click', () => openBayForm(bay));
-    wrap.appendChild(row);
-  });
-}
-let currentBay = null;
-function openBayForm(bay){
-  currentBay = bay;
-  document.getElementById('ghListWrap').style.display = 'none';
-  document.getElementById('ghFormWrap').style.display = 'block';
-  document.getElementById('ghBayNum').value = bay.bayNum;
-  document.getElementById('ghPurpose').value = bay.purpose;
-  document.getElementById('ghCrop').value = bay.currentCrop || '';
-  document.getElementById('ghOccupancy').value = bay.occupancyPct ? Math.round(bay.occupancyPct*100)/1 : '';
-  document.getElementById('ghDate').value = bay.dateStatusSet || todayStr();
-  document.getElementById('ghNotes').value = bay.notes || '';
-  makePills(document.getElementById('ghStatusPills'), LISTS.greenhouseBayStatus, bay.status);
-}
-document.getElementById('ghBack').addEventListener('click', () => {
-  document.getElementById('ghFormWrap').style.display = 'none';
-  document.getElementById('ghListWrap').style.display = 'block';
-});
-document.getElementById('ghSave').addEventListener('click', async () => {
-  if (!currentBay) return;
-  const btn = document.getElementById('ghSave');
-  btn.disabled = true; btn.textContent = 'Saving…';
-  try{
-    await callServer('updateGreenhouseBay', {
-      rowNum: currentBay.rowNum,
-      bayNum: currentBay.bayNum,
-      currentCrop: document.getElementById('ghCrop').value,
-      occupancyPct: document.getElementById('ghOccupancy').value,
-      status: document.getElementById('ghStatusPills').dataset.selected,
-      dateStatusSet: document.getElementById('ghDate').value,
-      notes: document.getElementById('ghNotes').value
-    });
-    showToast('Bay ' + currentBay.bayNum + ' updated');
-    await loadBays();
-    await refreshBoard();
-    document.getElementById('ghFormWrap').style.display = 'none';
-    document.getElementById('ghListWrap').style.display = 'block';
-  }catch(e){
-    showToast('Save failed: ' + e.message, true);
-  }finally{
-    btn.disabled = false; btn.textContent = 'Save bay update';
-  }
-});
-
-/* ========================================================================
-   STORAGE RESERVE
-   ======================================================================== */
-async function populateStorageCrops(){
-  try{
-    const crops = await callServer('getStorageCrops');
-    const sel = document.getElementById('stCrop');
-    sel.innerHTML = crops.map(c => '<option value="'+c+'">'+c+'</option>').join('');
-  }catch(e){ /* non-fatal */ }
-}
-document.getElementById('stSave').addEventListener('click', async () => {
-  const btn = document.getElementById('stSave');
-  btn.disabled = true; btn.textContent = 'Saving…';
-  try{
-    const res = await callServer('addStorageTransaction', {
-      crop: document.getElementById('stCrop').value,
-      dateIn: document.getElementById('stDate').value,
-      qtyIn: document.getElementById('stQtyIn').value,
-      qtyDrawn: document.getElementById('stQtyDrawn').value,
-      storageRoom: document.getElementById('stRoom').value,
-      temp: document.getElementById('stTemp').value,
-      humidity: document.getElementById('stHumidity').value,
-      notes: document.getElementById('stNotes').value
-    });
-    showToast('Storage logged — new balance ' + res.newBalance + ' lb');
-    ['stQtyIn','stQtyDrawn','stRoom','stTemp','stHumidity','stNotes'].forEach(id => document.getElementById(id).value = '');
-  }catch(e){
-    showToast('Save failed: ' + e.message, true);
-  }finally{
-    btn.disabled = false; btn.textContent = 'Log storage transaction';
-  }
-});
-
-/* ========================================================================
-   WASH STATION — mandatory gateway between harvest and destination.
-   Bed Update no longer captures weight/wash — everything that used to
-   live on the bed form's harvest block now lives here, plus routing.
-   ======================================================================== */
-function populateWashBedPicker(){
-  const sel = document.getElementById('wsBed');
-  const prev = sel.value;
-  const harvested = BEDS_CACHE.filter(b => b.stateName === 'Harvested');
-  const rest = BEDS_CACHE.filter(b => b.stateName !== 'Harvested');
-  sel.innerHTML =
-    '<option value="">Select a bed…</option>' +
-    (harvested.length ? '<optgroup label="Harvested — needs washing">' +
-      harvested.map(b => '<option value="'+b.rowNum+'">'+b.bedId+' · '+(b.cropVariety||b.defaultCrop)+(b.cohortId ? ' · '+b.cohortId : '')+'</option>').join('') +
-      '</optgroup>' : '') +
-    '<optgroup label="Other beds">' +
-      rest.map(b => '<option value="'+b.rowNum+'">'+b.bedId+' · '+(b.cropVariety||b.defaultCrop)+(b.cohortId ? ' · '+b.cohortId : '')+'</option>').join('') +
-    '</optgroup>';
-  if (prev) sel.value = prev;
-}
-document.getElementById('wsBed').addEventListener('change', () => {
-  const bed = BEDS_CACHE.find(b => String(b.rowNum) === document.getElementById('wsBed').value);
-  document.getElementById('wsCropVariety').value = bed ? (bed.cropVariety || bed.defaultCrop || '') : '';
-  const cohortWrap = document.getElementById('wsCohortWrap');
-  if (bed && bed.cohortId){
-    document.getElementById('wsCohortId').value = bed.cohortId;
-    cohortWrap.style.display = 'block';
-  } else {
-    document.getElementById('wsCohortId').value = '';
-    cohortWrap.style.display = 'none';
-  }
-});
-
-/* Target outlet options come from the Restaurant Delivery Map (not the
-   Lists tab's stale "Target Outlet" column, which actually held delivery
-   route names, not restaurant names) — this is the same source the
-   Staging & Dispatch board reads from, so a batch logged here always maps
-   to a real bay. */
-async function populateWashOutlets(){
-  const sel = document.getElementById('wsOutlet');
-  try{
-    RESTAURANTS_CACHE = await callServer('getRestaurants');
-    const active = RESTAURANTS_CACHE.filter(r => r.active);
-    sel.innerHTML = '<option value="">Select a restaurant…</option>' +
-      active.map(r => '<option value="'+r.name+'">'+r.name+'</option>').join('');
-  }catch(e){
-    sel.innerHTML = '<option value="">Restaurant Delivery Map not configured yet</option>';
-  }
-  updateWsOutletPreview();
-}
-function updateWsOutletPreview(){
-  const sel = document.getElementById('wsOutlet');
-  const preview = document.getElementById('wsOutletPreview');
-  const stagingLocInput = document.getElementById('wsStagingLoc');
-  const r = RESTAURANTS_CACHE.find(x => x.name === sel.value);
-  if (!r){ preview.style.display = 'none'; return; }
-  preview.style.display = 'block';
-  preview.innerHTML =
-    '<div style="font-family:\'Barlow Condensed\',sans-serif;font-size:13px;letter-spacing:.04em;text-transform:uppercase;color:var(--sage-dark);font-weight:600;">Drop crates at</div>'+
-    '<div style="font-size:15px;font-weight:600;color:var(--soil);margin-top:2px;">'+r.stagingSpot+'</div>'+
-    '<div class="mono" style="font-size:12px;color:#6B6250;margin-top:4px;">QR '+r.qrCodeId+' · '+r.route+'</div>';
-  if (!stagingLocInput.value || stagingLocInput.dataset.autofilled === '1'){
-    stagingLocInput.value = r.stagingSpot;
-    stagingLocInput.dataset.autofilled = '1';
-  }
-}
-document.getElementById('wsOutlet').addEventListener('change', updateWsOutletPreview);
-document.getElementById('wsStagingLoc').addEventListener('input', () => {
-  document.getElementById('wsStagingLoc').dataset.autofilled = '0';
-});
-
-let wsWashState = null;   // { startedAt } while running
-let wsWashResult = null;  // { minutes, violation, confirmedAt } once confirmed
-let wsWashTickHandle = null;
-function resetWsWashUi(){
-  wsWashState = null; wsWashResult = null;
-  if (wsWashTickHandle){ clearInterval(wsWashTickHandle); wsWashTickHandle = null; }
-  document.getElementById('wsWashStart').style.display = 'inline-flex';
-  document.getElementById('wsWashStart').textContent = 'Start wash timer';
-  document.getElementById('wsWashRunning').style.display = 'none';
-  document.getElementById('wsWashCountdown').textContent = '30:00';
-  document.getElementById('wsWashCountdown').style.color = '';
-  document.getElementById('wsWashResult').textContent = '';
-}
-document.getElementById('wsWashStart').addEventListener('click', () => {
-  wsWashState = { startedAt: Date.now() };
-  wsWashResult = null;
-  document.getElementById('wsWashStart').style.display = 'none';
-  document.getElementById('wsWashRunning').style.display = 'block';
-  document.getElementById('wsWashResult').textContent = '';
-  const countdownEl = document.getElementById('wsWashCountdown');
-  function tick(){
-    const elapsedMs = Date.now() - wsWashState.startedAt;
-    const remainingSec = Math.max(0, Math.round(1800 - elapsedMs / 1000));
-    const mm = String(Math.floor(remainingSec / 60)).padStart(2, '0');
-    const ss = String(remainingSec % 60).padStart(2, '0');
-    countdownEl.textContent = mm + ':' + ss;
-    countdownEl.style.color = remainingSec === 0 ? 'var(--rust)' : '';
-  }
-  tick();
-  wsWashTickHandle = setInterval(tick, 1000);
-});
-document.getElementById('wsWashConfirm').addEventListener('click', () => {
-  if (!wsWashState) return;
-  const elapsedMin = (Date.now() - wsWashState.startedAt) / 60000;
-  const violation = elapsedMin > 30;
-  wsWashResult = { minutes: Math.round(elapsedMin * 10) / 10, violation: violation, confirmedAt: Date.now() };
-  if (wsWashTickHandle){ clearInterval(wsWashTickHandle); wsWashTickHandle = null; }
-  document.getElementById('wsWashRunning').style.display = 'none';
-  document.getElementById('wsWashStart').style.display = 'inline-flex';
-  document.getElementById('wsWashStart').textContent = 'Restart wash timer';
-  const resultEl = document.getElementById('wsWashResult');
-  if (violation){
-    resultEl.style.color = 'var(--rust)';
-    resultEl.textContent = 'Washed at ' + wsWashResult.minutes + ' min — over the 30-min window. This will auto-log an escalation on save.';
-  } else {
-    resultEl.style.color = 'var(--ok)';
-    resultEl.textContent = 'Washed at ' + wsWashResult.minutes + ' min — within the 30-min window.';
-  }
-});
-
-function updateWsRouteVisibility(){
-  const route = document.getElementById('wsRoutePills').dataset.selected;
-  document.getElementById('wsStorageBlock').style.display = (route === 'Bulk Storage') ? 'block' : 'none';
-  document.getElementById('wsPackedBlock').style.display = (route === 'Packed & Staged (RTD)') ? 'block' : 'none';
-}
-
-document.getElementById('wsSave').addEventListener('click', async () => {
-  const bedSel = document.getElementById('wsBed');
-  const bed = BEDS_CACHE.find(b => String(b.rowNum) === bedSel.value);
-  if (!bed){ showToast('Pick a bed first.', true); return; }
-  const cropVariety = document.getElementById('wsCropVariety').value.trim();
-  const weightRaw = document.getElementById('wsWeight').value;
-  const route = document.getElementById('wsRoutePills').dataset.selected;
-  if (!cropVariety){ showToast('Enter the crop / variety.', true); return; }
-  if (!weightRaw){ showToast('Enter the batch weight before saving.', true); return; }
-  if (!wsWashResult){ showToast('Run the wash timer and confirm washed before saving.', true); return; }
-  if (!route){ showToast('Pick a route — Bulk Storage or Packed & Staged.', true); return; }
-  if (route === 'Packed & Staged (RTD)' && !document.getElementById('wsOutlet').value){
-    showToast('Pick a target outlet for Packed & Staged.', true); return;
+  function onLoginSuccess() {
+    el('screen-login').classList.add('hidden');
+    el('tabBar').classList.remove('hidden');
+    el('logoutBtn').style.display = 'inline-block';
+    el('whoLine').textContent = session.fullName + ' · ' + session.role;
+    switchTab('scan');
+    loadCropList();
+    loadRestaurantList();
   }
 
-  const payload = {
-    bedId: bed.bedId,
-    date: document.getElementById('wsDate').value,
-    cropVariety: cropVariety,
-    cropCategory: document.getElementById('wsCropCategory').value,
-    weightLb: parseFloat(weightRaw),
-    washMethod: document.getElementById('wsMethodPills').dataset.selected,
-    harvestTime: new Date(wsWashState.startedAt).toISOString(),
-    washArrivalTime: new Date(wsWashResult.confirmedAt).toISOString(),
-    route: route,
-    notes: document.getElementById('wsNotes').value
-  };
-  if (route === 'Bulk Storage'){
-    payload.storageRoom = document.getElementById('wsRoom').value;
-    payload.temp = document.getElementById('wsTemp').value;
-    payload.humidity = document.getElementById('wsHumidity').value;
-  } else {
-    payload.targetOutlet = document.getElementById('wsOutlet').value;
-    payload.crateCount = document.getElementById('wsCrateCount').value;
-    payload.stagingLocation = document.getElementById('wsStagingLoc').value;
-  }
-
-  const btn = document.getElementById('wsSave');
-  btn.disabled = true; btn.textContent = 'Saving…';
-  try{
-    const res = await callServer('logWashStation', payload);
-    const routeMsg = route === 'Packed & Staged (RTD)'
-      ? ' · staged at ' + (res.stagingSpot || payload.stagingLocation) + (res.unmapped ? ' (outlet not found in Restaurant Delivery Map — check the name)' : '')
-      : ' · routed to ' + route;
-    showToast(bed.bedId + ' washed' + routeMsg + (res.washViolation ? ' · wash violation logged to Escalations' : ''));
-    document.getElementById('wsWeight').value = '';
-    document.getElementById('wsCrateCount').value = '';
-    document.getElementById('wsStagingLoc').value = '';
-    document.getElementById('wsStagingLoc').dataset.autofilled = '0';
-    document.getElementById('wsRoom').value = '';
-    document.getElementById('wsTemp').value = '';
-    document.getElementById('wsHumidity').value = '';
-    document.getElementById('wsNotes').value = '';
-    resetWsWashUi();
-    await loadBeds();
-    await refreshBoard();
-    await loadDispatchBoard();
-  }catch(e){
-    showToast('Save failed: ' + e.message, true);
-  }finally{
-    btn.disabled = false; btn.textContent = 'Log wash + route';
-  }
-});
-
-/* ========================================================================
-   WEEKLY DEMAND & SCR
-   ======================================================================== */
-async function loadWeeklyDemand(){
-  const d = await callServer('getWeeklyDemand');
-  document.getElementById('wdWeekOf').value = d.weekOf || todayStr();
-  const wrap = document.getElementById('wdRows');
-  wrap.innerHTML = '';
-  d.rows.forEach(row => {
-    const div = document.createElement('div');
-    div.className = 'demand-row';
-    div.dataset.rowNum = row.rowNum;
-    div.dataset.cropCategory = row.cropCategory;
-    div.innerHTML =
-      '<div class="crop-name">'+row.cropCategory+' <span style="float:right;color:#9C907A;font-family:\'IBM Plex Mono\',monospace;font-weight:500;font-size:12px;">SCR '+(row.scr!=='' && row.scr!==undefined && row.scr!==null ? Number(row.scr).toFixed(2) : '—')+'</span></div>'+
-      '<div class="row3">'+
-        '<div><input type="number" min="0" class="wd-a" value="'+(row.chASupply||'')+'"><div class="mini-label">Ch A</div></div>'+
-        '<div><input type="number" min="0" class="wd-b" value="'+(row.chBSupply||'')+'"><div class="mini-label">Ch B</div></div>'+
-        '<div><input type="number" min="0" class="wd-c" value="'+(row.chCSupply||'')+'"><div class="mini-label">Ch C</div></div>'+
-      '</div>'+
-      '<div style="margin-top:6px;"><input type="number" min="0" class="wd-demand" placeholder="Weekly demand (units)" value="'+(row.weeklyDemand||'')+'"></div>';
-    wrap.appendChild(div);
-  });
-}
-document.getElementById('wdSave').addEventListener('click', async () => {
-  const btn = document.getElementById('wdSave');
-  btn.disabled = true; btn.textContent = 'Saving…';
-  try{
-    const rows = Array.from(document.querySelectorAll('#wdRows .demand-row')).map(div => ({
-      rowNum: div.dataset.rowNum,
-      cropCategory: div.dataset.cropCategory,
-      chASupply: div.querySelector('.wd-a').value,
-      chBSupply: div.querySelector('.wd-b').value,
-      chCSupply: div.querySelector('.wd-c').value,
-      weeklyDemand: div.querySelector('.wd-demand').value
-    }));
-    await callServer('saveWeeklyDemand', { weekOf: document.getElementById('wdWeekOf').value, rows: rows });
-    showToast('Weekly demand saved');
-    await loadWeeklyDemand();
-  }catch(e){
-    showToast('Save failed: ' + e.message, true);
-  }finally{
-    btn.disabled = false; btn.textContent = 'Save weekly demand';
-  }
-});
-
-/* ========================================================================
-   DAILY TASK LOG
-   ======================================================================== */
-document.getElementById('tkSave').addEventListener('click', async () => {
-  const btn = document.getElementById('tkSave');
-  const desc = document.getElementById('tkDesc').value.trim();
-  if (!desc){ showToast('Add a task description first.', true); return; }
-  btn.disabled = true; btn.textContent = 'Saving…';
-  try{
-    await callServer('addDailyTaskLog', {
-      date: document.getElementById('tkDate').value,
-      season: document.getElementById('tkSeasonPills').dataset.selected,
-      timeBlock: document.getElementById('tkBlockPills').dataset.selected || '',
-      taskDescription: desc,
-      assignedTo: document.getElementById('tkAssigned').value,
-      status: document.getElementById('tkStatusPills').dataset.selected,
-      notes: document.getElementById('tkNotes').value
-    });
-    showToast('Task logged');
-    document.getElementById('tkDesc').value = '';
-    document.getElementById('tkAssigned').value = '';
-    document.getElementById('tkNotes').value = '';
-  }catch(e){
-    showToast('Save failed: ' + e.message, true);
-  }finally{
-    btn.disabled = false; btn.textContent = 'Log task';
-  }
-});
-document.getElementById('tkBlockPills').addEventListener('click', (e) => {
-  const p = e.target.closest('.pill'); if (!p) return;
-  document.querySelectorAll('#tkBlockPills .pill').forEach(x=>x.classList.remove('active'));
-  p.classList.add('active');
-  document.getElementById('tkBlockPills').dataset.selected = p.dataset.val;
-});
-
-/* ========================================================================
-   ESCALATION LOG
-   ======================================================================== */
-document.getElementById('esSave').addEventListener('click', async () => {
-  const btn = document.getElementById('esSave');
-  const details = document.getElementById('esDetails').value.trim();
-  if (!details){ showToast('Describe what triggered this first.', true); return; }
-  btn.disabled = true; btn.textContent = 'Saving…';
-  try{
-    await callServer('addEscalation', {
-      date: document.getElementById('esDate').value,
-      checkType: document.getElementById('esTypePills').dataset.selected,
-      details: details,
-      metricValue: document.getElementById('esMetric').value,
-      threshold: document.getElementById('esThreshold').value,
-      actionTaken: document.getElementById('esAction').value,
-      resolved: document.getElementById('esResolvedPills').dataset.selected,
-      resolvedDate: document.getElementById('esResolvedDate').value
-    });
-    showToast('Escalation logged');
-    document.getElementById('esDetails').value = '';
-    document.getElementById('esMetric').value = '';
-    document.getElementById('esThreshold').value = '';
-    document.getElementById('esAction').value = '';
-    document.getElementById('esResolvedDate').value = '';
-  }catch(e){
-    showToast('Save failed: ' + e.message, true);
-  }finally{
-    btn.disabled = false; btn.textContent = 'Log escalation';
-  }
-});
-
-/* ========================================================================
-   STAGING & DISPATCH
-   Restaurant-by-restaurant board of what's currently packed and sitting in
-   a bay awaiting pickup, plus the driver-facing QR confirm tool. Both read
-   straight off the CSV (Restaurant Delivery Map + Packed & Staged (RTD));
-   only the final confirm tap writes, via confirmDispatch().
-   ======================================================================== */
-
-async function loadDispatchBoard(){
-  const board = document.getElementById('dsBoard');
-  try{
-    const [restaurants, packed] = await Promise.all([
-      RESTAURANTS_CACHE.length ? Promise.resolve(RESTAURANTS_CACHE) : callServer('getRestaurants'),
-      callServer('getPackedStaging')
-    ]);
-    RESTAURANTS_CACHE = restaurants;
-    PACKED_CACHE = packed;
-    document.getElementById('dsCountLabel').textContent = restaurants.filter(r => r.active).length + ' restaurants';
-    renderDispatchCards();
-    renderPlacards();
-    setupCameraButtonVisibility();
-  }catch(e){
-    board.innerHTML = '<div class="empty"><span class="big">&#9888;</span>'+e.message+'</div>';
-    document.getElementById('dsPlacards').innerHTML = '';
-  }
-}
-
-function renderDispatchCards(){
-  const board = document.getElementById('dsBoard');
-  board.innerHTML = '';
-  const active = RESTAURANTS_CACHE.filter(r => r.active);
-  if (!active.length){
-    board.innerHTML = '<div class="empty"><span class="big">&#9634;</span>No active restaurants in the Delivery Map.</div>';
-    return;
-  }
-  active.forEach(r => {
-    const pending = PACKED_CACHE.filter(p => p.targetOutlet === r.name && !p.qrScanConfirmed);
-    const totalCrates = pending.reduce((s,p) => s + (p.crateCount||0), 0);
-    const totalWeight = pending.reduce((s,p) => s + (p.weightLb||0), 0);
-    const byItem = {};
-    pending.forEach(p => {
-      const key = p.cropVariety || 'Unlabeled';
-      if (!byItem[key]) byItem[key] = { crates: 0, weight: 0 };
-      byItem[key].crates += p.crateCount||0;
-      byItem[key].weight += p.weightLb||0;
-    });
-
-    const card = document.createElement('div');
-    card.className = 'rcard';
-    let itemsHtml = '<div class="rcard-empty">Nothing staged right now.</div>';
-    const keys = Object.keys(byItem);
-    if (keys.length){
-      itemsHtml = '<div class="rcard-items">' + keys.map(k =>
-        '<div class="ri"><span>'+k+'</span><span class="mono">'+byItem[k].crates+' crates / '+Math.round(byItem[k].weight)+' lb</span></div>'
-      ).join('') + '</div>';
+  el('logoutBtn').onclick = function () {
+    if (session.userId) {
+      google.script.run.logoutUser(session.userId); // fire-and-forget: records LOGOUT in LOGIN_LOG
     }
-    card.innerHTML =
-      '<div class="rcard-head">'+
-        '<span class="rcard-dot" style="background:'+(r.color||'#7C8B6F')+';"></span>'+
-        '<span class="rcard-name">'+r.name+'</span>'+
-        '<span class="rcard-route">'+r.route+'</span>'+
-      '</div>'+
-      '<div class="rcard-spot">'+r.stagingSpot+'</div>'+
-      '<div class="rcard-totals">'+
-        '<div class="t"><span class="n">'+totalCrates+'</span><span class="l">Crates staged</span></div>'+
-        '<div class="t"><span class="n">'+Math.round(totalWeight)+'</span><span class="l">Lbs staged</span></div>'+
-      '</div>'+
-      itemsHtml +
-      '<div class="rcard-qr">QR '+r.qrCodeId+'</div>';
-    board.appendChild(card);
+    session = { userId: null, fullName: null, role: null };
+    el('tabBar').classList.add('hidden');
+    el('logoutBtn').style.display = 'none';
+    el('whoLine').textContent = 'Not logged in';
+    ['scan', 'weighin', 'pack'].forEach(function (t) { el('screen-' + t).classList.add('hidden'); });
+    el('screen-login').classList.remove('hidden');
+    el('loginPin').value = '';
+  };
+
+  // ── TABS ─────────────────────────────────────────────────────────────
+  Array.prototype.forEach.call(document.querySelectorAll('nav.tabs button'), function (btn) {
+    btn.onclick = function () { switchTab(btn.getAttribute('data-tab')); };
   });
-}
-
-function renderPlacards(){
-  const wrap = document.getElementById('dsPlacards');
-  wrap.innerHTML = '';
-  const active = RESTAURANTS_CACHE.filter(r => r.active);
-  const baseUrl = window.location.origin + window.location.pathname;
-  active.forEach(r => {
-    if (!r.qrCodeId) return;
-    const dispatchUrl = baseUrl + '?qr=' + encodeURIComponent(r.qrCodeId);
-    const qrImg = 'https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=' + encodeURIComponent(dispatchUrl);
-    const div = document.createElement('div');
-    div.className = 'placard';
-    div.innerHTML =
-      '<img src="'+qrImg+'" alt="QR for '+r.name+'">'+
-      '<div class="p-name">'+r.name+'</div>'+
-      '<div class="p-spot">'+r.stagingSpot+'</div>'+
-      '<div class="p-code">'+r.qrCodeId+'</div>';
-    wrap.appendChild(div);
-  });
-}
-
-/* Driver scans (or types) the QR Code ID stuck on the bay. We look up
-   every not-yet-confirmed Packed & Staged row carrying that code straight
-   from the cached CSV data — no server round trip until they actually
-   confirm — so the manifest shown is exactly what confirmDispatch() is
-   about to close out. */
-let dsCurrentQr = null;
-function lookupDispatchManifest(){
-  const code = document.getElementById('dsQrInput').value.trim();
-  document.getElementById('dsManifestWrap').style.display = 'none';
-  document.getElementById('dsManifestEmpty').style.display = 'none';
-  if (!code){ showToast('Enter or scan a QR code first.', true); return; }
-  const pending = PACKED_CACHE.filter(p => p.qrCodeId === code && !p.qrScanConfirmed);
-  if (!pending.length){
-    document.getElementById('dsManifestEmpty').style.display = 'block';
-    dsCurrentQr = null;
-    return;
-  }
-  dsCurrentQr = code;
-  const restaurant = pending[0].restaurant;
-  const totalCrates = pending.reduce((s,p) => s + (p.crateCount||0), 0);
-  const totalWeight = pending.reduce((s,p) => s + (p.weightLb||0), 0);
-  document.getElementById('dsManifestHead').textContent = restaurant + ' — ' + totalCrates + ' crates / ' + Math.round(totalWeight) + ' lb';
-  document.getElementById('dsManifestRows').innerHTML = pending.map(p =>
-    '<div class="ds-manifest-row"><span>'+(p.cropVariety||'Unlabeled')+' · '+p.bedId+(p.cohortId ? ' · '+p.cohortId : '')+'</span><span class="mono">'+p.crateCount+' crates / '+Math.round(p.weightLb)+' lb</span></div>'
-  ).join('');
-  document.getElementById('dsManifestWrap').style.display = 'block';
-}
-document.getElementById('dsLookupBtn').addEventListener('click', lookupDispatchManifest);
-document.getElementById('dsQrInput').addEventListener('keydown', (e) => { if (e.key === 'Enter') lookupDispatchManifest(); });
-
-document.getElementById('dsConfirmBtn').addEventListener('click', async () => {
-  if (!dsCurrentQr){ showToast('Look up an order first.', true); return; }
-  const btn = document.getElementById('dsConfirmBtn');
-  btn.disabled = true; btn.textContent = 'Confirming…';
-  try{
-    const res = await callServer('confirmDispatch', {
-      qrCodeId: dsCurrentQr,
-      confirmedBy: document.getElementById('dsConfirmedBy').value
+  function switchTab(name) {
+    ['scan', 'weighin', 'pack'].forEach(function (t) {
+      el('screen-' + t).classList.toggle('hidden', t !== name);
     });
-    showToast(res.restaurant + ' — ' + res.rowsConfirmed + ' item(s) confirmed picked up & dispatched');
-    document.getElementById('dsQrInput').value = '';
-    document.getElementById('dsConfirmedBy').value = '';
-    document.getElementById('dsManifestWrap').style.display = 'none';
-    dsCurrentQr = null;
-    await loadDispatchBoard();
-  }catch(e){
-    showToast('Confirm failed: ' + e.message, true);
-  }finally{
-    btn.disabled = false; btn.textContent = 'Confirm order picked up & dispatched';
+    Array.prototype.forEach.call(document.querySelectorAll('nav.tabs button'), function (btn) {
+      btn.classList.toggle('active', btn.getAttribute('data-tab') === name);
+    });
   }
-});
 
-/* Optional live camera scan using the browser's built-in BarcodeDetector
-   (supported on Chrome/Android; no external library, no network dependency
-   — degrades gracefully to manual entry everywhere else). */
-let dsCameraStream = null;
-function setupCameraButtonVisibility(){
-  const btn = document.getElementById('dsCameraBtn');
-  if ('BarcodeDetector' in window){ btn.style.display = 'inline-flex'; }
-}
-document.getElementById('dsCameraBtn').addEventListener('click', async () => {
-  const video = document.getElementById('dsCameraVideo');
-  const btn = document.getElementById('dsCameraBtn');
-  if (dsCameraStream){ stopCameraScan(); return; }
-  try{
-    dsCameraStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
-    video.srcObject = dsCameraStream;
-    video.style.display = 'block';
-    await video.play();
-    btn.textContent = 'Stop camera';
-    const detector = new window.BarcodeDetector({ formats: ['qr_code'] });
-    const scanLoop = async () => {
-      if (!dsCameraStream) return;
-      try{
-        const codes = await detector.detect(video);
-        if (codes.length){
-          document.getElementById('dsQrInput').value = codes[0].rawValue;
-          stopCameraScan();
-          lookupDispatchManifest();
-          return;
-        }
-      }catch(err){ /* keep trying */ }
-      requestAnimationFrame(scanLoop);
+  // ── LOOKUP DATA (crops, restaurants) ───────────────────────────────
+  function loadCropList() {
+    google.script.run.withSuccessHandler(function (list) { cropList = list; }).getCropReferenceList();
+  }
+  function loadRestaurantList() {
+    google.script.run.withSuccessHandler(function (list) {
+      var sel = el('packRestaurant');
+      sel.innerHTML = '';
+      list.forEach(function (r) {
+        var o = document.createElement('option'); o.value = r; o.textContent = r; sel.appendChild(o);
+      });
+    }).getRestaurantList();
+  }
+
+  // ── SCAN (manual + camera) ──────────────────────────────────────────
+  el('lookupBtn').onclick = function () {
+    var code = el('manualCode').value.trim();
+    if (!code) { showError('scanError', 'Enter a code, e.g. BED:B2-03'); return; }
+    runScan(code);
+  };
+
+  el('cameraToggleBtn').onclick = function () {
+    if (!cameraOn) { startCamera(); } else { stopCamera(); }
+  };
+
+  function startCamera() {
+    if (typeof Html5Qrcode === 'undefined') {
+      showError('scanError', 'Camera scanner failed to load. Use manual entry instead.');
+      return;
+    }
+    el('qrReader').classList.remove('hidden');
+    html5QrScanner = new Html5Qrcode('qrReader');
+    html5QrScanner.start(
+      { facingMode: 'environment' },
+      { fps: 10, qrbox: 220 },
+      function (decodedText) {
+        el('manualCode').value = decodedText;
+        stopCamera();
+        runScan(decodedText);
+      },
+      function () { /* per-frame scan failure, ignore */ }
+    ).then(function () {
+      cameraOn = true;
+      el('cameraToggleBtn').textContent = 'Stop Camera';
+    }).catch(function (err) {
+      showError('scanError', 'Camera unavailable (' + err + '). Use manual entry instead.');
+      el('qrReader').classList.add('hidden');
+    });
+  }
+  function stopCamera() {
+    if (html5QrScanner && cameraOn) {
+      html5QrScanner.stop().then(function () {
+        el('qrReader').classList.add('hidden');
+        cameraOn = false;
+        el('cameraToggleBtn').textContent = 'Scan Camera';
+      });
+    }
+  }
+
+  function runScan(code) {
+    clearError('scanError');
+    el('scanResult').innerHTML = '<div class="card muted">Looking up…</div>';
+    google.script.run
+      .withSuccessHandler(renderScanResult)
+      .withFailureHandler(function (err) {
+        el('scanResult').innerHTML = '';
+        showError('scanError', err.message || String(err));
+      })
+      .processScan(code);
+  }
+
+  function renderScanResult(ctx) {
+    if (ctx.bed) { renderBedContext(ctx); return; }
+    if (ctx.cohort) { renderCohortOnly(ctx.cohort); return; }
+    el('scanResult').innerHTML = '<div class="card muted">No display for this code type here — try the Pack-Shed or Pack &amp; Stage tabs.</div>';
+  }
+
+  function renderCohortOnly(cohort) {
+    el('scanResult').innerHTML =
+      '<div class="card">' +
+      '<h2>Cohort</h2>' +
+      '<div class="big">' + escapeHtml(cohort.Cohort_ID) + '</div>' +
+      '<div class="muted">' + escapeHtml(cohort.Crop_ID) + ' · ' + escapeHtml(cohort.Variety || '') + '</div>' +
+      '<div style="margin-top:8px;"><span class="badge state">' + escapeHtml(cohort.Current_State) + '</span></div>' +
+      '<div class="muted" style="margin-top:8px;">Target harvest: ' + fmtDate(cohort.Target_Harvest_Date) + '</div>' +
+      '</div>';
+  }
+
+  function renderBedContext(ctx) {
+    var bed = ctx.bed, cohort = ctx.cohort, next = ctx.nextExpectedAction;
+    var html = '<div class="card"><h2>Bed</h2><div class="big">' + escapeHtml(bed.Bed_ID) + '</div>' +
+      '<div class="muted">' + escapeHtml(bed.Block_ID) + ' · ' + escapeHtml(bed.Zone_Type) + '</div>' +
+      '<div style="margin-top:8px;"><span class="badge state">' + escapeHtml(bed.Current_State) + '</span></div></div>';
+
+    if (next === 'CREATE_COHORT') {
+      html += renderCreateCohortForm(bed);
+    } else if (next === 'TAP_PLANTED') {
+      html += '<div class="card"><h2>Cohort — Prep</h2>' +
+        '<div class="big">' + escapeHtml(cohort.Cohort_ID) + '</div>' +
+        '<div class="muted">' + escapeHtml(cohort.Crop_ID) + ' · ' + escapeHtml(cohort.Variety || '') + '</div>' +
+        '<button id="tapPlantedBtn" style="margin-top:16px;">TAP: PLANTED</button>' +
+        '<div id="tapPlantedError"></div></div>';
+    } else if (next === 'START_HARVEST') {
+      html += '<div class="card"><h2>Cohort — Harvestable</h2>' +
+        '<div class="big">' + escapeHtml(cohort.Cohort_ID) + '</div>' +
+        '<p class="muted">Scanning this starts the 30-minute cold-chain clock. Only scan when you are about to clip the first leaf.</p>' +
+        '<button class="amber" id="startHarvestBtn">START HARVEST (scan now)</button>' +
+        '<div id="startHarvestError"></div></div>';
+    } else if (cohort) {
+      html += '<div class="card"><h2>Cohort — ' + escapeHtml(cohort.Current_State) + '</h2>' +
+        '<div class="big">' + escapeHtml(cohort.Cohort_ID) + '</div>' +
+        '<p class="muted">Tracked automatically. No worker action needed right now.</p>' +
+        '<div class="muted">Target harvest: ' + fmtDate(cohort.Target_Harvest_Date) + '</div></div>';
+    }
+
+    el('scanResult').innerHTML = html;
+
+    if (next === 'CREATE_COHORT') wireCreateCohortForm(bed);
+    if (next === 'TAP_PLANTED') {
+      el('tapPlantedBtn').onclick = function () {
+        el('tapPlantedBtn').disabled = true;
+        google.script.run
+          .withSuccessHandler(function () { runScan('BED:' + bed.Bed_ID); })
+          .withFailureHandler(function (err) {
+            el('tapPlantedBtn').disabled = false;
+            showError('tapPlantedError', err.message || String(err));
+          })
+          .tapPlanted(cohort.Cohort_ID, session.userId);
+      };
+    }
+    if (next === 'START_HARVEST') {
+      el('startHarvestBtn').onclick = function () {
+        el('startHarvestBtn').disabled = true;
+        google.script.run
+          .withSuccessHandler(function (res) { renderHarvestStarted(res); })
+          .withFailureHandler(function (err) {
+            el('startHarvestBtn').disabled = false;
+            showError('startHarvestError', err.message || String(err));
+          })
+          .startHarvestScan({ bedId: bed.Bed_ID, cohortId: cohort.Cohort_ID, workerId: session.userId });
+      };
+    }
+  }
+
+  function renderHarvestStarted(res) {
+    el('scanResult').innerHTML =
+      '<div class="card">' +
+      '<h2>Cold Chain Clock Running</h2>' +
+      '<div class="muted">Harvest ID: ' + escapeHtml(res.harvestId) + '</div>' +
+      '<div class="muted">Cohort: ' + escapeHtml(res.cohortId) + '</div>' +
+      '<div class="timer" id="coldChainTimer">00:00</div>' +
+      '<p class="muted">Take crates to the pack-shed and weigh in within 30 minutes. Use the Pack-Shed tab there.</p>' +
+      '</div>';
+    var start = new Date(res.transitStartTime).getTime();
+    var timerEl = el('coldChainTimer');
+    setInterval(function () {
+      var elapsed = Math.floor((Date.now() - start) / 1000);
+      var m = Math.floor(elapsed / 60); var s = elapsed % 60;
+      timerEl.textContent = (m < 10 ? '0' : '') + m + ':' + (s < 10 ? '0' : '') + s;
+      if (elapsed > 30 * 60) timerEl.style.color = 'var(--red)';
+    }, 1000);
+  }
+
+  function renderCreateCohortForm(bed) {
+    var options = cropList
+      .filter(function (c) { return !c.defaultBlockId || c.defaultBlockId === bed.Block_ID; })
+      .map(function (c) { return '<option value="' + c.cropId + '">' + escapeHtml(c.cropName) + '</option>'; })
+      .join('');
+    if (!options) {
+      options = cropList.map(function (c) { return '<option value="' + c.cropId + '">' + escapeHtml(c.cropName) + '</option>'; }).join('');
+    }
+    return '<div class="card"><h2>New Cohort</h2>' +
+      '<div id="createCohortError"></div>' +
+      '<label>Crop</label><select id="newCropId">' + options + '</select>' +
+      '<label>Variety (optional)</label><input type="text" id="newVariety">' +
+      '<label>Target Planting Date</label><input type="date" id="newTargetPlanting">' +
+      '<label>Target Harvest Date</label><input type="date" id="newTargetHarvest">' +
+      '<label>Target Qty (lbs)</label><input type="number" id="newTargetQty">' +
+      '<button id="tapPrepBtn" style="margin-top:16px;">TAP: PREP</button>' +
+      '</div>';
+  }
+
+  function wireCreateCohortForm(bed) {
+    el('tapPrepBtn').onclick = function () {
+      el('tapPrepBtn').disabled = true;
+      google.script.run
+        .withSuccessHandler(function () { runScan('BED:' + bed.Bed_ID); })
+        .withFailureHandler(function (err) {
+          el('tapPrepBtn').disabled = false;
+          showError('createCohortError', err.message || String(err));
+        })
+        .createCohortAndTapPrep({
+          bedId: bed.Bed_ID,
+          cropId: el('newCropId').value,
+          variety: el('newVariety').value,
+          targetPlantingDate: el('newTargetPlanting').value,
+          targetHarvestDate: el('newTargetHarvest').value,
+          targetQtyLbs: el('newTargetQty').value,
+          workerId: session.userId
+        });
     };
-    scanLoop();
-  }catch(e){
-    showToast('Camera unavailable: ' + e.message, true);
-    stopCameraScan();
   }
-});
-function stopCameraScan(){
-  const video = document.getElementById('dsCameraVideo');
-  if (dsCameraStream){ dsCameraStream.getTracks().forEach(t => t.stop()); dsCameraStream = null; }
-  video.style.display = 'none';
-  document.getElementById('dsCameraBtn').textContent = 'Scan with camera';
-}
 
-document.getElementById('dsPrintBtn').addEventListener('click', () => window.print());
+  // ── PACK-SHED WEIGH-IN ───────────────────────────────────────────────
+  el('connectScaleBtn').onclick = function () {
+    connectBluetoothScale();
+  };
 
-boot();
+  function connectBluetoothScale() {
+    if (!navigator.bluetooth) {
+      el('scaleStatus').textContent = 'Web Bluetooth not supported on this browser/device — enter weight manually.';
+      return;
+    }
+    el('scaleStatus').textContent = 'Requesting device…';
+    // Standard GATT Weight Scale service (0x181D) / Weight Measurement characteristic (0x2A98).
+    // Compatibility depends entirely on the physical scale's firmware - if it doesn't expose
+    // this standard BLE profile, this will fail gracefully and the worker types the weight in.
+    navigator.bluetooth.requestDevice({
+      filters: [{ services: [0x181D] }]
+    }).then(function (device) {
+      el('scaleStatus').textContent = 'Connecting to ' + device.name + '…';
+      return device.gatt.connect();
+    }).then(function (server) {
+      return server.getPrimaryService(0x181D);
+    }).then(function (service) {
+      return service.getCharacteristic(0x2A98);
+    }).then(function (characteristic) {
+      return characteristic.startNotifications().then(function () {
+        characteristic.addEventListener('characteristicvaluechanged', function (event) {
+          var value = event.target.value;
+          // Weight Measurement flags byte 0; weight is a uint16 in bytes 1-2, SI unit = kg * 200 resolution (per GATT spec)
+          var flags = value.getUint8(0);
+          var isImperial = (flags & 0x01) === 1;
+          var raw = value.getUint16(1, true);
+          var kg = raw * 0.005;
+          var lbs = isImperial ? raw * 0.01 : kg * 2.20462;
+          el('grossWeight').value = lbs.toFixed(1);
+          el('scaleStatus').textContent = 'Live reading from ' + device.name;
+        });
+      });
+    }).catch(function (err) {
+      el('scaleStatus').textContent = 'Scale connect failed (' + err.message + ') — enter weight manually.';
+    });
+  }
+
+  el('weighInBtn').onclick = function () {
+    var payload = {
+      cohortId: el('weighCohortId').value.trim(),
+      harvestId: el('weighHarvestId').value.trim() || undefined,
+      grossWeight: el('grossWeight').value,
+      tareWeight: el('tareWeight').value,
+      crateCount: el('crateCount').value,
+      grade: el('qualityGrade').value,
+      workerId: session.userId
+    };
+    if (!payload.cohortId || !payload.grossWeight) {
+      showError('weighinError', 'Cohort ID and gross weight are required.');
+      return;
+    }
+    clearError('weighinError');
+    el('weighInBtn').disabled = true;
+    google.script.run
+      .withSuccessHandler(function (res) {
+        el('weighInBtn').disabled = false;
+        renderWeighInResult(res);
+      })
+      .withFailureHandler(function (err) {
+        el('weighInBtn').disabled = false;
+        showError('weighinError', err.message || String(err));
+      })
+      .completePackShedWeighIn(payload);
+  };
+
+  function renderWeighInResult(res) {
+    var badgeClass = res.coldChain === 'PASSED' ? 'pass' : 'fail';
+    el('weighinResult').innerHTML =
+      '<div class="card">' +
+      '<h2>Weigh-In Complete</h2>' +
+      '<div class="big">' + res.netWeight.toFixed(1) + ' lbs net</div>' +
+      '<div class="muted">Harvest ' + escapeHtml(res.harvestId) + ' · Cohort ' + escapeHtml(res.cohortId) + '</div>' +
+      '<div style="margin-top:10px;">' +
+      '<span class="badge ' + badgeClass + '">Cold Chain: ' + res.coldChain + '</span>' +
+      ' <span class="muted">' + res.elapsedMinutes + ' min field-to-scale</span>' +
+      '</div></div>';
+  }
+
+  // ── PACK & STAGE ─────────────────────────────────────────────────────
+  el('packBtn').onclick = function () {
+    var payload = {
+      cohortId: el('packCohortId').value.trim(),
+      restaurantId: el('packRestaurant').value,
+      receivedWeightLbs: el('receivedWeight').value,
+      packedWeightLbs: el('packedWeight').value,
+      caseCount: el('caseCount').value,
+      workerId: session.userId
+    };
+    if (!payload.cohortId || !payload.packedWeightLbs) {
+      showError('packError', 'Cohort ID and packed weight are required.');
+      return;
+    }
+    clearError('packError');
+    el('packBtn').disabled = true;
+    google.script.run
+      .withSuccessHandler(function (res) {
+        el('packBtn').disabled = false;
+        renderPackResult(res);
+      })
+      .withFailureHandler(function (err) {
+        el('packBtn').disabled = false;
+        showError('packError', err.message || String(err));
+      })
+      .submitPackedStaging(payload);
+  };
+
+  function renderPackResult(res) {
+    var qrUrl = 'https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=' + encodeURIComponent(res.qrCode);
+    el('packResult').innerHTML =
+      '<div class="card" id="printLabel">' +
+      '<h2>Lineage Label</h2>' +
+      '<div class="big">' + escapeHtml(res.packId) + '</div>' +
+      '<img class="qr-label-img" src="' + qrUrl + '" alt="QR label">' +
+      '<div class="muted" style="text-align:center;">Cohort ' + escapeHtml(res.cohortId) + '</div>' +
+      '<div class="muted" style="text-align:center;">Beds ' + escapeHtml(res.bedRange) + '</div>' +
+      '<div class="muted" style="text-align:center;">→ ' + escapeHtml(res.restaurantId) + '</div>' +
+      '<button class="secondary" id="printBtn" style="margin-top:14px;">Print Label</button>' +
+      '</div>';
+    el('printBtn').onclick = function () { window.print(); };
+  }
 </script>
 </body>
 </html>
