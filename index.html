@@ -1,9 +1,10 @@
 <!--
   WorkerApp.html
   Ngapori Ranch VPOS — mobile field interface.
-  Served by Code.gs's doGet() via HtmlService.createTemplateFromFile('WorkerApp').
-  <?= scriptUrl ?> below is injected server-side with ScriptApp.getService().getUrl(),
-  so this same page's client JS posts back to itself as a REST endpoint (doPost).
+  Hosted as a standalone static file (same pattern as the other Redwood Custodian /
+  Ngapori Ranch portals) rather than served via Code.gs's doGet() template. SCRIPT_URL
+  below is hardcoded to the deployed Apps Script Web App /exec endpoint; update it here
+  whenever the deployment is redeployed with a new URL (Deploy > Manage deployments).
 
   Flow: PIN login -> scan Bed QR (BED:<ID>) -> pick activity -> Start -> (Pause/Resume) ->
   Complete (qty + unit) -> back to scan. Exception can be flagged at any point during an
@@ -347,7 +348,7 @@
 
 <script>
 (function () {
-  var SCRIPT_URL = '<?= scriptUrl ?>';
+  var SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxBPkKsuqiXTIcLnBm_SNOSiyKEYtzNZ0lIf55PkRO5hmWaWEQ4OWbQsKf7zOHtT7DM/exec';
 
   var state = {
     user: null,          // { user_id, full_name, role }
