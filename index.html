@@ -107,6 +107,23 @@
   }
   .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--lime); }
 
+  /* ---- Connection status pill (top of scan screen; tap to refresh bed data) ---- */
+  .scan-header { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+  .scan-header h1 { margin: 0; }
+  .conn-pill {
+    display: flex; align-items: center; gap: 6px; padding: 5px 10px;
+    background: var(--panel); border: 1px solid var(--panel-line); border-radius: 999px;
+    font-family: var(--mono); font-size: 11px; color: var(--paper-dim);
+    text-transform: uppercase; letter-spacing: 0.04em; cursor: pointer; flex-shrink: 0;
+  }
+  .conn-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--paper-dim); flex-shrink: 0; }
+  .conn-pill.online .conn-dot { background: var(--lime); }
+  .conn-pill.online { color: var(--lime); }
+  .conn-pill.offline .conn-dot { background: var(--rust); }
+  .conn-pill.offline { color: var(--rust); }
+  .conn-pill.checking .conn-dot { animation: pulse 1s ease-in-out infinite; }
+  @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
+
   /* ---- Manual bed entry (fallback path, same outcome as a QR scan) ---- */
   .manual-entry-toggle { text-align: center; }
   .manual-entry-toggle a {
@@ -117,6 +134,11 @@
     background: var(--panel); border: 1px solid var(--panel-line); border-radius: 10px;
     padding: 16px; display: flex; flex-direction: column; gap: 10px;
   }
+  .manual-entry-hint {
+    font-family: var(--mono); font-size: 12px; min-height: 16px;
+  }
+  .manual-entry-hint.match { color: var(--lime); }
+  .manual-entry-hint.no-match { color: var(--rust); }
 
   /* ---- Session card ---- */
   .session-card {
@@ -204,20 +226,32 @@
 
     <!-- SCAN -->
     <section class="screen" id="screen-scan">
-      <h1>Scan a bed</h1>
+      <div class="scan-header">
+        <h1>Scan a bed</h1>
+        <button class="conn-pill" id="connPill" title="Tap to refresh bed data">
+          <span class="conn-dot" id="connDot"></span><span id="connLabel">Checking…</span>
+        </button>
+      </div>
       <div class="scan-target"><span class="dot"></span> Point the camera at a bed's QR sign</div>
       <div id="qr-reader"></div>
       <button class="btn btn-secondary" id="cancelScanBtn">Cancel</button>
 
       <!-- Manual fallback: same result as a successful QR scan, for devices with no
            camera (desktop testing) or a damaged/unreadable bed sign in the field.
-           Collapsed behind a link so the primary scan-first design is unchanged. -->
+           Collapsed behind a link so the primary scan-first design is unchanged.
+           Bed_ID list is fetched live from BED_MASTER (?action=getBedList) and used
+           both for the <datalist> search-as-you-type and to validate the entry before
+           it's accepted — typing an ID that doesn't exist in the sheet is rejected
+           with a toast rather than silently proceeding. -->
       <div class="manual-entry-toggle">
         <a href="#" id="manualEntryLink">Enter Bed ID manually</a>
       </div>
       <div class="manual-entry" id="manualEntryBox" style="display:none;">
         <label for="manualBedIdInput">Bed ID</label>
-        <input type="text" id="manualBedIdInput" placeholder="e.g. BRO-014" autocapitalize="characters">
+        <input type="text" id="manualBedIdInput" placeholder="Start typing to search…"
+               autocapitalize="characters" list="bedIdOptions" autocomplete="off">
+        <datalist id="bedIdOptions"></datalist>
+        <div class="manual-entry-hint" id="manualEntryHint"></div>
         <button class="btn btn-primary" id="manualEntrySubmitBtn">Use this bed</button>
       </div>
     </section>
@@ -324,7 +358,9 @@
     status: null,         // ACTIVE | PAUSED
     startedAt: null,
     timerHandle: null,
-    html5QrCode: null
+    html5QrCode: null,
+    beds: null,          // array from getBedList, or null until first successful fetch
+    bedMap: null         // { BED_ID: bedRecord } for O(1) validation lookups
   };
 
   // ---- helpers ----
@@ -355,6 +391,53 @@
       .then(function (r) { return r.text(); })
       .then(function (text) { return JSON.parse(text); });
   }
+
+  // GET requests (read-only, routed through Code.gs's routeApiRequest_) use SCRIPT_URL
+  // + ?action=... directly rather than post(), since they carry no body.
+  function get(action) {
+    return fetch(SCRIPT_URL + '?action=' + encodeURIComponent(action))
+      .then(function (r) { return r.text(); })
+      .then(function (text) { return JSON.parse(text); });
+  }
+
+  // ---- connection status + live bed roster (BED_MASTER via ?action=getBedList) ----
+  function setConnPill(status, label) {
+    // status: 'checking' | 'online' | 'offline'
+    var pill = $('#connPill');
+    pill.className = 'conn-pill ' + status;
+    $('#connLabel').textContent = label;
+  }
+
+  function fetchBedList() {
+    setConnPill('checking', 'Checking…');
+    return get('getBedList').then(function (res) {
+      if (!res.ok) throw new Error(res.error || 'getBedList failed');
+      state.beds = res.data || [];
+      state.bedMap = {};
+      state.beds.forEach(function (b) { state.bedMap[String(b.bed_id).toUpperCase()] = b; });
+
+      // Populate the manual-entry <datalist> for real search-as-you-type.
+      var list = $('#bedIdOptions');
+      list.innerHTML = '';
+      state.beds.forEach(function (b) {
+        var opt = document.createElement('option');
+        opt.value = b.bed_id;
+        opt.label = [b.block_id, b.zone_type].filter(Boolean).join(' · ');
+        list.appendChild(opt);
+      });
+
+      setConnPill('online', 'Connected · ' + state.beds.length + ' beds');
+      return state.beds;
+    }).catch(function (err) {
+      state.beds = null;
+      state.bedMap = null;
+      setConnPill('offline', 'Offline — tap to retry');
+      toast('Could not load bed list: ' + err, true);
+      throw err;
+    });
+  }
+
+  $('#connPill').addEventListener('click', function () { fetchBedList(); });
 
   // ---- login / PIN pad ----
   $('#screen-login').addEventListener('click', function (e) {
@@ -406,6 +489,7 @@
       $('#whoBox').style.display = 'block';
       showScreen('screen-scan');
       startScanner();
+      fetchBedList(); // populates manual-entry autocomplete + connection pill
     }).catch(function (err) { toast('Network error: ' + err, true); });
   }
 
@@ -475,14 +559,43 @@
     box.style.display = showing ? 'none' : 'flex';
     if (!showing) $('#manualBedIdInput').focus();
   });
+  // Live feedback as the worker types/picks from the datalist — confirms whether the
+  // typed Bed_ID is a real row in BED_MASTER before they tap "Use this bed".
+  $('#manualBedIdInput').addEventListener('input', function () {
+    var raw = this.value.trim().toUpperCase();
+    var hint = $('#manualEntryHint');
+    if (!raw) { hint.textContent = ''; hint.className = 'manual-entry-hint'; return; }
+    if (!state.bedMap) { hint.textContent = ''; hint.className = 'manual-entry-hint'; return; }
+    var bed = state.bedMap[raw];
+    if (bed) {
+      hint.textContent = '✓ ' + [bed.block_id, bed.zone_type, bed.current_crop].filter(Boolean).join(' · ');
+      hint.className = 'manual-entry-hint match';
+    } else {
+      hint.textContent = 'No matching bed in BED_MASTER';
+      hint.className = 'manual-entry-hint no-match';
+    }
+  });
+
   $('#manualEntrySubmitBtn').addEventListener('click', function () {
     var raw = $('#manualBedIdInput').value.trim().toUpperCase();
     if (!raw) { toast('Enter a Bed ID', true); return; }
+
+    // Validate against the live BED_MASTER roster when we have one. If the roster
+    // never loaded (offline), fall back to accepting the typed ID unvalidated rather
+    // than fully blocking the field app — Start_Session will still reject an unknown
+    // Bed_ID server-side (see Database.gs startSession), just without the early hint.
+    if (state.bedMap && !state.bedMap[raw]) {
+      toast('Unknown Bed ID: ' + raw + ' — check BED_MASTER or try Refresh', true);
+      return;
+    }
+
     // Accept either "BRO-014" or "BED:BRO-014" — normalize to the same string
     // onScanSuccess expects so both paths share one validation/assignment routine.
     var asScanPayload = raw.indexOf('BED:') === 0 ? raw : 'BED:' + raw;
     onScanSuccess(asScanPayload);
     $('#manualBedIdInput').value = '';
+    $('#manualEntryHint').textContent = '';
+    $('#manualEntryHint').className = 'manual-entry-hint';
     $('#manualEntryBox').style.display = 'none';
   });
   $('#backToScanBtn').addEventListener('click', function () {
