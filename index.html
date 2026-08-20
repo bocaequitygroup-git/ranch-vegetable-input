@@ -8,6 +8,11 @@
   Flow: PIN login -> scan Bed QR (BED:<ID>) -> pick activity -> Start -> (Pause/Resume) ->
   Complete (qty + unit) -> back to scan. Exception can be flagged at any point during an
   active/paused session.
+
+  NOTE: the locked FIELD_LIVE_SESSION schema has Exception_Notes (text) but no photo/URL
+  column, so this build omits the photo-upload capability mentioned in the original
+  roadmap doc. Adding it needs a schema decision (a Photos_URL column, or a separate
+  Drive-backed table) before it can be wired up — flagged rather than guessed at.
 -->
 <!DOCTYPE html>
 <html lang="en">
@@ -17,13 +22,13 @@
 <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
 <style>
   :root {
-    --field-dusk: #1B2620;      /* deep foliage-charcoal */
+    --field-dusk: #1B2620;      /* deep foliage-charcoal, not near-black-neon default */
     --field-dusk-2: #223129;
     --panel: #24352C;
     --panel-line: #3A4E41;
-    --paper: #F0EDE3;           /* worn field-notebook paper */
+    --paper: #F0EDE3;           /* worn field-notebook paper, warm off-white */
     --paper-dim: #B9BFAE;
-    --amber: #E8A33D;           /* radio-dial amber */
+    --amber: #E8A33D;           /* radio-dial amber — the signature accent */
     --amber-dim: #7A5A20;
     --lime: #9BC53D;            /* active/growth state */
     --rust: #C4562A;            /* exception/alert state */
@@ -51,7 +56,7 @@
   .topbar .who { font-size: 13px; text-align: right; }
   .topbar .who .name { font-weight: 700; }
   .topbar .who .role { color: var(--paper-dim); font-family: var(--mono); font-size: 11px; text-transform: uppercase; }
-  .logout-link { background: none; border: none; color: var(--rust); font-size: 12px; text-decoration: underline; padding: 4px 0; cursor: pointer; }
+  .logout-link { background: none; border: none; color: var(--rust); font-size: 12px; text-decoration: underline; padding: 4px 0; }
 
   main { flex: 1; display: flex; flex-direction: column; padding: 20px; gap: 16px; }
   .screen { display: none; flex: 1; flex-direction: column; gap: 16px; }
@@ -60,7 +65,7 @@
   h1 { font-size: 20px; margin: 0 0 4px; }
   p.hint { color: var(--paper-dim); font-size: 14px; margin: 0; line-height: 1.4; }
 
-  /* ---- Login: PIN pad ---- */
+  /* ---- Login: PIN pad, deliberately large for gloved/outdoor use ---- */
   .login-card {
     background: var(--panel); border: 1px solid var(--panel-line); border-radius: 10px;
     padding: 22px; display: flex; flex-direction: column; gap: 14px;
@@ -77,7 +82,7 @@
   .pin-pad { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
   .pin-pad button {
     padding: 18px 0; font-size: 22px; border-radius: 8px; border: 1px solid var(--panel-line);
-    background: var(--field-dusk-2); color: var(--paper); font-family: var(--mono); cursor: pointer;
+    background: var(--field-dusk-2); color: var(--paper); font-family: var(--mono);
   }
   .pin-pad button:active { background: var(--amber-dim); }
   .pin-pad button.clear { color: var(--rust); font-size: 14px; }
@@ -116,6 +121,7 @@
   .status-ACTIVE { background: rgba(155,197,61,0.18); color: var(--lime); }
   .status-PAUSED { background: rgba(232,163,61,0.18); color: var(--amber); }
 
+  /* Signature element: field-radio elapsed timer readout */
   .timer {
     font-family: var(--mono); font-size: 52px; text-align: center; letter-spacing: 0.03em;
     color: var(--amber); background: var(--field-dusk-2); border: 1px solid var(--panel-line);
@@ -126,7 +132,7 @@
   .btn-row { display: flex; gap: 10px; }
   .btn-row .btn { flex: 1; }
 
-  /* ---- Modal ---- */
+  /* ---- Modal (exception + complete) ---- */
   .modal-backdrop {
     position: fixed; inset: 0; background: rgba(0,0,0,0.6);
     display: none; align-items: flex-end; justify-content: center; z-index: 20;
@@ -156,7 +162,7 @@
     <div class="who" id="whoBox" style="display:none;">
       <div class="name" id="whoName"></div>
       <div class="role" id="whoRole"></div>
-      <button type="button" class="logout-link" id="logoutBtn">Log out</button>
+      <button class="logout-link" id="logoutBtn">Log out</button>
     </div>
   </div>
 
@@ -166,32 +172,23 @@
     <section class="screen active" id="screen-login">
       <h1>Log in</h1>
       <p class="hint">Enter your Worker ID, then your 4-digit PIN.</p>
-      <form id="loginForm" onsubmit="return false;">
-        <div class="login-card">
-          <div>
-            <label for="userIdInput">Worker ID</label>
-            <input type="text" id="userIdInput" placeholder="USR-WORKER1" autocapitalize="characters">
-          </div>
-          <div>
-            <label>PIN</label>
-            <div class="pin-display" id="pinDisplay">----</div>
-            <div class="pin-pad" id="pinPad">
-              <button type="button" data-key="1">1</button>
-              <button type="button" data-key="2">2</button>
-              <button type="button" data-key="3">3</button>
-              <button type="button" data-key="4">4</button>
-              <button type="button" data-key="5">5</button>
-              <button type="button" data-key="6">6</button>
-              <button type="button" data-key="7">7</button>
-              <button type="button" data-key="8">8</button>
-              <button type="button" data-key="9">9</button>
-              <button type="button" class="clear" data-key="clear">CLEAR</button>
-              <button type="button" data-key="0">0</button>
-              <button type="button" class="submit" data-key="submit">GO</button>
-            </div>
+      <div class="login-card">
+        <div>
+          <label for="userIdInput">Worker ID</label>
+          <input type="text" id="userIdInput" placeholder="USR-WORKER1" autocapitalize="characters">
+        </div>
+        <div>
+          <label>PIN</label>
+          <div class="pin-display" id="pinDisplay">----</div>
+          <div class="pin-pad">
+            <button data-key="1">1</button><button data-key="2">2</button><button data-key="3">3</button>
+            <button data-key="4">4</button><button data-key="5">5</button><button data-key="6">6</button>
+            <button data-key="7">7</button><button data-key="8">8</button><button data-key="9">9</button>
+            <button class="clear" data-key="clear">CLEAR</button><button data-key="0">0</button>
+            <button class="submit" data-key="submit">GO</button>
           </div>
         </div>
-      </form>
+      </div>
     </section>
 
     <!-- SCAN -->
@@ -199,10 +196,10 @@
       <h1>Scan a bed</h1>
       <div class="scan-target"><span class="dot"></span> Point the camera at a bed's QR sign</div>
       <div id="qr-reader"></div>
-      <button type="button" class="btn btn-secondary" id="cancelScanBtn">Cancel</button>
+      <button class="btn btn-secondary" id="cancelScanBtn">Cancel</button>
     </section>
 
-    <!-- ACTIVITY PICK -->
+    <!-- ACTIVITY PICK (after scan, before Start) -->
     <section class="screen" id="screen-activity">
       <h1>Start a session</h1>
       <div class="session-card">
@@ -220,8 +217,8 @@
           <option value="Other">Other</option>
         </select>
       </div>
-      <button type="button" class="btn btn-primary" id="startSessionBtn">Start session</button>
-      <button type="button" class="btn btn-secondary" id="backToScanBtn">Rescan</button>
+      <button class="btn btn-primary" id="startSessionBtn">Start session</button>
+      <button class="btn btn-secondary" id="backToScanBtn">Rescan</button>
     </section>
 
     <!-- ACTIVE SESSION -->
@@ -233,10 +230,10 @@
       </div>
       <div class="timer" id="timerReadout">00:00<span class="unit">ELAPSED MIN:SEC</span></div>
       <div class="btn-row">
-        <button type="button" class="btn btn-active" id="pauseResumeBtn">Pause</button>
-        <button type="button" class="btn btn-danger" id="exceptionBtn">Flag exception</button>
+        <button class="btn btn-active" id="pauseResumeBtn">Pause</button>
+        <button class="btn btn-danger" id="exceptionBtn">Flag exception</button>
       </div>
-      <button type="button" class="btn btn-primary" id="completeBtn">Complete session</button>
+      <button class="btn btn-primary" id="completeBtn">Complete session</button>
     </section>
 
   </main>
@@ -260,8 +257,8 @@
         <textarea id="exceptionNotes" rows="3" placeholder="What's going on?"></textarea>
       </div>
       <div class="btn-row">
-        <button type="button" class="btn btn-secondary" id="exceptionCancelBtn">Cancel</button>
-        <button type="button" class="btn btn-danger" id="exceptionSubmitBtn" style="background: var(--rust); color: var(--paper);">Submit</button>
+        <button class="btn btn-secondary" id="exceptionCancelBtn">Cancel</button>
+        <button class="btn btn-danger" id="exceptionSubmitBtn" style="background: var(--rust); color: var(--paper);">Submit</button>
       </div>
     </div>
   </div>
@@ -283,8 +280,8 @@
         </select>
       </div>
       <div class="btn-row">
-        <button type="button" class="btn btn-secondary" id="completeCancelBtn">Cancel</button>
-        <button type="button" class="btn btn-primary" id="completeSubmitBtn">Submit</button>
+        <button class="btn btn-secondary" id="completeCancelBtn">Cancel</button>
+        <button class="btn btn-primary" id="completeSubmitBtn">Submit</button>
       </div>
     </div>
   </div>
@@ -324,6 +321,8 @@
     var body = Object.assign({ action: action }, payload || {});
     return fetch(SCRIPT_URL, {
       method: 'POST',
+      // text/plain avoids a CORS preflight against the Apps Script Web App, matching
+      // the response side's ContentService.MimeType.TEXT convention in Code.gs.
       headers: { 'Content-Type': 'text/plain;charset=utf-8' },
       body: JSON.stringify(body)
     })
@@ -331,16 +330,10 @@
       .then(function (text) { return JSON.parse(text); });
   }
 
-  // ---- PIN Pad event handler ----
-  $('pinPad').addEventListener('click', function (e) {
-    e.preventDefault();
-    var btn = e.target.closest('button');
-    if (!btn) return;
-
-    var key = btn.dataset.key;
+  // ---- login / PIN pad ----
+  $('#screen-login').addEventListener('click', function (e) {
+    var key = e.target.dataset && e.target.dataset.key;
     if (!key) return;
-
-    $('userIdInput').blur();
 
     if (key === 'clear') {
       state.pin = '';
@@ -350,33 +343,33 @@
     } else if (state.pin.length < 4) {
       state.pin += key;
     }
-    $('pinDisplay').textContent = state.pin.padEnd(4, '-').split('').join(' ');
+    $('#pinDisplay').textContent = state.pin.padEnd(4, '-').split('').join(' ');
   });
 
   function doLogin() {
-    var userId = $('userIdInput').value.trim().toUpperCase();
+    var userId = $('#userIdInput').value.trim().toUpperCase();
     if (!userId) { toast('Enter your Worker ID', true); return; }
     if (state.pin.length !== 4) { toast('PIN must be 4 digits', true); return; }
 
     post('LOGIN', { user_id: userId, pin: state.pin }).then(function (res) {
       state.pin = '';
-      $('pinDisplay').textContent = '- - - -';
+      $('#pinDisplay').textContent = '- - - -';
       if (!res.ok) { toast(res.error || 'Login failed', true); return; }
 
       state.user = res;
-      $('whoName').textContent = res.full_name;
-      $('whoRole').textContent = res.role;
-      $('whoBox').style.display = 'block';
+      $('#whoName').textContent = res.full_name;
+      $('#whoRole').textContent = res.role;
+      $('#whoBox').style.display = 'block';
       showScreen('screen-scan');
       startScanner();
     }).catch(function (err) { toast('Network error: ' + err, true); });
   }
 
-  $('logoutBtn').addEventListener('click', function () {
+  $('#logoutBtn').addEventListener('click', function () {
     if (!state.user) return;
     post('LOGOUT', { user_id: state.user.user_id }).finally(function () {
       state.user = null;
-      $('whoBox').style.display = 'none';
+      $('#whoBox').style.display = 'none';
       stopScanner();
       showScreen('screen-login');
     });
@@ -390,7 +383,7 @@
       { facingMode: 'environment' },
       { fps: 10, qrbox: 240 },
       onScanSuccess,
-      function () { /* ignore per-frame misses */ }
+      function () { /* ignore per-frame scan misses */ }
     ).catch(function (err) { toast('Camera error: ' + err, true); });
   }
   function stopScanner() {
@@ -400,57 +393,58 @@
     }
   }
   function onScanSuccess(decodedText) {
+    // Expected format per QR_REGISTRY / BED_MASTER.QR_Code: "BED:<Bed_ID>"
     var match = /^BED:(.+)$/.exec(decodedText.trim());
     if (!match) { toast('Not a bed QR: ' + decodedText, true); return; }
 
     stopScanner();
     state.bedId = match[1];
-    $('pickedBedId').textContent = state.bedId;
+    $('#pickedBedId').textContent = state.bedId;
     showScreen('screen-activity');
   }
-  $('cancelScanBtn').addEventListener('click', function () {
+  $('#cancelScanBtn').addEventListener('click', function () {
     stopScanner();
-    showScreen('screen-login');
+    showScreen('screen-login'); // no active session yet, nothing to lose
   });
-  $('backToScanBtn').addEventListener('click', function () {
+  $('#backToScanBtn').addEventListener('click', function () {
     showScreen('screen-scan');
     startScanner();
   });
 
   // ---- session start ----
-  $('startSessionBtn').addEventListener('click', function () {
-    state.activityType = $('activityType').value;
-    $('startSessionBtn').disabled = true;
+  $('#startSessionBtn').addEventListener('click', function () {
+    state.activityType = $('#activityType').value;
+    $('#startSessionBtn').disabled = true;
     post('START_SESSION', {
       worker_id: state.user.user_id,
       bed_id: state.bedId,
       activity_type: state.activityType
     }).then(function (res) {
-      $('startSessionBtn').disabled = false;
+      $('#startSessionBtn').disabled = false;
       if (!res.ok) { toast(res.error || 'Could not start session', true); return; }
       state.sessionId = res.session_id;
       state.status = res.status;
       state.startedAt = Date.now();
       enterSessionScreen();
     }).catch(function (err) {
-      $('startSessionBtn').disabled = false;
+      $('#startSessionBtn').disabled = false;
       toast('Network error: ' + err, true);
     });
   });
 
   function enterSessionScreen() {
-    $('activeBedId').textContent = state.bedId;
-    $('activeActivity').textContent = state.activityType;
+    $('#activeBedId').textContent = state.bedId;
+    $('#activeActivity').textContent = state.activityType;
     updateStatusPill();
     showScreen('screen-session');
     runTimer();
   }
 
   function updateStatusPill() {
-    var pill = $('statusPill');
+    var pill = $('#statusPill');
     pill.textContent = state.status;
     pill.className = 'status-pill status-' + state.status;
-    $('pauseResumeBtn').textContent = state.status === 'PAUSED' ? 'Resume' : 'Pause';
+    $('#pauseResumeBtn').textContent = state.status === 'PAUSED' ? 'Resume' : 'Pause';
   }
 
   function runTimer() {
@@ -459,12 +453,12 @@
       var elapsedSec = Math.floor((Date.now() - state.startedAt) / 1000);
       var mm = String(Math.floor(elapsedSec / 60)).padStart(2, '0');
       var ss = String(elapsedSec % 60).padStart(2, '0');
-      $('timerReadout').innerHTML = mm + ':' + ss + '<span class="unit">ELAPSED MIN:SEC</span>';
+      $('#timerReadout').innerHTML = mm + ':' + ss + '<span class="unit">ELAPSED MIN:SEC</span>';
     }, 1000);
   }
 
   // ---- pause / resume ----
-  $('pauseResumeBtn').addEventListener('click', function () {
+  $('#pauseResumeBtn').addEventListener('click', function () {
     var toStatus = state.status === 'PAUSED' ? 'RESUME_SESSION' : 'PAUSE_SESSION';
     post(toStatus, { session_id: state.sessionId }).then(function (res) {
       if (!res.ok) { toast(res.error || 'Could not update session', true); return; }
@@ -474,37 +468,37 @@
   });
 
   // ---- exception modal ----
-  $('exceptionBtn').addEventListener('click', function () { $('exceptionModal').classList.add('open'); });
-  $('exceptionCancelBtn').addEventListener('click', function () { $('exceptionModal').classList.remove('open'); });
-  $('exceptionSubmitBtn').addEventListener('click', function () {
+  $('#exceptionBtn').addEventListener('click', function () { $('#exceptionModal').classList.add('open'); });
+  $('#exceptionCancelBtn').addEventListener('click', function () { $('#exceptionModal').classList.remove('open'); });
+  $('#exceptionSubmitBtn').addEventListener('click', function () {
     post('FLAG_EXCEPTION', {
       session_id: state.sessionId,
-      exception_type: $('exceptionType').value,
-      notes: $('exceptionNotes').value.trim()
+      exception_type: $('#exceptionType').value,
+      notes: $('#exceptionNotes').value.trim()
     }).then(function (res) {
-      $('exceptionModal').classList.remove('open');
+      $('#exceptionModal').classList.remove('open');
       if (!res.ok) { toast(res.error || 'Could not flag exception', true); return; }
-      $('exceptionNotes').value = '';
+      $('#exceptionNotes').value = '';
       toast('Exception flagged');
     }).catch(function (err) { toast('Network error: ' + err, true); });
   });
 
   // ---- complete modal ----
-  $('completeBtn').addEventListener('click', function () { $('completeModal').classList.add('open'); });
-  $('completeCancelBtn').addEventListener('click', function () { $('completeModal').classList.remove('open'); });
-  $('completeSubmitBtn').addEventListener('click', function () {
-    var qty = $('loggedQty').value.trim();
+  $('#completeBtn').addEventListener('click', function () { $('#completeModal').classList.add('open'); });
+  $('#completeCancelBtn').addEventListener('click', function () { $('#completeModal').classList.remove('open'); });
+  $('#completeSubmitBtn').addEventListener('click', function () {
+    var qty = $('#loggedQty').value.trim();
     if (!qty) { toast('Enter a quantity', true); return; }
     post('COMPLETE_SESSION', {
       session_id: state.sessionId,
       logged_quantity: qty,
-      unit: $('loggedUnit').value
+      unit: $('#loggedUnit').value
     }).then(function (res) {
-      $('completeModal').classList.remove('open');
+      $('#completeModal').classList.remove('open');
       if (!res.ok) { toast(res.error || 'Could not complete session', true); return; }
       clearInterval(state.timerHandle);
       toast('Session completed — awaiting manager verification');
-      $('loggedQty').value = '';
+      $('#loggedQty').value = '';
       state.sessionId = null; state.bedId = null; state.status = null;
       showScreen('screen-scan');
       startScanner();
