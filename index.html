@@ -107,6 +107,17 @@
   }
   .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--lime); }
 
+  /* ---- Manual bed entry (fallback path, same outcome as a QR scan) ---- */
+  .manual-entry-toggle { text-align: center; }
+  .manual-entry-toggle a {
+    font-family: var(--mono); font-size: 12px; color: var(--paper-dim);
+    text-decoration: underline; text-underline-offset: 3px;
+  }
+  .manual-entry {
+    background: var(--panel); border: 1px solid var(--panel-line); border-radius: 10px;
+    padding: 16px; display: flex; flex-direction: column; gap: 10px;
+  }
+
   /* ---- Session card ---- */
   .session-card {
     background: var(--panel); border: 1px solid var(--panel-line); border-radius: 12px;
@@ -197,6 +208,18 @@
       <div class="scan-target"><span class="dot"></span> Point the camera at a bed's QR sign</div>
       <div id="qr-reader"></div>
       <button class="btn btn-secondary" id="cancelScanBtn">Cancel</button>
+
+      <!-- Manual fallback: same result as a successful QR scan, for devices with no
+           camera (desktop testing) or a damaged/unreadable bed sign in the field.
+           Collapsed behind a link so the primary scan-first design is unchanged. -->
+      <div class="manual-entry-toggle">
+        <a href="#" id="manualEntryLink">Enter Bed ID manually</a>
+      </div>
+      <div class="manual-entry" id="manualEntryBox" style="display:none;">
+        <label for="manualBedIdInput">Bed ID</label>
+        <input type="text" id="manualBedIdInput" placeholder="e.g. BRO-014" autocapitalize="characters">
+        <button class="btn btn-primary" id="manualEntrySubmitBtn">Use this bed</button>
+      </div>
     </section>
 
     <!-- ACTIVITY PICK (after scan, before Start) -->
@@ -440,6 +463,27 @@
   $('#cancelScanBtn').addEventListener('click', function () {
     stopScanner();
     showScreen('screen-login'); // no active session yet, nothing to lose
+  });
+
+  // ---- Manual bed entry (fallback for no-camera devices / unreadable QR signs) ----
+  // Reuses onScanSuccess's own BED:<id> parsing so a typed entry is validated and
+  // handled identically to a real scan — no separate code path to drift out of sync.
+  $('#manualEntryLink').addEventListener('click', function (e) {
+    e.preventDefault();
+    var box = $('#manualEntryBox');
+    var showing = box.style.display !== 'none';
+    box.style.display = showing ? 'none' : 'flex';
+    if (!showing) $('#manualBedIdInput').focus();
+  });
+  $('#manualEntrySubmitBtn').addEventListener('click', function () {
+    var raw = $('#manualBedIdInput').value.trim().toUpperCase();
+    if (!raw) { toast('Enter a Bed ID', true); return; }
+    // Accept either "BRO-014" or "BED:BRO-014" — normalize to the same string
+    // onScanSuccess expects so both paths share one validation/assignment routine.
+    var asScanPayload = raw.indexOf('BED:') === 0 ? raw : 'BED:' + raw;
+    onScanSuccess(asScanPayload);
+    $('#manualBedIdInput').value = '';
+    $('#manualEntryBox').style.display = 'none';
   });
   $('#backToScanBtn').addEventListener('click', function () {
     showScreen('screen-scan');
