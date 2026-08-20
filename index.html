@@ -307,8 +307,11 @@
   // ---- helpers ----
   function $(id) { return document.querySelector(id); }
   function showScreen(id) {
+    // Called throughout with a bare id ('screen-scan', not '#screen-scan') — use
+    // getElementById directly rather than $ (which expects a full CSS selector) so
+    // this doesn't depend on every call site matching the '#'-prefixed convention.
     document.querySelectorAll('.screen').forEach(function (s) { s.classList.remove('active'); });
-    $(id).classList.add('active');
+    document.getElementById(id).classList.add('active');
   }
   function toast(msg, isError) {
     var t = $('#toast');
