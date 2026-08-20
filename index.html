@@ -1,644 +1,511 @@
 <!--
-  NGAPORI RANCH VPOS - WorkerApp.html (Phase 2)
-  Tablet-facing field app implementing the 3-tap physical-anchor workflow:
-    Scan Lane Sign -> Cohort Creator -> Tap PREP -> Tap PLANTED
-    (Growing happens automatically in the background - see AutoLifecycle.gs)
-    Scan Lane Sign at harvest -> cold-chain clock starts
-    Pack-shed scale weigh-in -> cold-chain clock closes, net weight logged
-    Pack & Stage -> prints the Lineage QR label
+  WorkerApp.html
+  Ngapori Ranch VPOS — mobile field interface.
+  Served by Code.gs's doGet() via HtmlService.createTemplateFromFile('WorkerApp').
+  <?= scriptUrl ?> below is injected server-side with ScriptApp.getService().getUrl(),
+  so this same page's client JS posts back to itself as a REST endpoint (doPost).
 
-  NETWORKING: talks to the server over fetch() against the deployed Web
-  App /exec URL (APP_URL below), POSTing {action, data} and reading back
-  {status, result|message} from doPost in Code.gs - the same
-  read-CSV/write-via-WebApp pattern used across the other ranch/PM
-  portals. This means the file works identically whether it's served
-  by Apps Script itself (doGet) or hosted anywhere else (GitHub Pages,
-  a static host, etc.) - unlike google.script.run, which only works
-  when Apps Script is the one serving the page.
+  Flow: PIN login -> scan Bed QR (BED:<ID>) -> pick activity -> Start -> (Pause/Resume) ->
+  Complete (qty + unit) -> back to scan. Exception can be flagged at any point during an
+  active/paused session.
 
-  IMPORTANT: if you ever create a NEW deployment (not just a new
-  version of this one), Web App URLs can change - update APP_URL below
-  to match. Also confirm the deployment's "Who has access" is set to
-  "Anyone" - if it's "Anyone with Google account", fetch() calls from a
-  logged-out browser/tablet will fail.
+  NOTE: the locked FIELD_LIVE_SESSION schema has Exception_Notes (text) but no photo/URL
+  column, so this build omits the photo-upload capability mentioned in the original
+  roadmap doc. Adding it needs a schema decision (a Photos_URL column, or a separate
+  Drive-backed table) before it can be wired up — flagged rather than guessed at.
 -->
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-  <base target="_top">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <style>
-    :root {
-      --green: #2e7d32;
-      --green-dark: #1b5e20;
-      --amber: #e65100;
-      --red: #c62828;
-      --gray-bg: #f4f6f4;
-      --card-bg: #ffffff;
-      --text: #1c1c1c;
-      --muted: #6b6b6b;
-      --border: #dfe3df;
-    }
-    * { box-sizing: border-box; }
-    html, body {
-      margin: 0; padding: 0;
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
-      background: var(--gray-bg);
-      color: var(--text);
-      -webkit-tap-highlight-color: transparent;
-    }
-    #app { max-width: 520px; margin: 0 auto; min-height: 100vh; display: flex; flex-direction: column; }
-    header {
-      background: var(--green-dark); color: #fff;
-      padding: 14px 16px; display: flex; align-items: center; justify-content: space-between;
-      position: sticky; top: 0; z-index: 10;
-    }
-    header .title { font-size: 17px; font-weight: 700; }
-    header .who { font-size: 12px; opacity: 0.85; }
-    main { flex: 1; padding: 16px; padding-bottom: 90px; }
-    .card {
-      background: var(--card-bg); border: 1px solid var(--border); border-radius: 12px;
-      padding: 16px; margin-bottom: 14px;
-    }
-    .card h2 { margin: 0 0 4px; font-size: 15px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; }
-    .card .big { font-size: 22px; font-weight: 700; margin: 2px 0; }
-    label { display: block; font-size: 13px; color: var(--muted); margin: 10px 0 4px; }
-    input[type=text], input[type=number], input[type=password], input[type=date], select {
-      width: 100%; padding: 12px; font-size: 16px; border: 1px solid var(--border); border-radius: 8px;
-      background: #fff;
-    }
-    button {
-      width: 100%; padding: 16px; font-size: 17px; font-weight: 700; border: none; border-radius: 10px;
-      margin-top: 12px; cursor: pointer; color: #fff; background: var(--green);
-    }
-    button.secondary { background: #fff; color: var(--green-dark); border: 2px solid var(--green); }
-    button.amber { background: var(--amber); }
-    button.small { width: auto; padding: 8px 14px; font-size: 13px; margin-top: 0; }
-    button:disabled { opacity: 0.5; }
-    .badge { display: inline-block; padding: 4px 10px; border-radius: 20px; font-size: 12px; font-weight: 700; color: #fff; }
-    .badge.pass { background: var(--green); }
-    .badge.fail { background: var(--red); }
-    .badge.state { background: #455a64; }
-    .error-box { background: #fdecea; border: 1px solid var(--red); color: var(--red); padding: 12px; border-radius: 8px; margin-bottom: 12px; font-size: 14px; }
-    .muted { color: var(--muted); font-size: 13px; }
-    .timer { font-size: 34px; font-weight: 800; color: var(--amber); text-align: center; margin: 10px 0; }
-    nav.tabs {
-      position: fixed; bottom: 0; left: 0; right: 0; background: #fff; border-top: 1px solid var(--border);
-      display: flex; max-width: 520px; margin: 0 auto;
-    }
-    nav.tabs button {
-      flex: 1; background: none; color: var(--muted); font-size: 12px; font-weight: 600;
-      border-radius: 0; margin: 0; padding: 10px 4px;
-    }
-    nav.tabs button.active { color: var(--green-dark); border-top: 3px solid var(--green); }
-    .hidden { display: none !important; }
-    #qrReader { width: 100%; margin-top: 10px; border-radius: 8px; overflow: hidden; }
-    .qr-label-img { display: block; margin: 14px auto; width: 220px; height: 220px; }
-    .row2 { display: flex; gap: 10px; }
-    .row2 > div { flex: 1; }
-  </style>
+<meta charset="UTF-8">
+<title>Ngapori Ranch VPOS — Field App</title>
+<script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+<style>
+  :root {
+    --field-dusk: #1B2620;      /* deep foliage-charcoal, not near-black-neon default */
+    --field-dusk-2: #223129;
+    --panel: #24352C;
+    --panel-line: #3A4E41;
+    --paper: #F0EDE3;           /* worn field-notebook paper, warm off-white */
+    --paper-dim: #B9BFAE;
+    --amber: #E8A33D;           /* radio-dial amber — the signature accent */
+    --amber-dim: #7A5A20;
+    --lime: #9BC53D;            /* active/growth state */
+    --rust: #C4562A;            /* exception/alert state */
+    --mono: 'Courier New', ui-monospace, monospace;
+    --sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0; padding: 0; height: 100%;
+    background: var(--field-dusk);
+    color: var(--paper);
+    font-family: var(--sans);
+    -webkit-tap-highlight-color: transparent;
+  }
+  body { display: flex; flex-direction: column; min-height: 100vh; }
+
+  .topbar {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 14px 18px;
+    background: var(--field-dusk-2);
+    border-bottom: 2px solid var(--panel-line);
+  }
+  .topbar .brand { font-family: var(--mono); letter-spacing: 0.08em; font-size: 13px; color: var(--paper-dim); }
+  .topbar .brand b { color: var(--amber); }
+  .topbar .who { font-size: 13px; text-align: right; }
+  .topbar .who .name { font-weight: 700; }
+  .topbar .who .role { color: var(--paper-dim); font-family: var(--mono); font-size: 11px; text-transform: uppercase; }
+  .logout-link { background: none; border: none; color: var(--rust); font-size: 12px; text-decoration: underline; padding: 4px 0; }
+
+  main { flex: 1; display: flex; flex-direction: column; padding: 20px; gap: 16px; }
+  .screen { display: none; flex: 1; flex-direction: column; gap: 16px; }
+  .screen.active { display: flex; }
+
+  h1 { font-size: 20px; margin: 0 0 4px; }
+  p.hint { color: var(--paper-dim); font-size: 14px; margin: 0; line-height: 1.4; }
+
+  /* ---- Login: PIN pad, deliberately large for gloved/outdoor use ---- */
+  .login-card {
+    background: var(--panel); border: 1px solid var(--panel-line); border-radius: 10px;
+    padding: 22px; display: flex; flex-direction: column; gap: 14px;
+  }
+  label { font-family: var(--mono); font-size: 12px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--paper-dim); }
+  select, input[type=text], textarea {
+    width: 100%; padding: 14px; font-size: 17px; border-radius: 8px;
+    border: 1px solid var(--panel-line); background: var(--field-dusk); color: var(--paper);
+  }
+  .pin-display {
+    font-family: var(--mono); font-size: 32px; letter-spacing: 0.5em; text-align: center;
+    padding: 12px 0; color: var(--amber); min-height: 44px;
+  }
+  .pin-pad { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+  .pin-pad button {
+    padding: 18px 0; font-size: 22px; border-radius: 8px; border: 1px solid var(--panel-line);
+    background: var(--field-dusk-2); color: var(--paper); font-family: var(--mono);
+  }
+  .pin-pad button:active { background: var(--amber-dim); }
+  .pin-pad button.clear { color: var(--rust); font-size: 14px; }
+  .pin-pad button.submit { color: var(--lime); font-size: 14px; }
+
+  /* ---- Buttons ---- */
+  .btn {
+    display: block; width: 100%; padding: 18px; font-size: 17px; font-weight: 700;
+    border-radius: 10px; border: none; text-align: center; cursor: pointer;
+  }
+  .btn-primary { background: var(--amber); color: var(--field-dusk); }
+  .btn-active { background: var(--lime); color: var(--field-dusk); }
+  .btn-secondary { background: transparent; border: 1px solid var(--panel-line); color: var(--paper); }
+  .btn-danger { background: transparent; border: 1px solid var(--rust); color: var(--rust); }
+  .btn:disabled { opacity: 0.45; }
+
+  /* ---- Scan screen ---- */
+  #qr-reader { width: 100%; border-radius: 10px; overflow: hidden; border: 1px solid var(--panel-line); }
+  .scan-target {
+    font-family: var(--mono); font-size: 13px; color: var(--paper-dim);
+    display: flex; align-items: center; gap: 8px;
+  }
+  .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--lime); }
+
+  /* ---- Session card ---- */
+  .session-card {
+    background: var(--panel); border: 1px solid var(--panel-line); border-radius: 12px;
+    padding: 20px; display: flex; flex-direction: column; gap: 4px;
+  }
+  .session-card .bed { font-size: 22px; font-weight: 700; }
+  .session-card .meta { font-family: var(--mono); font-size: 12px; color: var(--paper-dim); text-transform: uppercase; letter-spacing: 0.05em; }
+  .status-pill {
+    display: inline-block; padding: 3px 10px; border-radius: 999px; font-size: 11px;
+    font-family: var(--mono); text-transform: uppercase; letter-spacing: 0.06em; margin-top: 8px;
+  }
+  .status-ACTIVE { background: rgba(155,197,61,0.18); color: var(--lime); }
+  .status-PAUSED { background: rgba(232,163,61,0.18); color: var(--amber); }
+
+  /* Signature element: field-radio elapsed timer readout */
+  .timer {
+    font-family: var(--mono); font-size: 52px; text-align: center; letter-spacing: 0.03em;
+    color: var(--amber); background: var(--field-dusk-2); border: 1px solid var(--panel-line);
+    border-radius: 10px; padding: 18px 0; margin: 4px 0;
+  }
+  .timer .unit { font-size: 14px; color: var(--paper-dim); display: block; letter-spacing: 0.2em; }
+
+  .btn-row { display: flex; gap: 10px; }
+  .btn-row .btn { flex: 1; }
+
+  /* ---- Modal (exception + complete) ---- */
+  .modal-backdrop {
+    position: fixed; inset: 0; background: rgba(0,0,0,0.6);
+    display: none; align-items: flex-end; justify-content: center; z-index: 20;
+  }
+  .modal-backdrop.open { display: flex; }
+  .modal {
+    background: var(--panel); border-top: 2px solid var(--panel-line);
+    border-radius: 16px 16px 0 0; padding: 22px; width: 100%; max-width: 480px;
+    display: flex; flex-direction: column; gap: 14px;
+  }
+  .modal h2 { margin: 0; font-size: 18px; }
+
+  .toast {
+    position: fixed; bottom: 18px; left: 50%; transform: translateX(-50%);
+    background: var(--field-dusk-2); border: 1px solid var(--panel-line);
+    color: var(--paper); padding: 12px 18px; border-radius: 8px; font-size: 14px;
+    display: none; z-index: 30; max-width: 90%;
+  }
+  .toast.error { border-color: var(--rust); color: var(--rust); }
+  .toast.show { display: block; }
+</style>
 </head>
 <body>
-<div id="app">
 
-  <header>
-    <div>
-      <div class="title">Ngapori Ranch Field OS</div>
-      <div class="who" id="whoLine">Not logged in</div>
+  <div class="topbar">
+    <div class="brand">NGAPORI RANCH · <b>VPOS FIELD</b></div>
+    <div class="who" id="whoBox" style="display:none;">
+      <div class="name" id="whoName"></div>
+      <div class="role" id="whoRole"></div>
+      <button class="logout-link" id="logoutBtn">Log out</button>
     </div>
-    <button class="small secondary" id="logoutBtn" style="display:none;width:auto;color:#fff;border-color:#fff;">Log out</button>
-  </header>
+  </div>
 
   <main>
 
-    <!-- ===================== LOGIN ===================== -->
-    <section id="screen-login" class="card">
-      <h2>Worker Login</h2>
-      <div id="loginError"></div>
-      <label>User ID</label>
-      <input type="text" id="loginUserId" placeholder="USR-001" autocapitalize="characters">
-      <label>PIN</label>
-      <input type="password" id="loginPin" inputmode="numeric" placeholder="••••">
-      <button id="loginBtn">Log In</button>
-    </section>
-
-    <!-- ===================== SCAN TAB ===================== -->
-    <section id="screen-scan" class="hidden">
-      <div class="card">
-        <h2>Scan Lane Sign</h2>
-        <div id="scanError"></div>
-        <label>Enter code, or use camera below</label>
-        <input type="text" id="manualCode" placeholder="BED:B2-03 or COH:COH-SUK-2026-001" autocapitalize="characters">
-        <div class="row2">
-          <div><button id="lookupBtn">Look Up</button></div>
-          <div><button class="secondary" id="cameraToggleBtn">Scan Camera</button></div>
+    <!-- LOGIN -->
+    <section class="screen active" id="screen-login">
+      <h1>Log in</h1>
+      <p class="hint">Enter your Worker ID, then your 4-digit PIN.</p>
+      <div class="login-card">
+        <div>
+          <label for="userIdInput">Worker ID</label>
+          <input type="text" id="userIdInput" placeholder="USR-WORKER1" autocapitalize="characters">
         </div>
-        <div id="qrReader" class="hidden"></div>
-      </div>
-
-      <div id="scanResult"></div>
-    </section>
-
-    <!-- ===================== PACK-SHED WEIGH-IN TAB ===================== -->
-    <section id="screen-weighin" class="hidden">
-      <div class="card">
-        <h2>Pack-Shed Weigh-In</h2>
-        <p class="muted">Closes the cold-chain clock a field scan started. If you know the Harvest ID, enter it; otherwise the oldest pending harvest for the cohort is used.</p>
-        <div id="weighinError"></div>
-        <label>Cohort ID</label>
-        <input type="text" id="weighCohortId" placeholder="COH-SUK-2026-001">
-        <label>Harvest ID (optional)</label>
-        <input type="text" id="weighHarvestId" placeholder="HRV-20260818-071500">
-
-        <label>Gross Weight (lbs)</label>
-        <input type="number" step="0.1" id="grossWeight" placeholder="24.5">
-        <button class="secondary" id="connectScaleBtn">Connect Bluetooth Scale</button>
-        <div class="muted" id="scaleStatus" style="margin-top:6px;"></div>
-
-        <label>Tare Weight (lbs)</label>
-        <input type="number" step="0.1" id="tareWeight" placeholder="2.0" value="0">
-
-        <div class="row2">
-          <div>
-            <label>Crate Count</label>
-            <input type="number" id="crateCount" placeholder="3">
-          </div>
-          <div>
-            <label>Quality Grade</label>
-            <select id="qualityGrade">
-              <option value="A">A</option>
-              <option value="B">B</option>
-              <option value="C">C</option>
-            </select>
+        <div>
+          <label>PIN</label>
+          <div class="pin-display" id="pinDisplay">----</div>
+          <div class="pin-pad">
+            <button data-key="1">1</button><button data-key="2">2</button><button data-key="3">3</button>
+            <button data-key="4">4</button><button data-key="5">5</button><button data-key="6">6</button>
+            <button data-key="7">7</button><button data-key="8">8</button><button data-key="9">9</button>
+            <button class="clear" data-key="clear">CLEAR</button><button data-key="0">0</button>
+            <button class="submit" data-key="submit">GO</button>
           </div>
         </div>
-
-        <button id="weighInBtn">Weigh In</button>
       </div>
-      <div id="weighinResult"></div>
     </section>
 
-    <!-- ===================== PACK & STAGE TAB ===================== -->
-    <section id="screen-pack" class="hidden">
-      <div class="card">
-        <h2>Pack &amp; Stage</h2>
-        <div id="packError"></div>
-        <label>Cohort ID</label>
-        <input type="text" id="packCohortId" placeholder="COH-SUK-2026-001">
-        <label>Restaurant</label>
-        <select id="packRestaurant"></select>
-        <div class="row2">
-          <div>
-            <label>Received Wt (lbs)</label>
-            <input type="number" step="0.1" id="receivedWeight">
-          </div>
-          <div>
-            <label>Packed Wt (lbs)</label>
-            <input type="number" step="0.1" id="packedWeight">
-          </div>
-        </div>
-        <label>Case Count</label>
-        <input type="number" id="caseCount">
-        <button id="packBtn">Pack &amp; Print Label</button>
+    <!-- SCAN -->
+    <section class="screen" id="screen-scan">
+      <h1>Scan a bed</h1>
+      <div class="scan-target"><span class="dot"></span> Point the camera at a bed's QR sign</div>
+      <div id="qr-reader"></div>
+      <button class="btn btn-secondary" id="cancelScanBtn">Cancel</button>
+    </section>
+
+    <!-- ACTIVITY PICK (after scan, before Start) -->
+    <section class="screen" id="screen-activity">
+      <h1>Start a session</h1>
+      <div class="session-card">
+        <div class="bed" id="pickedBedId">—</div>
+        <div class="meta">Scanned bed</div>
       </div>
-      <div id="packResult"></div>
+      <div>
+        <label for="activityType">Activity</label>
+        <select id="activityType">
+          <option value="Harvest">Harvest</option>
+          <option value="Weeding">Weeding</option>
+          <option value="Pruning">Pruning</option>
+          <option value="Irrigation">Irrigation</option>
+          <option value="Planting">Planting</option>
+          <option value="Other">Other</option>
+        </select>
+      </div>
+      <button class="btn btn-primary" id="startSessionBtn">Start session</button>
+      <button class="btn btn-secondary" id="backToScanBtn">Rescan</button>
+    </section>
+
+    <!-- ACTIVE SESSION -->
+    <section class="screen" id="screen-session">
+      <div class="session-card">
+        <div class="bed" id="activeBedId">—</div>
+        <div class="meta" id="activeActivity">—</div>
+        <span class="status-pill" id="statusPill">ACTIVE</span>
+      </div>
+      <div class="timer" id="timerReadout">00:00<span class="unit">ELAPSED MIN:SEC</span></div>
+      <div class="btn-row">
+        <button class="btn btn-active" id="pauseResumeBtn">Pause</button>
+        <button class="btn btn-danger" id="exceptionBtn">Flag exception</button>
+      </div>
+      <button class="btn btn-primary" id="completeBtn">Complete session</button>
     </section>
 
   </main>
 
-  <nav class="tabs hidden" id="tabBar">
-    <button data-tab="scan" class="active">Scan</button>
-    <button data-tab="weighin">Pack-Shed</button>
-    <button data-tab="pack">Pack &amp; Stage</button>
-  </nav>
+  <!-- EXCEPTION MODAL -->
+  <div class="modal-backdrop" id="exceptionModal">
+    <div class="modal">
+      <h2>Flag exception</h2>
+      <div>
+        <label for="exceptionType">Type</label>
+        <select id="exceptionType">
+          <option>Pest Discovered</option>
+          <option>Irrigation Failure</option>
+          <option>Equipment Failure</option>
+          <option>Crop Damage</option>
+          <option>Other</option>
+        </select>
+      </div>
+      <div>
+        <label for="exceptionNotes">Notes</label>
+        <textarea id="exceptionNotes" rows="3" placeholder="What's going on?"></textarea>
+      </div>
+      <div class="btn-row">
+        <button class="btn btn-secondary" id="exceptionCancelBtn">Cancel</button>
+        <button class="btn btn-danger" id="exceptionSubmitBtn" style="background: var(--rust); color: var(--paper);">Submit</button>
+      </div>
+    </div>
+  </div>
 
-</div>
+  <!-- COMPLETE MODAL -->
+  <div class="modal-backdrop" id="completeModal">
+    <div class="modal">
+      <h2>Complete session</h2>
+      <div>
+        <label for="loggedQty">Quantity</label>
+        <input type="text" inputmode="decimal" id="loggedQty" placeholder="0">
+      </div>
+      <div>
+        <label for="loggedUnit">Unit</label>
+        <select id="loggedUnit">
+          <option>LBS</option>
+          <option>CASES</option>
+          <option>KG</option>
+        </select>
+      </div>
+      <div class="btn-row">
+        <button class="btn btn-secondary" id="completeCancelBtn">Cancel</button>
+        <button class="btn btn-primary" id="completeSubmitBtn">Submit</button>
+      </div>
+    </div>
+  </div>
 
-<script src="https://cdnjs.cloudflare.com/ajax/libs/html5-qrcode/2.3.8/html5-qrcode.min.js"></script>
+  <div class="toast" id="toast"></div>
+
 <script>
-  // ── SERVER CONNECTION ────────────────────────────────────────────────
-  // Update this if you ever create a NEW deployment (Deploy > Manage
-  // deployments > New deployment gets a new URL; New version on an
-  // EXISTING deployment keeps the same URL and does not need this changed).
-  var APP_URL = 'https://script.google.com/macros/s/AKfycbxRXSebPQ3dW76DA3tOUrAA7PAE4jBry53-Jt8dXEheJzbSg1_CRPPMiKpZfoZnGptS/exec';
+(function () {
+  var SCRIPT_URL = '<?= scriptUrl ?>';
 
-  // Calls doPost in Code.gs with {action, data}. No explicit Content-Type
-  // header is set on purpose - leaving it as the fetch default
-  // (text/plain) keeps this a CORS "simple request" so the browser skips
-  // an OPTIONS preflight, which Apps Script Web Apps don't handle.
-  // doPost doesn't care about the header anyway; it just JSON.parses the
-  // raw body. Returns a Promise that resolves with the result on
-  // {status: 'SUCCESS'} and rejects with an Error on {status: 'ERROR'}.
-  function callServer(action, data) {
-    return fetch(APP_URL, {
+  var state = {
+    user: null,          // { user_id, full_name, role }
+    pin: '',
+    bedId: null,
+    sessionId: null,
+    activityType: null,
+    status: null,         // ACTIVE | PAUSED
+    startedAt: null,
+    timerHandle: null,
+    html5QrCode: null
+  };
+
+  // ---- helpers ----
+  function $(id) { return document.getElementById(id); }
+  function showScreen(id) {
+    document.querySelectorAll('.screen').forEach(function (s) { s.classList.remove('active'); });
+    $(id).classList.add('active');
+  }
+  function toast(msg, isError) {
+    var t = $('toast');
+    t.textContent = msg;
+    t.className = 'toast show' + (isError ? ' error' : '');
+    setTimeout(function () { t.className = 'toast'; }, 3200);
+  }
+
+  function post(action, payload) {
+    var body = Object.assign({ action: action }, payload || {});
+    return fetch(SCRIPT_URL, {
       method: 'POST',
-      body: JSON.stringify({ action: action, data: data || {} })
+      // text/plain avoids a CORS preflight against the Apps Script Web App, matching
+      // the response side's ContentService.MimeType.TEXT convention in Code.gs.
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify(body)
     })
-      .then(function (res) { return res.json(); })
-      .then(function (json) {
-        if (json.status === 'SUCCESS') return json.result;
-        throw new Error(json.message || 'Server error');
-      });
+      .then(function (r) { return r.text(); })
+      .then(function (text) { return JSON.parse(text); });
   }
 
-  // ── SESSION STATE ────────────────────────────────────────────────────
-  var session = { userId: null, fullName: null, role: null };
-  var cropList = [];
-  var html5QrScanner = null;
-  var cameraOn = false;
+  // ---- login / PIN pad ----
+  $('#screen-login').addEventListener('click', function (e) {
+    var key = e.target.dataset && e.target.dataset.key;
+    if (!key) return;
 
-  function el(id) { return document.getElementById(id); }
-  function showError(containerId, message) {
-    el(containerId).innerHTML = '<div class="error-box">' + escapeHtml(message) + '</div>';
-  }
-  function clearError(containerId) { el(containerId).innerHTML = ''; }
-  function escapeHtml(s) {
-    return String(s).replace(/[&<>"']/g, function (c) {
-      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
-    });
-  }
-  function fmtDate(d) {
-    if (!d) return '—';
-    try { return new Date(d).toLocaleDateString(); } catch (e) { return String(d); }
-  }
-
-  // ── LOGIN ────────────────────────────────────────────────────────────
-  el('loginBtn').onclick = function () {
-    var userId = el('loginUserId').value.trim();
-    var pin = el('loginPin').value.trim();
-    if (!userId || !pin) { showError('loginError', 'Enter both User ID and PIN.'); return; }
-    clearError('loginError');
-    el('loginBtn').disabled = true;
-    callServer('login', { userId: userId, pin: pin })
-      .then(function (res) {
-        el('loginBtn').disabled = false;
-        session.userId = res.userId; session.fullName = res.fullName; session.role = res.role;
-        onLoginSuccess();
-      })
-      .catch(function (err) {
-        el('loginBtn').disabled = false;
-        showError('loginError', err.message || String(err));
-      });
-  };
-
-  function onLoginSuccess() {
-    el('screen-login').classList.add('hidden');
-    el('tabBar').classList.remove('hidden');
-    el('logoutBtn').style.display = 'inline-block';
-    el('whoLine').textContent = session.fullName + ' · ' + session.role;
-    switchTab('scan');
-    loadCropList();
-    loadRestaurantList();
-  }
-
-  el('logoutBtn').onclick = function () {
-    if (session.userId) {
-      callServer('logout', { userId: session.userId }).catch(function () { /* fire-and-forget */ });
-    }
-    session = { userId: null, fullName: null, role: null };
-    el('tabBar').classList.add('hidden');
-    el('logoutBtn').style.display = 'none';
-    el('whoLine').textContent = 'Not logged in';
-    ['scan', 'weighin', 'pack'].forEach(function (t) { el('screen-' + t).classList.add('hidden'); });
-    el('screen-login').classList.remove('hidden');
-    el('loginPin').value = '';
-  };
-
-  // ── TABS ─────────────────────────────────────────────────────────────
-  Array.prototype.forEach.call(document.querySelectorAll('nav.tabs button'), function (btn) {
-    btn.onclick = function () { switchTab(btn.getAttribute('data-tab')); };
-  });
-  function switchTab(name) {
-    ['scan', 'weighin', 'pack'].forEach(function (t) {
-      el('screen-' + t).classList.toggle('hidden', t !== name);
-    });
-    Array.prototype.forEach.call(document.querySelectorAll('nav.tabs button'), function (btn) {
-      btn.classList.toggle('active', btn.getAttribute('data-tab') === name);
-    });
-  }
-
-  // ── LOOKUP DATA (crops, restaurants) ───────────────────────────────
-  function loadCropList() {
-    callServer('getCropReferenceList', {}).then(function (list) { cropList = list; });
-  }
-  function loadRestaurantList() {
-    callServer('getRestaurantList', {}).then(function (list) {
-      var sel = el('packRestaurant');
-      sel.innerHTML = '';
-      list.forEach(function (r) {
-        var o = document.createElement('option'); o.value = r; o.textContent = r; sel.appendChild(o);
-      });
-    });
-  }
-
-  // ── SCAN (manual + camera) ──────────────────────────────────────────
-  el('lookupBtn').onclick = function () {
-    var code = el('manualCode').value.trim();
-    if (!code) { showError('scanError', 'Enter a code, e.g. BED:B2-03'); return; }
-    runScan(code);
-  };
-
-  el('cameraToggleBtn').onclick = function () {
-    if (!cameraOn) { startCamera(); } else { stopCamera(); }
-  };
-
-  function startCamera() {
-    if (typeof Html5Qrcode === 'undefined') {
-      showError('scanError', 'Camera scanner failed to load. Use manual entry instead.');
+    if (key === 'clear') {
+      state.pin = '';
+    } else if (key === 'submit') {
+      doLogin();
       return;
+    } else if (state.pin.length < 4) {
+      state.pin += key;
     }
-    el('qrReader').classList.remove('hidden');
-    html5QrScanner = new Html5Qrcode('qrReader');
-    html5QrScanner.start(
-      { facingMode: 'environment' },
-      { fps: 10, qrbox: 220 },
-      function (decodedText) {
-        el('manualCode').value = decodedText;
-        stopCamera();
-        runScan(decodedText);
-      },
-      function () { /* per-frame scan failure, ignore */ }
-    ).then(function () {
-      cameraOn = true;
-      el('cameraToggleBtn').textContent = 'Stop Camera';
-    }).catch(function (err) {
-      showError('scanError', 'Camera unavailable (' + err + '). Use manual entry instead.');
-      el('qrReader').classList.add('hidden');
+    $('#pinDisplay').textContent = state.pin.padEnd(4, '-').split('').join(' ');
+  });
+
+  function doLogin() {
+    var userId = $('#userIdInput').value.trim().toUpperCase();
+    if (!userId) { toast('Enter your Worker ID', true); return; }
+    if (state.pin.length !== 4) { toast('PIN must be 4 digits', true); return; }
+
+    post('LOGIN', { user_id: userId, pin: state.pin }).then(function (res) {
+      state.pin = '';
+      $('#pinDisplay').textContent = '- - - -';
+      if (!res.ok) { toast(res.error || 'Login failed', true); return; }
+
+      state.user = res;
+      $('#whoName').textContent = res.full_name;
+      $('#whoRole').textContent = res.role;
+      $('#whoBox').style.display = 'block';
+      showScreen('screen-scan');
+      startScanner();
+    }).catch(function (err) { toast('Network error: ' + err, true); });
+  }
+
+  $('#logoutBtn').addEventListener('click', function () {
+    if (!state.user) return;
+    post('LOGOUT', { user_id: state.user.user_id }).finally(function () {
+      state.user = null;
+      $('#whoBox').style.display = 'none';
+      stopScanner();
+      showScreen('screen-login');
     });
+  });
+
+  // ---- QR scan ----
+  function startScanner() {
+    if (state.html5QrCode) return;
+    state.html5QrCode = new Html5Qrcode('qr-reader');
+    state.html5QrCode.start(
+      { facingMode: 'environment' },
+      { fps: 10, qrbox: 240 },
+      onScanSuccess,
+      function () { /* ignore per-frame scan misses */ }
+    ).catch(function (err) { toast('Camera error: ' + err, true); });
   }
-  function stopCamera() {
-    if (html5QrScanner && cameraOn) {
-      html5QrScanner.stop().then(function () {
-        el('qrReader').classList.add('hidden');
-        cameraOn = false;
-        el('cameraToggleBtn').textContent = 'Scan Camera';
-      });
+  function stopScanner() {
+    if (state.html5QrCode) {
+      state.html5QrCode.stop().catch(function () {});
+      state.html5QrCode = null;
     }
   }
+  function onScanSuccess(decodedText) {
+    // Expected format per QR_REGISTRY / BED_MASTER.QR_Code: "BED:<Bed_ID>"
+    var match = /^BED:(.+)$/.exec(decodedText.trim());
+    if (!match) { toast('Not a bed QR: ' + decodedText, true); return; }
 
-  function runScan(code) {
-    clearError('scanError');
-    el('scanResult').innerHTML = '<div class="card muted">Looking up…</div>';
-    callServer('scan', { qrPayload: code })
-      .then(renderScanResult)
-      .catch(function (err) {
-        el('scanResult').innerHTML = '';
-        showError('scanError', err.message || String(err));
-      });
+    stopScanner();
+    state.bedId = match[1];
+    $('#pickedBedId').textContent = state.bedId;
+    showScreen('screen-activity');
+  }
+  $('#cancelScanBtn').addEventListener('click', function () {
+    stopScanner();
+    showScreen('screen-login'); // no active session yet, nothing to lose
+  });
+  $('#backToScanBtn').addEventListener('click', function () {
+    showScreen('screen-scan');
+    startScanner();
+  });
+
+  // ---- session start ----
+  $('#startSessionBtn').addEventListener('click', function () {
+    state.activityType = $('#activityType').value;
+    $('#startSessionBtn').disabled = true;
+    post('START_SESSION', {
+      worker_id: state.user.user_id,
+      bed_id: state.bedId,
+      activity_type: state.activityType
+    }).then(function (res) {
+      $('#startSessionBtn').disabled = false;
+      if (!res.ok) { toast(res.error || 'Could not start session', true); return; }
+      state.sessionId = res.session_id;
+      state.status = res.status;
+      state.startedAt = Date.now();
+      enterSessionScreen();
+    }).catch(function (err) {
+      $('#startSessionBtn').disabled = false;
+      toast('Network error: ' + err, true);
+    });
+  });
+
+  function enterSessionScreen() {
+    $('#activeBedId').textContent = state.bedId;
+    $('#activeActivity').textContent = state.activityType;
+    updateStatusPill();
+    showScreen('screen-session');
+    runTimer();
   }
 
-  function renderScanResult(ctx) {
-    if (ctx.bed) { renderBedContext(ctx); return; }
-    if (ctx.cohort) { renderCohortOnly(ctx.cohort); return; }
-    el('scanResult').innerHTML = '<div class="card muted">No display for this code type here — try the Pack-Shed or Pack &amp; Stage tabs.</div>';
+  function updateStatusPill() {
+    var pill = $('#statusPill');
+    pill.textContent = state.status;
+    pill.className = 'status-pill status-' + state.status;
+    $('#pauseResumeBtn').textContent = state.status === 'PAUSED' ? 'Resume' : 'Pause';
   }
 
-  function renderCohortOnly(cohort) {
-    el('scanResult').innerHTML =
-      '<div class="card">' +
-      '<h2>Cohort</h2>' +
-      '<div class="big">' + escapeHtml(cohort.Cohort_ID) + '</div>' +
-      '<div class="muted">' + escapeHtml(cohort.Crop_ID) + ' · ' + escapeHtml(cohort.Variety || '') + '</div>' +
-      '<div style="margin-top:8px;"><span class="badge state">' + escapeHtml(cohort.Current_State) + '</span></div>' +
-      '<div class="muted" style="margin-top:8px;">Target harvest: ' + fmtDate(cohort.Target_Harvest_Date) + '</div>' +
-      '</div>';
-  }
-
-  function renderBedContext(ctx) {
-    var bed = ctx.bed, cohort = ctx.cohort, next = ctx.nextExpectedAction;
-    var html = '<div class="card"><h2>Bed</h2><div class="big">' + escapeHtml(bed.Bed_ID) + '</div>' +
-      '<div class="muted">' + escapeHtml(bed.Block_ID) + ' · ' + escapeHtml(bed.Zone_Type) + '</div>' +
-      '<div style="margin-top:8px;"><span class="badge state">' + escapeHtml(bed.Current_State) + '</span></div></div>';
-
-    if (next === 'CREATE_COHORT') {
-      html += renderCreateCohortForm(bed);
-    } else if (next === 'TAP_PLANTED') {
-      html += '<div class="card"><h2>Cohort — Prep</h2>' +
-        '<div class="big">' + escapeHtml(cohort.Cohort_ID) + '</div>' +
-        '<div class="muted">' + escapeHtml(cohort.Crop_ID) + ' · ' + escapeHtml(cohort.Variety || '') + '</div>' +
-        '<button id="tapPlantedBtn" style="margin-top:16px;">TAP: PLANTED</button>' +
-        '<div id="tapPlantedError"></div></div>';
-    } else if (next === 'START_HARVEST') {
-      html += '<div class="card"><h2>Cohort — Harvestable</h2>' +
-        '<div class="big">' + escapeHtml(cohort.Cohort_ID) + '</div>' +
-        '<p class="muted">Scanning this starts the 30-minute cold-chain clock. Only scan when you are about to clip the first leaf.</p>' +
-        '<button class="amber" id="startHarvestBtn">START HARVEST (scan now)</button>' +
-        '<div id="startHarvestError"></div></div>';
-    } else if (cohort) {
-      html += '<div class="card"><h2>Cohort — ' + escapeHtml(cohort.Current_State) + '</h2>' +
-        '<div class="big">' + escapeHtml(cohort.Cohort_ID) + '</div>' +
-        '<p class="muted">Tracked automatically. No worker action needed right now.</p>' +
-        '<div class="muted">Target harvest: ' + fmtDate(cohort.Target_Harvest_Date) + '</div></div>';
-    }
-
-    el('scanResult').innerHTML = html;
-
-    if (next === 'CREATE_COHORT') wireCreateCohortForm(bed);
-    if (next === 'TAP_PLANTED') {
-      el('tapPlantedBtn').onclick = function () {
-        el('tapPlantedBtn').disabled = true;
-        callServer('tapPlanted', { cohortId: cohort.Cohort_ID, workerId: session.userId })
-          .then(function () { runScan('BED:' + bed.Bed_ID); })
-          .catch(function (err) {
-            el('tapPlantedBtn').disabled = false;
-            showError('tapPlantedError', err.message || String(err));
-          });
-      };
-    }
-    if (next === 'START_HARVEST') {
-      el('startHarvestBtn').onclick = function () {
-        el('startHarvestBtn').disabled = true;
-        callServer('startHarvestScan', { bedId: bed.Bed_ID, cohortId: cohort.Cohort_ID, workerId: session.userId })
-          .then(function (res) { renderHarvestStarted(res); })
-          .catch(function (err) {
-            el('startHarvestBtn').disabled = false;
-            showError('startHarvestError', err.message || String(err));
-          });
-      };
-    }
-  }
-
-  function renderHarvestStarted(res) {
-    el('scanResult').innerHTML =
-      '<div class="card">' +
-      '<h2>Cold Chain Clock Running</h2>' +
-      '<div class="muted">Harvest ID: ' + escapeHtml(res.harvestId) + '</div>' +
-      '<div class="muted">Cohort: ' + escapeHtml(res.cohortId) + '</div>' +
-      '<div class="timer" id="coldChainTimer">00:00</div>' +
-      '<p class="muted">Take crates to the pack-shed and weigh in within 30 minutes. Use the Pack-Shed tab there.</p>' +
-      '</div>';
-    var start = new Date(res.transitStartTime).getTime();
-    var timerEl = el('coldChainTimer');
-    setInterval(function () {
-      var elapsed = Math.floor((Date.now() - start) / 1000);
-      var m = Math.floor(elapsed / 60); var s = elapsed % 60;
-      timerEl.textContent = (m < 10 ? '0' : '') + m + ':' + (s < 10 ? '0' : '') + s;
-      if (elapsed > 30 * 60) timerEl.style.color = 'var(--red)';
+  function runTimer() {
+    clearInterval(state.timerHandle);
+    state.timerHandle = setInterval(function () {
+      var elapsedSec = Math.floor((Date.now() - state.startedAt) / 1000);
+      var mm = String(Math.floor(elapsedSec / 60)).padStart(2, '0');
+      var ss = String(elapsedSec % 60).padStart(2, '0');
+      $('#timerReadout').innerHTML = mm + ':' + ss + '<span class="unit">ELAPSED MIN:SEC</span>';
     }, 1000);
   }
 
-  function renderCreateCohortForm(bed) {
-    var options = cropList
-      .filter(function (c) { return !c.defaultBlockId || c.defaultBlockId === bed.Block_ID; })
-      .map(function (c) { return '<option value="' + c.cropId + '">' + escapeHtml(c.cropName) + '</option>'; })
-      .join('');
-    if (!options) {
-      options = cropList.map(function (c) { return '<option value="' + c.cropId + '">' + escapeHtml(c.cropName) + '</option>'; }).join('');
-    }
-    return '<div class="card"><h2>New Cohort</h2>' +
-      '<div id="createCohortError"></div>' +
-      '<label>Crop</label><select id="newCropId">' + options + '</select>' +
-      '<label>Variety (optional)</label><input type="text" id="newVariety">' +
-      '<label>Target Planting Date</label><input type="date" id="newTargetPlanting">' +
-      '<label>Target Harvest Date</label><input type="date" id="newTargetHarvest">' +
-      '<label>Target Qty (lbs)</label><input type="number" id="newTargetQty">' +
-      '<button id="tapPrepBtn" style="margin-top:16px;">TAP: PREP</button>' +
-      '</div>';
-  }
+  // ---- pause / resume ----
+  $('#pauseResumeBtn').addEventListener('click', function () {
+    var toStatus = state.status === 'PAUSED' ? 'RESUME_SESSION' : 'PAUSE_SESSION';
+    post(toStatus, { session_id: state.sessionId }).then(function (res) {
+      if (!res.ok) { toast(res.error || 'Could not update session', true); return; }
+      state.status = res.status;
+      updateStatusPill();
+    }).catch(function (err) { toast('Network error: ' + err, true); });
+  });
 
-  function wireCreateCohortForm(bed) {
-    el('tapPrepBtn').onclick = function () {
-      el('tapPrepBtn').disabled = true;
-      callServer('createCohortAndTapPrep', {
-        bedId: bed.Bed_ID,
-        cropId: el('newCropId').value,
-        variety: el('newVariety').value,
-        targetPlantingDate: el('newTargetPlanting').value,
-        targetHarvestDate: el('newTargetHarvest').value,
-        targetQtyLbs: el('newTargetQty').value,
-        workerId: session.userId
-      })
-        .then(function () { runScan('BED:' + bed.Bed_ID); })
-        .catch(function (err) {
-          el('tapPrepBtn').disabled = false;
-          showError('createCohortError', err.message || String(err));
-        });
-    };
-  }
+  // ---- exception modal ----
+  $('#exceptionBtn').addEventListener('click', function () { $('#exceptionModal').classList.add('open'); });
+  $('#exceptionCancelBtn').addEventListener('click', function () { $('#exceptionModal').classList.remove('open'); });
+  $('#exceptionSubmitBtn').addEventListener('click', function () {
+    post('FLAG_EXCEPTION', {
+      session_id: state.sessionId,
+      exception_type: $('#exceptionType').value,
+      notes: $('#exceptionNotes').value.trim()
+    }).then(function (res) {
+      $('#exceptionModal').classList.remove('open');
+      if (!res.ok) { toast(res.error || 'Could not flag exception', true); return; }
+      $('#exceptionNotes').value = '';
+      toast('Exception flagged');
+    }).catch(function (err) { toast('Network error: ' + err, true); });
+  });
 
-  // ── PACK-SHED WEIGH-IN ───────────────────────────────────────────────
-  el('connectScaleBtn').onclick = function () {
-    connectBluetoothScale();
-  };
+  // ---- complete modal ----
+  $('#completeBtn').addEventListener('click', function () { $('#completeModal').classList.add('open'); });
+  $('#completeCancelBtn').addEventListener('click', function () { $('#completeModal').classList.remove('open'); });
+  $('#completeSubmitBtn').addEventListener('click', function () {
+    var qty = $('#loggedQty').value.trim();
+    if (!qty) { toast('Enter a quantity', true); return; }
+    post('COMPLETE_SESSION', {
+      session_id: state.sessionId,
+      logged_quantity: qty,
+      unit: $('#loggedUnit').value
+    }).then(function (res) {
+      $('#completeModal').classList.remove('open');
+      if (!res.ok) { toast(res.error || 'Could not complete session', true); return; }
+      clearInterval(state.timerHandle);
+      toast('Session completed — awaiting manager verification');
+      $('#loggedQty').value = '';
+      state.sessionId = null; state.bedId = null; state.status = null;
+      showScreen('screen-scan');
+      startScanner();
+    }).catch(function (err) { toast('Network error: ' + err, true); });
+  });
 
-  function connectBluetoothScale() {
-    if (!navigator.bluetooth) {
-      el('scaleStatus').textContent = 'Web Bluetooth not supported on this browser/device — enter weight manually.';
-      return;
-    }
-    el('scaleStatus').textContent = 'Requesting device…';
-    // Standard GATT Weight Scale service (0x181D) / Weight Measurement characteristic (0x2A98).
-    // Compatibility depends entirely on the physical scale's firmware - if it doesn't expose
-    // this standard BLE profile, this will fail gracefully and the worker types the weight in.
-    navigator.bluetooth.requestDevice({
-      filters: [{ services: [0x181D] }]
-    }).then(function (device) {
-      el('scaleStatus').textContent = 'Connecting to ' + device.name + '…';
-      return device.gatt.connect();
-    }).then(function (server) {
-      return server.getPrimaryService(0x181D);
-    }).then(function (service) {
-      return service.getCharacteristic(0x2A98);
-    }).then(function (characteristic) {
-      return characteristic.startNotifications().then(function () {
-        characteristic.addEventListener('characteristicvaluechanged', function (event) {
-          var value = event.target.value;
-          // Weight Measurement flags byte 0; weight is a uint16 in bytes 1-2, SI unit = kg * 200 resolution (per GATT spec)
-          var flags = value.getUint8(0);
-          var isImperial = (flags & 0x01) === 1;
-          var raw = value.getUint16(1, true);
-          var kg = raw * 0.005;
-          var lbs = isImperial ? raw * 0.01 : kg * 2.20462;
-          el('grossWeight').value = lbs.toFixed(1);
-          el('scaleStatus').textContent = 'Live reading from ' + device.name;
-        });
-      });
-    }).catch(function (err) {
-      el('scaleStatus').textContent = 'Scale connect failed (' + err.message + ') — enter weight manually.';
-    });
-  }
-
-  el('weighInBtn').onclick = function () {
-    var payload = {
-      cohortId: el('weighCohortId').value.trim(),
-      harvestId: el('weighHarvestId').value.trim() || undefined,
-      grossWeight: el('grossWeight').value,
-      tareWeight: el('tareWeight').value,
-      crateCount: el('crateCount').value,
-      grade: el('qualityGrade').value,
-      workerId: session.userId
-    };
-    if (!payload.cohortId || !payload.grossWeight) {
-      showError('weighinError', 'Cohort ID and gross weight are required.');
-      return;
-    }
-    clearError('weighinError');
-    el('weighInBtn').disabled = true;
-    callServer('completePackShedWeighIn', payload)
-      .then(function (res) {
-        el('weighInBtn').disabled = false;
-        renderWeighInResult(res);
-      })
-      .catch(function (err) {
-        el('weighInBtn').disabled = false;
-        showError('weighinError', err.message || String(err));
-      });
-  };
-
-  function renderWeighInResult(res) {
-    var badgeClass = res.coldChain === 'PASSED' ? 'pass' : 'fail';
-    el('weighinResult').innerHTML =
-      '<div class="card">' +
-      '<h2>Weigh-In Complete</h2>' +
-      '<div class="big">' + res.netWeight.toFixed(1) + ' lbs net</div>' +
-      '<div class="muted">Harvest ' + escapeHtml(res.harvestId) + ' · Cohort ' + escapeHtml(res.cohortId) + '</div>' +
-      '<div style="margin-top:10px;">' +
-      '<span class="badge ' + badgeClass + '">Cold Chain: ' + res.coldChain + '</span>' +
-      ' <span class="muted">' + res.elapsedMinutes + ' min field-to-scale</span>' +
-      '</div></div>';
-  }
-
-  // ── PACK & STAGE ─────────────────────────────────────────────────────
-  el('packBtn').onclick = function () {
-    var payload = {
-      cohortId: el('packCohortId').value.trim(),
-      restaurantId: el('packRestaurant').value,
-      receivedWeightLbs: el('receivedWeight').value,
-      packedWeightLbs: el('packedWeight').value,
-      caseCount: el('caseCount').value,
-      workerId: session.userId
-    };
-    if (!payload.cohortId || !payload.packedWeightLbs) {
-      showError('packError', 'Cohort ID and packed weight are required.');
-      return;
-    }
-    clearError('packError');
-    el('packBtn').disabled = true;
-    callServer('submitPackedStaging', payload)
-      .then(function (res) {
-        el('packBtn').disabled = false;
-        renderPackResult(res);
-      })
-      .catch(function (err) {
-        el('packBtn').disabled = false;
-        showError('packError', err.message || String(err));
-      });
-  };
-
-  function renderPackResult(res) {
-    var qrUrl = 'https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=' + encodeURIComponent(res.qrCode);
-    el('packResult').innerHTML =
-      '<div class="card" id="printLabel">' +
-      '<h2>Lineage Label</h2>' +
-      '<div class="big">' + escapeHtml(res.packId) + '</div>' +
-      '<img class="qr-label-img" src="' + qrUrl + '" alt="QR label">' +
-      '<div class="muted" style="text-align:center;">Cohort ' + escapeHtml(res.cohortId) + '</div>' +
-      '<div class="muted" style="text-align:center;">Beds ' + escapeHtml(res.bedRange) + '</div>' +
-      '<div class="muted" style="text-align:center;">→ ' + escapeHtml(res.restaurantId) + '</div>' +
-      '<button class="secondary" id="printBtn" style="margin-top:14px;">Print Label</button>' +
-      '</div>';
-    el('printBtn').onclick = function () { window.print(); };
-  }
+})();
 </script>
 </body>
 </html>
