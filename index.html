@@ -338,22 +338,34 @@
     if (key === 'clear') {
       state.pin = '';
     } else if (key === 'submit') {
-      doLogin();
+      try { doLogin(); } catch (err) { toast('Login error: ' + err, true); }
       return;
     } else if (state.pin.length < 4) {
       state.pin += key;
     }
-    $('#pinDisplay').textContent = state.pin.padEnd(4, '-').split('').join(' ');
+    renderPinDisplay();
   });
+
+  // Masked PIN readout: filled dot per digit entered, dash per digit remaining.
+  // Never renders the actual digits.
+  function renderPinDisplay() {
+    var masked = state.pin.replace(/./g, '\u25CF').padEnd(4, '-');
+    $('#pinDisplay').textContent = masked.split('').join(' ');
+  }
 
   function doLogin() {
     var userId = $('#userIdInput').value.trim().toUpperCase();
     if (!userId) { toast('Enter your Worker ID', true); return; }
     if (state.pin.length !== 4) { toast('PIN must be 4 digits', true); return; }
 
+    if (!SCRIPT_URL || SCRIPT_URL.indexOf('<?') === 0 || SCRIPT_URL === '') {
+      toast('App not connected to the script backend (scriptUrl missing) — reload from the deployed web app URL, not a local file.', true);
+      return;
+    }
+
     post('LOGIN', { user_id: userId, pin: state.pin }).then(function (res) {
       state.pin = '';
-      $('#pinDisplay').textContent = '- - - -';
+      renderPinDisplay();
       if (!res.ok) { toast(res.error || 'Login failed', true); return; }
 
       state.user = res;
