@@ -311,7 +311,7 @@
     $(id).classList.add('active');
   }
   function toast(msg, isError) {
-    var t = $('toast');
+    var t = $('#toast');
     t.textContent = msg;
     t.className = 'toast show' + (isError ? ' error' : '');
     setTimeout(function () { t.className = 'toast'; }, 3200);
@@ -358,7 +358,13 @@
     if (!userId) { toast('Enter your Worker ID', true); return; }
     if (state.pin.length !== 4) { toast('PIN must be 4 digits', true); return; }
 
-    if (!SCRIPT_URL || SCRIPT_URL.indexOf('<?') === 0 || SCRIPT_URL === '') {
+    // Built via fromCharCode, not written as a literal here — Apps Script's HtmlService
+    // template compiler treats that two-character open-scriptlet delimiter anywhere in
+    // this file (even inside a client-side script string, even in a comment) as the
+    // start of a server scriptlet, which broke page load entirely when this check used
+    // the raw delimiter characters directly.
+    var UNRESOLVED_MARKER = String.fromCharCode(60, 63);
+    if (!SCRIPT_URL || SCRIPT_URL.indexOf(UNRESOLVED_MARKER) === 0 || SCRIPT_URL === '') {
       toast('App not connected to the script backend (scriptUrl missing) — reload from the deployed web app URL, not a local file.', true);
       return;
     }
