@@ -400,12 +400,26 @@
   function startScanner() {
     if (state.html5QrCode) return;
     state.html5QrCode = new Html5Qrcode('qr-reader');
-    state.html5QrCode.start(
-      { facingMode: 'environment' },
-      { fps: 10, qrbox: 240 },
-      onScanSuccess,
-      function () { /* ignore per-frame scan misses */ }
-    ).catch(function (err) { toast('Camera error: ' + err, true); });
+    var scanConfig = { fps: 10, qrbox: 240 };
+
+    // Prefer the rear ("environment") camera — the normal case on a phone/tablet in
+    // the field. If that constraint can't be satisfied (e.g. NotFoundError — no camera
+    // matches "environment", commonly a desktop/laptop with only a front webcam, or a
+    // device that just doesn't report facingMode reliably), fall back to whatever
+    // camera Html5Qrcode can actually find, rather than hard-failing the scan screen.
+    state.html5QrCode.start({ facingMode: 'environment' }, scanConfig, onScanSuccess, function () {})
+      .catch(function (err) {
+        Html5Qrcode.getCameras().then(function (cameras) {
+          if (!cameras || !cameras.length) {
+            toast('No camera found on this device', true);
+            return;
+          }
+          state.html5QrCode.start(cameras[0].id, scanConfig, onScanSuccess, function () {})
+            .catch(function (fallbackErr) { toast('Camera error: ' + fallbackErr, true); });
+        }).catch(function (listErr) {
+          toast('Camera error: ' + listErr, true);
+        });
+      });
   }
   function stopScanner() {
     if (state.html5QrCode) {
