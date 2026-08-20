@@ -530,8 +530,21 @@
       });
   }
   function stopScanner() {
+    // Html5Qrcode.stop() throws SYNCHRONOUSLY (not a rejected promise) if the scanner
+    // was never actually in a "scanning" state — e.g. no camera present, permission
+    // denied, or .start() is still pending/failed (common on desktop test setups).
+    // A .catch() on the call can't catch that synchronous throw, so it must be
+    // wrapped in try/catch or it silently aborts whatever click handler called us
+    // (e.g. the manual Bed ID entry flow, which routes through here too).
     if (state.html5QrCode) {
-      state.html5QrCode.stop().catch(function () {});
+      try {
+        var stopResult = state.html5QrCode.stop();
+        if (stopResult && typeof stopResult.catch === 'function') {
+          stopResult.catch(function () {});
+        }
+      } catch (err) {
+        // Scanner wasn't running — nothing to stop, safe to ignore.
+      }
       state.html5QrCode = null;
     }
   }
@@ -578,26 +591,31 @@
   });
 
   $('#manualEntrySubmitBtn').addEventListener('click', function () {
-    var raw = $('#manualBedIdInput').value.trim().toUpperCase();
-    if (!raw) { toast('Enter a Bed ID', true); return; }
+    try {
+      var raw = $('#manualBedIdInput').value.trim().toUpperCase();
+      if (!raw) { toast('Enter a Bed ID', true); return; }
 
-    // Validate against the live BED_MASTER roster when we have one. If the roster
-    // never loaded (offline), fall back to accepting the typed ID unvalidated rather
-    // than fully blocking the field app — Start_Session will still reject an unknown
-    // Bed_ID server-side (see Database.gs startSession), just without the early hint.
-    if (state.bedMap && !state.bedMap[raw]) {
-      toast('Unknown Bed ID: ' + raw + ' — check BED_MASTER or try Refresh', true);
-      return;
+      // Validate against the live BED_MASTER roster when we have one. If the roster
+      // never loaded (offline), fall back to accepting the typed ID unvalidated rather
+      // than fully blocking the field app — Start_Session will still reject an unknown
+      // Bed_ID server-side (see Database.gs startSession), just without the early hint.
+      if (state.bedMap && !state.bedMap[raw]) {
+        toast('Unknown Bed ID: ' + raw + ' — check BED_MASTER or try Refresh', true);
+        return;
+      }
+
+      // Accept either "BRO-014" or "BED:BRO-014" — normalize to the same string
+      // onScanSuccess expects so both paths share one validation/assignment routine.
+      var asScanPayload = raw.indexOf('BED:') === 0 ? raw : 'BED:' + raw;
+      onScanSuccess(asScanPayload);
+      $('#manualBedIdInput').value = '';
+      $('#manualEntryHint').textContent = '';
+      $('#manualEntryHint').className = 'manual-entry-hint';
+      $('#manualEntryBox').style.display = 'none';
+    } catch (err) {
+      // Surface any unexpected error instead of failing silently.
+      toast('Could not select bed: ' + err, true);
     }
-
-    // Accept either "BRO-014" or "BED:BRO-014" — normalize to the same string
-    // onScanSuccess expects so both paths share one validation/assignment routine.
-    var asScanPayload = raw.indexOf('BED:') === 0 ? raw : 'BED:' + raw;
-    onScanSuccess(asScanPayload);
-    $('#manualBedIdInput').value = '';
-    $('#manualEntryHint').textContent = '';
-    $('#manualEntryHint').className = 'manual-entry-hint';
-    $('#manualEntryBox').style.display = 'none';
   });
   $('#backToScanBtn').addEventListener('click', function () {
     showScreen('screen-scan');
