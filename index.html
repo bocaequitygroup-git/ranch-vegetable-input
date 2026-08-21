@@ -1,9 +1,176 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <base target="_top">
   <meta charset="utf-8">
-  <?!= include('WorkerAppCSS'); ?>
+  <style>
+  /* ---------------------------------------------------------------------
+     Ngapori Ranch Worker App -- design tokens
+     A field tool, not a marketing page: high contrast for direct sun,
+     large tap targets for gloved hands, and a "stamped field-stake tag"
+     motif for IDs (Bed/Cohort codes) since that's literally how the ranch
+     already labels things (QR_REGISTRY notes plates on headland risers and
+     nursery tray tags).
+  --------------------------------------------------------------------- */
+  @import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap');
+
+  :root {
+    --ink: #1C2321;
+    --paper: #FAF8F2;
+    --paper-dim: #F1EEE3;
+    --rust: #B5482B;
+    --rust-dark: #8F3620;
+    --field-green: #3A5F3D;
+    --field-green-dark: #2A4630;
+    --soil: #6B5544;
+    --amber: #C68B12;
+    --alert-red: #A6291F;
+    --line: #D8D2C4;
+    --line-strong: #B7AF9B;
+    --radius: 10px;
+    --tap: 56px;
+  }
+
+  * { box-sizing: border-box; }
+
+  html, body {
+    margin: 0; padding: 0;
+    background: var(--paper);
+    color: var(--ink);
+    font-family: 'IBM Plex Sans', system-ui, sans-serif;
+    -webkit-tap-highlight-color: transparent;
+    overscroll-behavior-y: contain;
+  }
+
+  #app { max-width: 480px; margin: 0 auto; min-height: 100vh; display: flex; flex-direction: column; }
+
+  .topbar {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 14px 16px; border-bottom: 3px solid var(--ink);
+    background: var(--ink); color: var(--paper);
+  }
+  .topbar .brand { font-family: 'Bebas Neue', sans-serif; font-size: 22px; letter-spacing: 0.06em; }
+  .topbar .status-dot { width: 10px; height: 10px; border-radius: 50%; background: var(--field-green); display: inline-block; margin-right: 6px; }
+  .topbar .status-dot.offline { background: var(--alert-red); }
+  .topbar .status { font-size: 12px; font-family: 'IBM Plex Mono', monospace; opacity: 0.85; display:flex; align-items:center; }
+
+  .screen { flex: 1; padding: 20px 18px 100px; display: none; }
+  .screen.active { display: block; }
+
+  h1.page-title {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 34px; letter-spacing: 0.03em; margin: 4px 0 18px;
+    color: var(--ink);
+  }
+  .subtitle { font-size: 14px; color: var(--soil); margin: -12px 0 20px; }
+
+  label { display: block; font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: var(--soil); margin: 16px 0 6px; }
+  input[type=text], input[type=password], input[type=number], select, textarea {
+    width: 100%; padding: 14px 12px; font-size: 17px; font-family: inherit;
+    border: 2px solid var(--line-strong); border-radius: var(--radius);
+    background: #fff; color: var(--ink); min-height: var(--tap);
+  }
+  input:focus, select:focus, textarea:focus { outline: 3px solid var(--field-green); outline-offset: 1px; border-color: var(--field-green); }
+  textarea { min-height: 90px; resize: vertical; }
+
+  button { font-family: inherit; cursor: pointer; border: none; }
+  .btn {
+    width: 100%; min-height: var(--tap); border-radius: var(--radius);
+    font-size: 17px; font-weight: 700; letter-spacing: 0.02em;
+    display: flex; align-items: center; justify-content: center; gap: 8px;
+    margin-top: 14px; transition: transform 0.05s ease;
+  }
+  .btn:active { transform: scale(0.98); }
+  .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+  .btn-primary { background: var(--rust); color: #fff; }
+  .btn-primary:active:not(:disabled) { background: var(--rust-dark); }
+  .btn-success { background: var(--field-green); color: #fff; }
+  .btn-success:active:not(:disabled) { background: var(--field-green-dark); }
+  .btn-warn { background: var(--amber); color: var(--ink); }
+  .btn-danger { background: var(--alert-red); color: #fff; }
+  .btn-ghost { background: transparent; color: var(--ink); border: 2px solid var(--line-strong); }
+  .btn-block-secondary { background: var(--paper-dim); color: var(--ink); border: 2px solid var(--line); }
+
+  /* Stamped field-stake tag, used for Bed_ID / Cohort_ID / Session_ID display */
+  .tag {
+    display: inline-flex; align-items: center; gap: 6px;
+    font-family: 'IBM Plex Mono', monospace; font-weight: 600; font-size: 13px;
+    background: var(--ink); color: var(--paper);
+    padding: 5px 10px; border-radius: 4px; letter-spacing: 0.03em;
+    transform: rotate(-0.6deg);
+  }
+  .tag.tag-outline { background: transparent; color: var(--ink); border: 2px dashed var(--line-strong); }
+
+  .card {
+    background: #fff; border: 2px solid var(--line); border-radius: var(--radius);
+    padding: 16px; margin-bottom: 14px;
+  }
+  .card-row { display: flex; justify-content: space-between; align-items: center; padding: 8px 0; border-bottom: 1px solid var(--line); }
+  .card-row:last-child { border-bottom: none; }
+  .card-row .k { font-size: 12px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--soil); }
+  .card-row .v { font-weight: 600; font-size: 15px; text-align: right; }
+
+  .state-pill {
+    display: inline-block; padding: 4px 10px; border-radius: 999px;
+    font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em;
+  }
+  .state-pill.ACTIVE { background: #E4EFE4; color: var(--field-green-dark); }
+  .state-pill.PAUSED { background: #FBEFD8; color: var(--amber); }
+  .state-pill.COMPLETED { background: #E4EFE4; color: var(--field-green-dark); }
+
+  .activity-grid { display: flex; flex-direction: column; gap: 8px; margin-top: 6px; }
+  .activity-group-label { font-family: 'Bebas Neue', sans-serif; font-size: 16px; letter-spacing: 0.04em; color: var(--soil); margin: 16px 0 4px; }
+  .activity-option {
+    width: 100%; text-align: left; padding: 14px; border-radius: var(--radius);
+    border: 2px solid var(--line-strong); background: #fff; font-size: 16px; font-weight: 600;
+    min-height: var(--tap); display: flex; align-items: center; justify-content: space-between;
+  }
+  .activity-option.selected { border-color: var(--rust); background: #FBEFEA; }
+
+  .timer {
+    font-family: 'IBM Plex Mono', monospace; font-size: 48px; font-weight: 600;
+    text-align: center; margin: 18px 0; letter-spacing: 0.02em;
+  }
+  .timer.paused { color: var(--amber); }
+
+  .action-row { display: flex; gap: 10px; margin-top: 10px; }
+  .action-row .btn { margin-top: 0; }
+
+  .scan-frame {
+    aspect-ratio: 1 / 1; width: 100%; border-radius: var(--radius);
+    background: #000; overflow: hidden; position: relative; margin-bottom: 14px;
+    border: 3px solid var(--ink);
+  }
+  #qr-reader { width: 100%; height: 100%; }
+  .scan-hint { text-align: center; font-size: 13px; color: var(--soil); margin-bottom: 10px; }
+  .divider-or { display: flex; align-items: center; gap: 10px; margin: 18px 0 6px; color: var(--soil); font-size: 12px; text-transform: uppercase; letter-spacing: 0.08em; }
+  .divider-or::before, .divider-or::after { content: ''; flex: 1; height: 1px; background: var(--line); }
+
+  .error-banner {
+    background: #FBEAE8; border: 2px solid var(--alert-red); color: var(--rust-dark);
+    padding: 12px 14px; border-radius: var(--radius); font-size: 14px; font-weight: 600; margin-bottom: 14px;
+    display: none;
+  }
+  .error-banner.show { display: block; }
+
+  .queue-banner {
+    background: var(--amber); color: var(--ink); font-size: 12px; font-weight: 700;
+    text-align: center; padding: 6px; display: none;
+  }
+  .queue-banner.show { display: block; }
+
+  .empty-state { text-align: center; padding: 40px 20px; color: var(--soil); }
+  .empty-state .glyph { font-size: 40px; margin-bottom: 10px; }
+
+  a.link-btn { display:block; text-align:center; margin-top: 14px; color: var(--soil); font-size: 14px; text-decoration: underline; cursor: pointer; }
+
+  .photo-preview { width: 100%; max-height: 160px; object-fit: cover; border-radius: var(--radius); margin-top: 10px; border: 2px solid var(--line); }
+
+  ::selection { background: var(--amber); }
+
+  @media (prefers-reduced-motion: reduce) {
+    * { transition: none !important; }
+  }
+</style>
 </head>
 <body>
   <div id="app">
@@ -133,7 +300,568 @@
   </div>
 
   <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
-  <script>window.SCRIPT_URL = "<?= scriptUrl ?>";</script>
-  <?!= include('WorkerAppJS'); ?>
+  <script>
+    // ---------------------------------------------------------------
+    // EDIT THIS whenever you redeploy the Apps Script backend (Deploy ->
+    // Manage deployments -> the "Web app" URL ending in /exec). This is
+    // the ONLY host-specific setting in this file -- everything else is
+    // fully static and can be hosted anywhere (GitHub Pages, Netlify,
+    // S3, a plain web server, etc).
+    // ---------------------------------------------------------------
+    window.SCRIPT_URL = "https://script.google.com/macros/s/AKfycby9x30ocRrG9AwOYATrspBX1zyJgWKrSjii5qp7rag6tvBrKUGUfOdeKCuPU_UzS_sQyg/exec";
+  </script>
+  <script>
+/**
+ * WorkerAppJS.html
+ *
+ * Client logic for the Worker App. Talks to Code.gs's doPost() router only
+ * -- no other tables are read/written directly from the browser, per the
+ * "stateless, all authoritative state lives in Sheets" principle.
+ *
+ * Offline tolerance: every API call goes through callApi(). If the network
+ * is down or the request fails, WRITE actions (anything that changes
+ * server state) are queued in localStorage and retried when connectivity
+ * returns. READ actions (scan-bed) are not queued -- there's nothing
+ * useful to show the worker from a stale local cache of bed state, so
+ * those simply surface an error and let the worker retry the scan.
+ */
+
+(function () {
+  'use strict';
+
+  var ACTIVITY_TAXONOMY = {
+    'Land Prep & Soil': ['LandPrep', 'Tillage', 'BedForming', 'Solarization', 'CoverCropSeeding'],
+    'Seeding & Planting': ['Planting', 'DirectSeeding', 'Transplanting', 'Replanting'],
+    'Crop Care & Maintenance': ['Irrigation', 'Fertigation', 'Weeding', 'Pruning', 'Trellising', 'Thinning', 'PestControl'],
+    'Harvest & Post-Harvest': ['Harvest', 'PostHarvestCuring', 'FieldPacking'],
+    'Sanitation & Turnover': ['FieldTurnover', 'CropRemoval', 'FieldSanitation', 'StateChange']
+  };
+
+  var QUEUE_KEY = 'vpos_worker_app_queue_v1';
+  var SESSION_KEY = 'vpos_worker_app_session_v1';
+
+  // ---- App state (in-memory; auth identity persisted to localStorage so a
+  // refresh mid-shift doesn't force a re-login) ----
+  var state = {
+    workerId: null,
+    fullName: null,
+    role: null,
+    bed: null,          // last resolveBed() result
+    activityType: null,
+    session: null,       // { Session_ID, Bed_ID, Cohort_ID, Crop_ID, Activity_Type, Start_Time, ... }
+    isPaused: false,
+    timerHandle: null
+  };
+
+  // ---------------------------------------------------------------------
+  // API layer + offline queue
+  // ---------------------------------------------------------------------
+
+  function callApi(action, payload, opts) {
+    opts = opts || {};
+    var body = JSON.stringify({ action: action, payload: payload });
+
+    return fetch(window.SCRIPT_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' }, // avoids CORS preflight on Apps Script web apps
+      body: body
+    })
+      .then(function (res) { return res.json(); })
+      .catch(function (err) {
+        if (opts.queueOnFailure) {
+          enqueue(action, payload);
+          return { success: false, queued: true, error: 'Offline -- action queued and will sync automatically.' };
+        }
+        return { success: false, error: 'Network error: ' + err.message };
+      });
+  }
+
+  function enqueue(action, payload) {
+    var q = getQueue();
+    q.push({ action: action, payload: payload, queuedAt: Date.now() });
+    localStorage.setItem(QUEUE_KEY, JSON.stringify(q));
+    renderQueueBanner();
+  }
+
+  function getQueue() {
+    try { return JSON.parse(localStorage.getItem(QUEUE_KEY)) || []; }
+    catch (e) { return []; }
+  }
+
+  function renderQueueBanner() {
+    var q = getQueue();
+    var banner = document.getElementById('queueBanner');
+    if (q.length > 0) {
+      banner.textContent = q.length + ' action' + (q.length === 1 ? '' : 's') + ' waiting to sync';
+      banner.classList.add('show');
+    } else {
+      banner.classList.remove('show');
+    }
+  }
+
+  function flushQueue() {
+    var q = getQueue();
+    if (q.length === 0 || !navigator.onLine) return;
+
+    var next = q[0];
+    callApi(next.action, next.payload, { queueOnFailure: false }).then(function (res) {
+      // Whether it succeeded or failed for a *server* reason (not a network
+      // error), pop it -- retrying a request the server already rejected
+      // (e.g. "already has an open session") would just loop forever.
+      var remaining = getQueue();
+      remaining.shift();
+      localStorage.setItem(QUEUE_KEY, JSON.stringify(remaining));
+      renderQueueBanner();
+      if (remaining.length > 0) flushQueue();
+    });
+  }
+
+  window.addEventListener('online', function () { updateConnStatus(); flushQueue(); });
+  window.addEventListener('offline', updateConnStatus);
+  setInterval(function () { if (navigator.onLine) flushQueue(); }, 15000);
+
+  function updateConnStatus() {
+    var dot = document.getElementById('connDot');
+    var label = document.getElementById('connLabel');
+    if (navigator.onLine) {
+      dot.classList.remove('offline'); label.textContent = 'Online';
+    } else {
+      dot.classList.add('offline'); label.textContent = 'Offline';
+    }
+  }
+
+  // ---------------------------------------------------------------------
+  // Screen navigation
+  // ---------------------------------------------------------------------
+
+  function showScreen(id) {
+    document.querySelectorAll('.screen').forEach(function (el) { el.classList.remove('active'); });
+    document.getElementById(id).classList.add('active');
+  }
+
+  function showError(elId, message) {
+    var el = document.getElementById(elId);
+    el.textContent = message;
+    el.classList.add('show');
+  }
+  function clearError(elId) {
+    var el = document.getElementById(elId);
+    el.textContent = '';
+    el.classList.remove('show');
+  }
+
+  // ---------------------------------------------------------------------
+  // Screen 1: Login
+  // ---------------------------------------------------------------------
+
+  document.getElementById('btnLogin').addEventListener('click', function () {
+    clearError('loginError');
+    var workerId = document.getElementById('loginWorkerId').value.trim();
+    var pin = document.getElementById('loginPin').value;
+    if (!workerId || !pin) { showError('loginError', 'Enter your Worker ID and PIN.'); return; }
+
+    var btn = this; btn.disabled = true; btn.textContent = 'Logging in\u2026';
+    callApi('login', { workerId: workerId, pin: pin }).then(function (res) {
+      btn.disabled = false; btn.textContent = 'Log In';
+      if (!res.success) { showError('loginError', res.error || 'Login failed.'); return; }
+      state.workerId = res.userId;
+      state.fullName = res.fullName;
+      state.role = res.role;
+      localStorage.setItem(SESSION_KEY, JSON.stringify({ workerId: res.userId, fullName: res.fullName, role: res.role }));
+      document.getElementById('scanWelcome').textContent = 'Hi ' + res.fullName + ' \u2014 scan a bed to begin.';
+      showScreen('screen-scan');
+      startQrScanner();
+    });
+  });
+
+  document.getElementById('btnLogout').addEventListener('click', function () {
+    stopQrScanner();
+    callApi('logout', { workerId: state.workerId });
+    localStorage.removeItem(SESSION_KEY);
+    state.workerId = null; state.fullName = null; state.role = null;
+    document.getElementById('loginWorkerId').value = '';
+    document.getElementById('loginPin').value = '';
+    showScreen('screen-login');
+  });
+
+  // ---------------------------------------------------------------------
+  // Screen 2: Scan Bed
+  // ---------------------------------------------------------------------
+
+  var qrScanner = null;
+  var bedListLoaded = false;
+
+  function loadBedListForAutocomplete() {
+    if (bedListLoaded) return; // 231 beds, static for the session -- fetch once
+    callApi('list-beds', {}).then(function (res) {
+      if (!res.success) return; // non-critical -- manual typing still works without it
+      bedListLoaded = true;
+      var datalist = document.getElementById('bedIdList');
+      datalist.innerHTML = '';
+      res.beds.forEach(function (b) {
+        var opt = document.createElement('option');
+        opt.value = b.Bed_ID;
+        opt.label = b.Block_ID + ' \u2014 ' + (b.Current_Crop || '\u2014') + ' (' + b.Current_State + ')';
+        datalist.appendChild(opt);
+      });
+    });
+  }
+
+  function startQrScanner() {
+    loadBedListForAutocomplete();
+    if (!window.Html5Qrcode) return;
+    var el = document.getElementById('qr-reader');
+    if (!el) return;
+    try {
+      qrScanner = new Html5Qrcode('qr-reader');
+      qrScanner.start(
+        { facingMode: 'environment' },
+        { fps: 10, qrbox: 220 },
+        function (decodedText) { onQrDecoded(decodedText); },
+        function () { /* per-frame decode miss, ignore */ }
+      ).catch(function () {
+        document.getElementById('scanError').classList.add('show');
+        document.getElementById('scanError').textContent = 'Camera unavailable -- use manual entry below.';
+      });
+    } catch (e) { /* camera not available; manual entry still works */ }
+  }
+
+  function stopQrScanner() {
+    if (qrScanner) {
+      // qrScanner.stop() can throw *synchronously* (not just reject) when
+      // the scanner never reached a running state -- e.g. no camera on
+      // desktop, or permission denied. A plain .catch() only handles a
+      // rejected promise, so it can't catch that. Wrap in try/catch too,
+      // otherwise this throw escapes into whatever called stopQrScanner()
+      // (e.g. mid-way through resolveBedAndAdvance's success handler) and
+      // silently kills everything after it -- symptom: click "Resolve Bed",
+      // nothing happens.
+      try {
+        var result = qrScanner.stop();
+        if (result && typeof result.catch === 'function') result.catch(function () {});
+      } catch (e) { /* scanner was never running; nothing to stop */ }
+      qrScanner = null;
+    }
+  }
+
+  function onQrDecoded(text) {
+    // QR_REGISTRY format: BED:<Bed_ID>
+    var parts = text.split(':');
+    if (parts[0] !== 'BED') {
+      showError('scanError', 'That QR code is not a bed marker (' + text + ').');
+      return;
+    }
+    clearError('scanError');
+    resolveBedAndAdvance(parts.slice(1).join(':'));
+  }
+
+  document.getElementById('btnResolveManual').addEventListener('click', function () {
+    var bedId = document.getElementById('manualBedId').value.trim();
+    if (!bedId) { showError('scanError', 'Enter a Bed ID.'); return; }
+    resolveBedAndAdvance(bedId);
+  });
+
+  function resolveBedAndAdvance(bedId) {
+    clearError('scanError');
+    callApi('scan-bed', { bedId: bedId, workerId: state.workerId }).then(function (res) {
+      if (!res.success) { showError('scanError', res.error || 'Could not resolve that bed.'); return; }
+      try {
+        state.bed = res;
+        state.activityType = null;
+        stopQrScanner();
+        renderActivityScreen();
+        showScreen('screen-activity');
+      } catch (e) {
+        // Belt-and-suspenders: if anything in here throws, surface it
+        // instead of leaving the worker stuck on a dead "Resolve Bed"
+        // click with no feedback at all.
+        showError('scanError', 'Something went wrong showing that bed: ' + e.message);
+      }
+    });
+  }
+
+  document.getElementById('btnRescan1').addEventListener('click', function () {
+    showScreen('screen-scan');
+    startQrScanner();
+  });
+
+  // ---------------------------------------------------------------------
+  // Screen 3: Select Activity
+  // ---------------------------------------------------------------------
+
+  function renderActivityScreen() {
+    var b = state.bed;
+    document.getElementById('bedSummaryCard').innerHTML =
+      row('Bed', tag(b.Bed_ID)) +
+      row('Block / Zone', b.Block_ID + ' / ' + (b.Irrigation_Zone_ID || '\u2014')) +
+      row('Cohort', b.Cohort_ID ? tag(b.Cohort_ID) : '\u2014') +
+      row('Crop', b.Crop_Name || b.Crop_ID || '\u2014') +
+      row('Current State', '<span class="state-pill ACTIVE">' + escapeHtml(b.Current_State) + '</span>');
+
+    var allowedSet = new Set(b.Allowed_Activities || []);
+    var container = document.getElementById('activityGroups');
+    container.innerHTML = '';
+
+    Object.keys(ACTIVITY_TAXONOMY).forEach(function (group) {
+      var items = ACTIVITY_TAXONOMY[group].filter(function (a) { return allowedSet.has(a); });
+      if (items.length === 0) return;
+
+      var label = document.createElement('div');
+      label.className = 'activity-group-label';
+      label.textContent = group;
+      container.appendChild(label);
+
+      var grid = document.createElement('div');
+      grid.className = 'activity-grid';
+      items.forEach(function (activity) {
+        var btn = document.createElement('button');
+        btn.className = 'activity-option';
+        btn.textContent = humanize(activity);
+        btn.dataset.activity = activity;
+        btn.addEventListener('click', function () {
+          document.querySelectorAll('.activity-option').forEach(function (el) { el.classList.remove('selected'); });
+          btn.classList.add('selected');
+          state.activityType = activity;
+          document.getElementById('btnToStart').disabled = false;
+        });
+        grid.appendChild(btn);
+      });
+      container.appendChild(grid);
+    });
+  }
+
+  document.getElementById('btnToStart').addEventListener('click', function () {
+    if (!state.activityType) return;
+    document.getElementById('startSummaryCard').innerHTML =
+      row('Bed', tag(state.bed.Bed_ID)) +
+      row('Cohort', state.bed.Cohort_ID ? tag(state.bed.Cohort_ID) : '\u2014') +
+      row('Crop', state.bed.Crop_Name || state.bed.Crop_ID || '\u2014') +
+      row('Activity', humanize(state.activityType));
+    showScreen('screen-start');
+  });
+
+  document.getElementById('btnBackToActivity').addEventListener('click', function () { showScreen('screen-activity'); });
+
+  // ---------------------------------------------------------------------
+  // Screen 4: Start Activity
+  // ---------------------------------------------------------------------
+
+  document.getElementById('btnStart').addEventListener('click', function () {
+    var btn = this; btn.disabled = true; btn.textContent = 'Starting\u2026';
+    callApi('start-session', {
+      workerId: state.workerId,
+      bedId: state.bed.Bed_ID,
+      activityType: state.activityType
+    }).then(function (res) {
+      btn.disabled = false; btn.textContent = 'Start';
+      if (!res.success) { alert(res.error || 'Could not start session.'); return; }
+      state.session = res;
+      state.isPaused = false;
+      renderWorkScreen();
+      startTimer();
+      showScreen('screen-work');
+    });
+  });
+
+  // ---------------------------------------------------------------------
+  // Screen 5: Work (+ Screen 6 Pause/Resume folded in)
+  // ---------------------------------------------------------------------
+
+  function renderWorkScreen() {
+    var s = state.session;
+    document.getElementById('workSummaryCard').innerHTML =
+      row('Bed', tag(s.Bed_ID)) +
+      row('Cohort', s.Cohort_ID ? tag(s.Cohort_ID) : '\u2014') +
+      row('Crop', s.Crop_Name || s.Crop_ID || '\u2014') +
+      row('Activity', humanize(s.Activity_Type)) +
+      row('Status', '<span class="state-pill ' + s.Session_Status + '">' + s.Session_Status + '</span>');
+    togglePauseButtons();
+  }
+
+  function togglePauseButtons() {
+    document.getElementById('btnPause').style.display = state.isPaused ? 'none' : 'flex';
+    document.getElementById('btnResume').style.display = state.isPaused ? 'flex' : 'none';
+    document.getElementById('workTimer').classList.toggle('paused', state.isPaused);
+  }
+
+  function startTimer() {
+    var startedAt = new Date(state.session.Start_Time).getTime();
+    if (isNaN(startedAt)) startedAt = Date.now();
+    if (state.timerHandle) clearInterval(state.timerHandle);
+    state.timerHandle = setInterval(function () {
+      if (state.isPaused) return;
+      var elapsed = Math.max(0, Date.now() - startedAt);
+      document.getElementById('workTimer').textContent = formatDuration(elapsed);
+    }, 1000);
+  }
+  function stopTimer() {
+    if (state.timerHandle) { clearInterval(state.timerHandle); state.timerHandle = null; }
+  }
+
+  document.getElementById('btnPause').addEventListener('click', function () {
+    callApi('pause-session', { workerId: state.workerId, sessionId: state.session.Session_ID }, { queueOnFailure: true })
+      .then(function (res) {
+        if (!res.success && !res.queued) { alert(res.error || 'Could not pause.'); return; }
+        state.isPaused = true;
+        state.session.Session_Status = 'PAUSED';
+        togglePauseButtons();
+      });
+  });
+
+  document.getElementById('btnResume').addEventListener('click', function () {
+    callApi('resume-session', { workerId: state.workerId, sessionId: state.session.Session_ID }, { queueOnFailure: true })
+      .then(function (res) {
+        if (!res.success && !res.queued) { alert(res.error || 'Could not resume.'); return; }
+        state.isPaused = false;
+        state.session.Session_Status = 'ACTIVE';
+        // Resume rewrites Start_Time server-side; restart the local timer
+        // baseline to "now" to match, since we don't get the new value back
+        // from a queued (offline) resume.
+        state.session.Start_Time = new Date().toISOString();
+        startTimer();
+        togglePauseButtons();
+      });
+  });
+
+  document.getElementById('btnComplete').addEventListener('click', function () {
+    document.getElementById('completeSummaryCard').innerHTML =
+      row('Bed', tag(state.session.Bed_ID)) +
+      row('Activity', humanize(state.session.Activity_Type));
+    showScreen('screen-complete');
+  });
+
+  document.getElementById('btnBackToWork').addEventListener('click', function () { showScreen('screen-work'); });
+
+  // ---------------------------------------------------------------------
+  // Screen 6: Report Exception
+  // ---------------------------------------------------------------------
+
+  document.getElementById('btnException').addEventListener('click', function () {
+    clearError('exceptionError');
+    document.getElementById('excType').value = '';
+    document.getElementById('excSeverity').value = 'Medium';
+    document.getElementById('excNotes').value = '';
+    document.getElementById('excPhoto').value = '';
+    document.getElementById('excPhotoPreview').style.display = 'none';
+    showScreen('screen-exception');
+  });
+
+  document.getElementById('btnCancelException').addEventListener('click', function () { showScreen('screen-work'); });
+
+  document.getElementById('excPhoto').addEventListener('change', function (e) {
+    var file = e.target.files[0];
+    if (!file) return;
+    var reader = new FileReader();
+    reader.onload = function (ev) {
+      var preview = document.getElementById('excPhotoPreview');
+      preview.src = ev.target.result;
+      preview.style.display = 'block';
+    };
+    reader.readAsDataURL(file);
+  });
+
+  document.getElementById('btnSubmitException').addEventListener('click', function () {
+    clearError('exceptionError');
+    var type = document.getElementById('excType').value;
+    if (!type) { showError('exceptionError', 'Select an exception type.'); return; }
+    var severity = document.getElementById('excSeverity').value;
+    var notes = document.getElementById('excNotes').value.trim();
+    var photoDataUrl = document.getElementById('excPhotoPreview').src || '';
+    // NOTE: for a production deployment, uploading the actual photo bytes
+    // to Drive (via a dedicated /upload-photo action returning a Drive URL)
+    // is the right approach -- passing a full data: URL through as
+    // Photo_URL works but bloats FIELD_LIVE_SESSION cells for large images.
+    // Left as the simplest thing that fully implements Screen 7 end-to-end;
+    // flagging the swap-in point clearly rather than half-building Drive
+    // upload here.
+
+    var btn = this; btn.disabled = true; btn.textContent = 'Submitting\u2026';
+    callApi('report-exception', {
+      workerId: state.workerId,
+      sessionId: state.session.Session_ID,
+      exceptionType: type,
+      severity: severity,
+      notes: notes,
+      photoUrl: document.getElementById('excPhoto').files.length ? photoDataUrl : ''
+    }, { queueOnFailure: true }).then(function (res) {
+      btn.disabled = false; btn.textContent = 'Submit Exception';
+      if (!res.success && !res.queued) { showError('exceptionError', res.error || 'Could not submit.'); return; }
+      showScreen('screen-work');
+    });
+  });
+
+  // ---------------------------------------------------------------------
+  // Screen 8: Complete Activity
+  // ---------------------------------------------------------------------
+
+  document.getElementById('btnConfirmComplete').addEventListener('click', function () {
+    var qty = document.getElementById('completeQty').value;
+    var unit = document.getElementById('completeUnit').value;
+
+    var btn = this; btn.disabled = true; btn.textContent = 'Completing\u2026';
+    callApi('complete-session', {
+      workerId: state.workerId,
+      sessionId: state.session.Session_ID,
+      quantity: qty ? Number(qty) : '',
+      unit: unit
+    }, { queueOnFailure: true }).then(function (res) {
+      btn.disabled = false; btn.textContent = 'Complete Activity';
+      if (!res.success && !res.queued) { alert(res.error || 'Could not complete session.'); return; }
+      stopTimer();
+      var elapsedText = (res.Elapsed_Minutes !== undefined && res.Elapsed_Minutes !== null)
+        ? res.Elapsed_Minutes + ' min logged'
+        : 'Will sync once back online';
+      document.getElementById('doneSummary').textContent =
+        humanize(state.session.Activity_Type) + ' on ' + state.session.Bed_ID + ' \u2014 ' + elapsedText;
+      state.session = null;
+      state.bed = null;
+      state.activityType = null;
+      showScreen('screen-done');
+    });
+  });
+
+  document.getElementById('btnScanNext').addEventListener('click', function () {
+    showScreen('screen-scan');
+    startQrScanner();
+  });
+
+  // ---------------------------------------------------------------------
+  // Helpers
+  // ---------------------------------------------------------------------
+
+  function row(k, v) { return '<div class="card-row"><span class="k">' + escapeHtml(k) + '</span><span class="v">' + v + '</span></div>'; }
+  function tag(text) { return '<span class="tag">' + escapeHtml(text) + '</span>'; }
+  function humanize(activityType) { return String(activityType).replace(/([a-z])([A-Z])/g, '$1 $2'); }
+  function escapeHtml(s) { return String(s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
+  function formatDuration(ms) {
+    var totalSec = Math.floor(ms / 1000);
+    var h = Math.floor(totalSec / 3600);
+    var m = Math.floor((totalSec % 3600) / 60);
+    var s = totalSec % 60;
+    return [h, m, s].map(function (n) { return String(n).padStart(2, '0'); }).join(':');
+  }
+
+  // ---------------------------------------------------------------------
+  // Boot
+  // ---------------------------------------------------------------------
+
+  updateConnStatus();
+  renderQueueBanner();
+  flushQueue();
+
+  try {
+    var saved = JSON.parse(localStorage.getItem(SESSION_KEY));
+    if (saved && saved.workerId) {
+      state.workerId = saved.workerId;
+      state.fullName = saved.fullName;
+      state.role = saved.role;
+      document.getElementById('scanWelcome').textContent = 'Hi ' + saved.fullName + ' \u2014 scan a bed to begin.';
+      showScreen('screen-scan');
+      startQrScanner();
+    }
+  } catch (e) { /* no saved session, stay on login */ }
+
+})();
+</script>
 </body>
 </html>
