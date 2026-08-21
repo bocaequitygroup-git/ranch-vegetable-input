@@ -36,7 +36,8 @@
       <div class="scan-hint">Point the camera at the bed's QR plate</div>
       <div class="divider-or">or enter manually</div>
       <label for="manualBedId">Bed ID</label>
-      <input type="text" id="manualBedId" placeholder="B1-02">
+      <input type="text" id="manualBedId" placeholder="B1-02" list="bedIdList" autocomplete="off">
+      <datalist id="bedIdList"></datalist>
       <button class="btn btn-block-secondary" id="btnResolveManual">Resolve Bed</button>
       <a class="link-btn" id="btnLogout">Log out</a>
     </section>
