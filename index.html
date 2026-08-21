@@ -530,22 +530,103 @@
 
   var qrScanner = null;
   var bedListLoaded = false;
+  var bedListLoading = false;
+  var allBeds = []; // full list from list-beds, used by both the datalist and the browse overlay
 
   function loadBedListForAutocomplete() {
-    if (bedListLoaded) return; // 231 beds, static for the session -- fetch once
+    if (bedListLoaded || bedListLoading) return; // 231 beds, static for the session -- fetch once
+    bedListLoading = true;
     callApi('list-beds', {}).then(function (res) {
-      if (!res.success) return; // non-critical -- manual typing still works without it
+      bedListLoading = false;
+      if (!res.success) {
+        showError('scanError', 'Could not load the bed list (' + (res.error || 'unknown error') + '). You can still type a Bed ID exactly and tap Resolve Bed.');
+        return;
+      }
       bedListLoaded = true;
+      allBeds = res.beds;
+
       var datalist = document.getElementById('bedIdList');
       datalist.innerHTML = '';
-      res.beds.forEach(function (b) {
+      allBeds.forEach(function (b) {
         var opt = document.createElement('option');
         opt.value = b.Bed_ID;
         opt.label = b.Block_ID + ' \u2014 ' + (b.Current_Crop || '\u2014') + ' (' + b.Current_State + ')';
         datalist.appendChild(opt);
       });
+
+      if (document.getElementById('bedBrowseOverlay').classList.contains('show')) {
+        renderBedBrowseList(document.getElementById('bedBrowseSearch').value);
+      }
     });
   }
+
+  // ---------------------------------------------------------------------
+  // Bed browse/search overlay
+  // ---------------------------------------------------------------------
+
+  function openBedBrowser() {
+    document.getElementById('bedBrowseSearch').value = '';
+    document.getElementById('bedBrowseOverlay').classList.add('show');
+    document.getElementById('bedBrowseSearch').focus();
+    if (!bedListLoaded) loadBedListForAutocomplete();
+    renderBedBrowseList('');
+  }
+
+  function closeBedBrowser() {
+    document.getElementById('bedBrowseOverlay').classList.remove('show');
+  }
+
+  function renderBedBrowseList(filterText) {
+    var listEl = document.getElementById('bedBrowseList');
+    var q = (filterText || '').trim().toLowerCase();
+
+    if (bedListLoading) {
+      listEl.innerHTML = '<div class="empty-state"><div class="glyph">\u23F3</div>Loading beds&hellip;</div>';
+      return;
+    }
+    if (!bedListLoaded) {
+      listEl.innerHTML = '<div class="empty-state"><div class="glyph">\u26A0\uFE0F</div>Bed list unavailable. Check your connection and reopen this screen.</div>';
+      return;
+    }
+
+    var matches = !q ? allBeds : allBeds.filter(function (b) {
+      return (b.Bed_ID || '').toLowerCase().indexOf(q) !== -1 ||
+             (b.Block_ID || '').toLowerCase().indexOf(q) !== -1 ||
+             (b.Current_Crop || '').toLowerCase().indexOf(q) !== -1;
+    });
+
+    if (matches.length === 0) {
+      listEl.innerHTML = '<div class="empty-state"><div class="glyph">\uD83D\uDD0D</div>No beds match "' + escapeHtml(filterText) + '".</div>';
+      return;
+    }
+
+    var html = '<div class="bed-browse-count">' + matches.length + ' of ' + allBeds.length + ' beds</div>';
+    html += matches.map(function (b) {
+      return '<button type="button" class="bed-row" data-bed-id="' + escapeHtml(b.Bed_ID) + '">' +
+        '<span class="tag">' + escapeHtml(b.Bed_ID) + '</span>' +
+        '<span class="bed-row-meta">' +
+          '<div class="bed-row-block">' + escapeHtml(b.Block_ID || '\u2014') + '</div>' +
+          '<div class="bed-row-sub">' + escapeHtml(b.Current_Crop || '\u2014') + ' \u2014 ' + escapeHtml(b.Current_State || '\u2014') + '</div>' +
+        '</span>' +
+      '</button>';
+    }).join('');
+    listEl.innerHTML = html;
+  }
+
+
+  document.getElementById('btnBrowseBeds').addEventListener('click', openBedBrowser);
+  document.getElementById('btnCloseBedBrowse').addEventListener('click', closeBedBrowser);
+  document.getElementById('bedBrowseSearch').addEventListener('input', function (e) {
+    renderBedBrowseList(e.target.value);
+  });
+  document.getElementById('bedBrowseList').addEventListener('click', function (e) {
+    var row = e.target.closest ? e.target.closest('.bed-row') : null;
+    if (!row) return;
+    var bedId = row.getAttribute('data-bed-id');
+    closeBedBrowser();
+    document.getElementById('manualBedId').value = bedId;
+    resolveBedAndAdvance(bedId);
+  });
 
   function startQrScanner() {
     loadBedListForAutocomplete();
@@ -822,86 +903,4 @@
       exceptionType: type,
       severity: severity,
       notes: notes,
-      photoUrl: document.getElementById('excPhoto').files.length ? photoDataUrl : ''
-    }, { queueOnFailure: true }).then(function (res) {
-      btn.disabled = false; btn.textContent = 'Submit Exception';
-      if (!res.success && !res.queued) { showError('exceptionError', res.error || 'Could not submit.'); return; }
-      showScreen('screen-work');
-    });
-  });
-
-  // ---------------------------------------------------------------------
-  // Screen 8: Complete Activity
-  // ---------------------------------------------------------------------
-
-  document.getElementById('btnConfirmComplete').addEventListener('click', function () {
-    var qty = document.getElementById('completeQty').value;
-    var unit = document.getElementById('completeUnit').value;
-
-    var btn = this; btn.disabled = true; btn.textContent = 'Completing\u2026';
-    callApi('complete-session', {
-      workerId: state.workerId,
-      sessionId: state.session.Session_ID,
-      quantity: qty ? Number(qty) : '',
-      unit: unit
-    }, { queueOnFailure: true }).then(function (res) {
-      btn.disabled = false; btn.textContent = 'Complete Activity';
-      if (!res.success && !res.queued) { alert(res.error || 'Could not complete session.'); return; }
-      stopTimer();
-      var elapsedText = (res.Elapsed_Minutes !== undefined && res.Elapsed_Minutes !== null)
-        ? res.Elapsed_Minutes + ' min logged'
-        : 'Will sync once back online';
-      document.getElementById('doneSummary').textContent =
-        humanize(state.session.Activity_Type) + ' on ' + state.session.Bed_ID + ' \u2014 ' + elapsedText;
-      state.session = null;
-      state.bed = null;
-      state.activityType = null;
-      showScreen('screen-done');
-    });
-  });
-
-  document.getElementById('btnScanNext').addEventListener('click', function () {
-    showScreen('screen-scan');
-    startQrScanner();
-  });
-
-  // ---------------------------------------------------------------------
-  // Helpers
-  // ---------------------------------------------------------------------
-
-  function row(k, v) { return '<div class="card-row"><span class="k">' + escapeHtml(k) + '</span><span class="v">' + v + '</span></div>'; }
-  function tag(text) { return '<span class="tag">' + escapeHtml(text) + '</span>'; }
-  function humanize(activityType) { return String(activityType).replace(/([a-z])([A-Z])/g, '$1 $2'); }
-  function escapeHtml(s) { return String(s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
-  function formatDuration(ms) {
-    var totalSec = Math.floor(ms / 1000);
-    var h = Math.floor(totalSec / 3600);
-    var m = Math.floor((totalSec % 3600) / 60);
-    var s = totalSec % 60;
-    return [h, m, s].map(function (n) { return String(n).padStart(2, '0'); }).join(':');
-  }
-
-  // ---------------------------------------------------------------------
-  // Boot
-  // ---------------------------------------------------------------------
-
-  updateConnStatus();
-  renderQueueBanner();
-  flushQueue();
-
-  try {
-    var saved = JSON.parse(localStorage.getItem(SESSION_KEY));
-    if (saved && saved.workerId) {
-      state.workerId = saved.workerId;
-      state.fullName = saved.fullName;
-      state.role = saved.role;
-      document.getElementById('scanWelcome').textContent = 'Hi ' + saved.fullName + ' \u2014 scan a bed to begin.';
-      showScreen('screen-scan');
-      startQrScanner();
-    }
-  } catch (e) { /* no saved session, stay on login */ }
-
-})();
-</script>
-</body>
-</html>
+      photoUrl: document.getElementById('excPhoto').files.length 
