@@ -2,328 +2,334 @@
 <html>
 <head>
   <base target="_top">
-  <?!= include('Stylesheet'); ?>
+  <style>
+    :root {
+      --primary: #2e7d32;
+      --primary-dark: #1b5e20;
+      --bg: #f4f6f8;
+      --card-bg: #ffffff;
+      --text: #333333;
+      --danger: #d32f2f;
+      --warning: #f57c00;
+    }
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; margin: 0; padding: 0; background: var(--bg); color: var(--text); }
+    .header { background: var(--primary); color: white; padding: 16px; text-align: center; font-weight: bold; font-size: 1.2rem; }
+    .container { padding: 16px; max-width: 600px; margin: 0 auto; }
+    .card { background: var(--card-bg); border-radius: 8px; padding: 16px; margin-bottom: 16px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+    .btn { display: block; width: 100%; padding: 14px; margin: 8px 0; background: var(--primary); color: white; border: none; border-radius: 6px; font-size: 1rem; font-weight: bold; cursor: pointer; text-align: center; box-sizing: border-box; }
+    .btn-secondary { background: #757575; }
+    .btn-warning { background: var(--warning); }
+    .btn-danger { background: var(--danger); }
+    .form-group { margin-bottom: 12px; }
+    label { font-size: 0.85rem; color: #666; display: block; margin-bottom: 4px; }
+    input, select, textarea { width: 100%; padding: 12px; border: 1px solid #ccc; border-radius: 6px; font-size: 1rem; box-sizing: border-box; }
+    .group-header { font-weight: bold; color: var(--primary-dark); margin-top: 12px; margin-bottom: 6px; border-bottom: 1px solid #e0e0e0; padding-bottom: 4px; }
+    .badge { display: inline-block; padding: 4px 8px; border-radius: 4px; font-size: 0.75rem; font-weight: bold; color: white; }
+    .badge-active { background: var(--primary); }
+    .badge-warning { background: var(--warning); }
+    .badge-danger { background: var(--danger); }
+    table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
+    th, td { padding: 8px; text-align: left; border-bottom: 1px solid #ddd; }
+    th { background: #e8f5e9; color: var(--primary-dark); }
+    .hidden { display: none; }
+  </style>
 </head>
 <body>
-<div class="app">
-  <div class="topbar">
-    <div>
-      <h1>Ngapori Ranch VPOS</h1>
-      <div class="sub" id="topbarSub">Field Worker</div>
+
+<div class="header">Ngapori Ranch VPOS</div>
+
+<div class="container">
+
+  <!-- View 1: Worker Login -->
+  <div id="view-login" class="card">
+    <h3>Worker Authentication</h3>
+    <div class="form-group">
+      <label>Worker ID</label>
+      <input type="text" id="login-worker-id" value="W-017">
     </div>
-    <button class="btn btn-outline hidden" id="logoutBtn" style="width:auto;margin:0;padding:8px 12px;font-size:12px;">Log out</button>
+    <div class="form-group">
+      <label>PIN</label>
+      <input type="password" id="login-pin" value="1234">
+    </div>
+    <button class="btn" onclick="appLogin()">Login to VPOS</button>
+    <button class="btn btn-secondary" onclick="switchView('view-manager')">Switch to Manager Board</button>
   </div>
-  <div class="content" id="content">
-    <div class="spinner">Loading...</div>
+
+  <!-- View 2: Scan Bed -->
+  <div id="view-scan" class="card hidden">
+    <h3>Scan Operational Location</h3>
+    <div class="form-group">
+      <label>Scan Bed QR / NFC Code</label>
+      <input type="text" id="scan-bed-input" placeholder="e.g. B-17">
+    </div>
+    <button class="btn" onclick="appScanBed()">Resolve Location</button>
   </div>
+
+  <!-- View 3: Select Activity & Start -->
+  <div id="view-select-task" class="card hidden">
+    <h3>Bed Assignment: <span id="lbl-bed-id" style="color:var(--primary);"></span></h3>
+    <p style="margin:4px 0;"><strong>Cohort:</strong> <span id="lbl-cohort-id"></span> | <strong>Crop:</strong> <span id="lbl-crop"></span></p>
+    
+    <div class="form-group" style="margin-top:16px;">
+      <label>Select 23-Taxonomy Activity</label>
+      <div id="activity-picker-container"></div>
+    </div>
+    
+    <button class="btn" onclick="appStartSession()">START ACTIVITY</button>
+    <button class="btn btn-secondary" onclick="switchView('view-scan')">Cancel</button>
+  </div>
+
+  <!-- View 4: Active Session Execution -->
+  <div id="view-execution" class="card hidden">
+    <div style="display:flex; justify-content:space-between; align-items:center;">
+      <h3>Session Active</h3>
+      <span class="badge badge-active" id="lbl-status">ACTIVE</span>
+    </div>
+    
+    <p><strong>Bed:</strong> <span id="exec-bed"></span> | <strong>Task:</strong> <span id="exec-task"></span></p>
+    <p><strong>Started:</strong> <span id="exec-start"></span></p>
+
+    <button class="btn btn-warning" onclick="appReportExceptionPrompt()">REPORT EXCEPTION</button>
+    <button class="btn" onclick="appCompleteSession()">COMPLETE ACTIVITY</button>
+  </div>
+
+  <!-- View 5: Exception Reporting -->
+  <div id="view-exception" class="card hidden">
+    <h3 style="color:var(--danger);">Report Anomaly</h3>
+    <div class="form-group">
+      <label>Exception Type</label>
+      <select id="exc-type">
+        <option value="Pest Discovered">Pest Discovered</option>
+        <option value="Disease Discovered">Disease Discovered</option>
+        <option value="Irrigation Failure">Irrigation Failure</option>
+        <option value="Crop Damage">Crop Damage</option>
+        <option value="Missing Material">Missing Material</option>
+        <option value="Equipment Failure">Equipment Failure</option>
+        <option value="Safety Issue">Safety Issue</option>
+        <option value="Other">Other</option>
+      </select>
+    </div>
+    <div class="form-group">
+      <label>Severity</label>
+      <select id="exc-severity">
+        <option value="Low">Low</option>
+        <option value="Medium">Medium</option>
+        <option value="High">High</option>
+        <option value="Critical">Critical</option>
+      </select>
+    </div>
+    <div class="form-group">
+      <label>Notes</label>
+      <textarea id="exc-notes" rows="3"></textarea>
+    </div>
+    <button class="btn btn-danger" onclick="appSubmitException()">Submit Alert</button>
+    <button class="btn btn-secondary" onclick="switchView('view-execution')">Back to Session</button>
+  </div>
+
+  <!-- View 6: Manager Operations Live Board -->
+  <div id="view-manager" class="card hidden">
+    <h3>FIELD LIVE BOARD</h3>
+    <button class="btn btn-secondary" onclick="loadLiveBoard()" style="margin-bottom:12px;">Refresh Board</button>
+    <div style="overflow-x:auto;">
+      <table>
+        <thead>
+          <tr>
+            <th>Worker</th>
+            <th>Bed</th>
+            <th>Cohort</th>
+            <th>Activity</th>
+            <th>Elapsed</th>
+            <th>Status</th>
+            <th>Exception</th>
+          </tr>
+        </thead>
+        <tbody id="live-board-rows"></tbody>
+      </table>
+    </div>
+    <button class="btn" onclick="appArchiveSessions()" style="margin-top:16px;">Archive Completed Sessions</button>
+    <button class="btn btn-secondary" onclick="switchView('view-login')">Logout / Switch View</button>
+  </div>
+
 </div>
 
 <script>
-const SCRIPT_URL = "<?= scriptUrl ?>";
-let state = {
-  token: null,
-  user: null,
-  bed: null,
-  taxonomy: null,
-  suggestedGroup: null,
-  plannedTask: null,
-  activeSession: null,
-  selectedActivity: null
-};
+  let state = {
+    workerId: 'W-017',
+    bedId: '',
+    cohortId: '',
+    crop: '',
+    selectedActivity: '',
+    sessionId: '',
+    taxonomyGroups: {}
+  };
 
-function api(action, payload) {
-  return fetch(SCRIPT_URL, {
-    method: 'POST',
-    headers: { 'Content-Type': 'text/plain;charset=utf-8' }, // avoids CORS preflight on Apps Script web apps
-    body: JSON.stringify({ action: action, token: state.token, payload: payload || {} })
-  })
-  .then(function (r) { return r.json(); })
-  .then(function (res) {
-    if (!res.ok) {
-      const err = new Error(res.error.message);
-      err.code = res.error.code;
-      throw err;
-    }
-    return res.data;
-  });
-}
-
-function el(html) {
-  const t = document.createElement('template');
-  t.innerHTML = html.trim();
-  return t.content.firstChild;
-}
-
-function render(html) {
-  document.getElementById('content').innerHTML = html;
-}
-
-function showError(msg) {
-  return '<div class="error-box">' + msg + '</div>';
-}
-
-// ---------- Screen: Login ----------
-
-function renderLogin(errorMsg) {
-  document.getElementById('logoutBtn').classList.add('hidden');
-  document.getElementById('topbarSub').textContent = 'Sign in';
-  render(
-    (errorMsg ? showError(errorMsg) : '') +
-    '<div class="card">' +
-      '<div class="field"><label>Worker ID</label><input id="userId" placeholder="USR-WORKER1" autocapitalize="characters"></div>' +
-      '<div class="field"><label>PIN</label><input id="pin" type="password" inputmode="numeric" placeholder="\u2022\u2022\u2022\u2022"></div>' +
-      '<button class="btn btn-primary" id="loginBtn">Log in</button>' +
-    '</div>'
-  );
-  document.getElementById('loginBtn').onclick = doLogin;
-}
-
-function doLogin() {
-  const userId = document.getElementById('userId').value.trim();
-  const pin = document.getElementById('pin').value.trim();
-  if (!userId || !pin) return renderLogin('Enter both a worker ID and PIN.');
-  render('<div class="spinner">Signing in...</div>');
-  api('login', { userId: userId, pin: pin })
-    .then(function (data) {
-      state.token = data.token;
-      state.user = data.user;
-      document.getElementById('logoutBtn').classList.remove('hidden');
-      document.getElementById('topbarSub').textContent = data.user.Full_Name + ' \u00b7 ' + data.user.Role;
-      checkForActiveSession();
-    })
-    .catch(function (err) { renderLogin(err.message); });
-}
-
-document.getElementById('logoutBtn').onclick = function () {
-  api('logout', {}).finally(function () {
-    state = { token: null, user: null, bed: null, taxonomy: null, suggestedGroup: null, plannedTask: null, activeSession: null, selectedActivity: null };
-    renderLogin();
-  });
-};
-
-function checkForActiveSession() {
-  render('<div class="spinner">Checking for an open session...</div>');
-  api('get-my-session', {})
-    .then(function (session) {
-      if (session) {
-        state.activeSession = session;
-        renderSession();
-      } else {
-        renderScan();
-      }
-    })
-    .catch(function (err) { renderScan(); });
-}
-
-// ---------- Screen: Scan bed ----------
-
-function renderScan(errorMsg) {
-  render(
-    (errorMsg ? showError(errorMsg) : '') +
-    '<div class="card">' +
-      '<div class="field"><label>Bed ID</label><input id="bedId" placeholder="e.g. B1-02" autocapitalize="characters"></div>' +
-      '<div class="muted" style="margin-bottom:10px;">Scan the bed\'s QR code, or type the Bed ID printed on the stake.</div>' +
-      '<button class="btn btn-primary" id="scanBtn">Scan / Confirm Bed</button>' +
-    '</div>'
-  );
-  document.getElementById('scanBtn').onclick = doScan;
-  document.getElementById('bedId').focus();
-}
-
-function doScan() {
-  const bedId = document.getElementById('bedId').value.trim().toUpperCase();
-  if (!bedId) return renderScan('Enter a bed ID.');
-  render('<div class="spinner">Looking up bed...</div>');
-  api('scan-bed', { bedId: bedId })
-    .then(function (data) {
-      state.bed = data.bed;
-      state.taxonomy = data.taxonomy;
-      state.suggestedGroup = data.suggestedGroup;
-      state.plannedTask = data.plannedTask;
-      if (data.activeSession) {
-        state.activeSession = data.activeSession;
-        renderSession();
-      } else {
-        renderTaskSelect();
-      }
-    })
-    .catch(function (err) { renderScan(err.message); });
-}
-
-// ---------- Screen: Task select ----------
-
-function renderTaskSelect() {
-  const bed = state.bed;
-  const groups = state.taxonomy.groups;
-  const labels = state.taxonomy.labels;
-
-  let plannedHtml = '';
-  if (state.plannedTask) {
-    plannedHtml = '<div class="success-box">Planned today: <b>' + labels[state.plannedTask.Activity_Type] + '</b>' +
-      (state.plannedTask.Notes ? ' \u2014 ' + state.plannedTask.Notes : '') + '</div>';
+  function apiCall(action, payload, callback) {
+    google.script.run.withSuccessHandler(function(responseStr) {
+      let res = typeof responseStr === 'string' ? JSON.parse(responseStr) : responseStr;
+      callback(res);
+    }).doPost({ postData: { contents: JSON.stringify({ action: action, payload: payload }) } });
   }
 
-  let groupsHtml = '';
-  const groupNames = Object.keys(groups);
-  // suggested group first
-  groupNames.sort(function (a, b) {
-    if (a === state.suggestedGroup) return -1;
-    if (b === state.suggestedGroup) return 1;
-    return 0;
-  });
-  groupNames.forEach(function (g) {
-    groupsHtml += '<div class="group-header">' + g + (g === state.suggestedGroup ? ' \u2713 suggested' : '') + '</div>';
-    groupsHtml += '<div class="activity-grid">';
-    groups[g].forEach(function (key) {
-      const isPlanned = state.plannedTask && state.plannedTask.Activity_Type === key;
-      groupsHtml += '<button class="activity-btn' + (isPlanned ? ' suggested' : '') + '" data-key="' + key + '">' + labels[key] + '</button>';
+  function switchView(viewId) {
+    ['view-login', 'view-scan', 'view-select-task', 'view-execution', 'view-exception', 'view-manager'].forEach(v => {
+      document.getElementById(v).classList.add('hidden');
     });
-    groupsHtml += '</div>';
-  });
+    document.getElementById(viewId).classList.remove('hidden');
+  }
 
-  render(
-    '<div class="card">' +
-      '<div class="row-between"><div><b>' + bed.Bed_ID + '</b><div class="muted">' + (bed.Current_Crop || 'unplanted') + ' \u00b7 ' + bed.Current_State + '</div></div>' +
-      '<button class="btn btn-outline" id="rescanBtn" style="width:auto;margin:0;padding:8px 12px;font-size:12px;">Rescan</button></div>' +
-    '</div>' +
-    plannedHtml +
-    '<div class="card">' + groupsHtml + '</div>'
-  );
+  function appLogin() {
+    state.workerId = document.getElementById('login-worker-id').value;
+    let pin = document.getElementById('login-pin').value;
+    
+    apiCall('login', { workerId: state.workerId, pin: pin }, function(res) {
+      if (res.success) {
+        loadTaxonomy();
+        switchView('view-scan');
+      } else {
+        alert('Authentication failed');
+      }
+    });
+  }
 
-  document.getElementById('rescanBtn').onclick = function () { renderScan(); };
-  document.querySelectorAll('.activity-btn').forEach(function (btn) {
-    btn.onclick = function () { startSession(btn.getAttribute('data-key')); };
-  });
-}
+  function loadTaxonomy() {
+    apiCall('get-taxonomy', {}, function(res) {
+      if (res.success) {
+        state.taxonomyGroups = res.groups;
+        renderTaxonomyPicker();
+      }
+    });
+  }
 
-function startSession(activityKey) {
-  render('<div class="spinner">Starting session...</div>');
-  api('start-session', { bedId: state.bed.Bed_ID, activityType: activityKey, plannedFlag: !!state.plannedTask })
-    .then(function (session) {
-      state.activeSession = session;
-      renderSession();
-    })
-    .catch(function (err) { renderTaskSelect(); alert(err.message); });
-}
-
-// ---------- Screen: Active session ----------
-
-function renderSession(errorMsg) {
-  const s = state.activeSession;
-  const label = (state.taxonomy && state.taxonomy.labels[s.Activity_Type]) || s.Activity_Type;
-  const statusClass = 'badge-' + s.Session_Status.toLowerCase();
-  const isPaused = s.Session_Status === 'PAUSED';
-
-  render(
-    (errorMsg ? showError(errorMsg) : '') +
-    '<div class="card">' +
-      '<div class="row-between"><span class="badge ' + statusClass + '">' + s.Session_Status + '</span>' +
-      '<span class="muted">' + s.Bed_ID + '</span></div>' +
-      '<div class="big-stat">' + label + '</div>' +
-      '<div class="muted" style="text-align:center;">Cohort ' + (s.Cohort_ID || '\u2014') + '</div>' +
-    '</div>' +
-    '<div class="card">' +
-      '<div class="btn-row">' +
-        (isPaused
-          ? '<button class="btn btn-primary" id="resumeBtn">Resume</button>'
-          : '<button class="btn btn-amber" id="pauseBtn">Pause</button>') +
-        '<button class="btn btn-primary" id="completeBtn">Complete</button>' +
-      '</div>' +
-      '<button class="btn btn-outline" id="exceptionBtn">\u26a0\ufe0f Report Exception</button>' +
-    '</div>'
-  );
-
-  const pauseBtn = document.getElementById('pauseBtn');
-  if (pauseBtn) pauseBtn.onclick = function () { transitionSession('pause-session'); };
-  const resumeBtn = document.getElementById('resumeBtn');
-  if (resumeBtn) resumeBtn.onclick = function () { transitionSession('resume-session'); };
-  document.getElementById('completeBtn').onclick = renderCompleteForm;
-  document.getElementById('exceptionBtn').onclick = renderExceptionForm;
-}
-
-function transitionSession(action) {
-  render('<div class="spinner">Updating...</div>');
-  api(action, { sessionId: state.activeSession.Session_ID })
-    .then(function (session) { state.activeSession = session; renderSession(); })
-    .catch(function (err) { renderSession(err.message); });
-}
-
-function renderCompleteForm() {
-  const s = state.activeSession;
-  const needsQty = s.Activity_Type === 'Harvest';
-  render(
-    '<div class="card">' +
-      '<b>Complete session</b>' +
-      '<div class="muted" style="margin-bottom:10px;">' + s.Bed_ID + ' \u00b7 ' + s.Activity_Type + '</div>' +
-      (needsQty
-        ? '<div class="field"><label>Quantity</label><input id="qty" type="number" inputmode="decimal" placeholder="e.g. 42"></div>' +
-          '<div class="field"><label>Unit</label><select id="unit"><option value="lbs">lbs</option><option value="crates">crates</option></select></div>'
-        : '') +
-      '<button class="btn btn-primary" id="confirmCompleteBtn">Confirm Complete</button>' +
-      '<button class="btn btn-outline" id="cancelCompleteBtn">Back</button>' +
-    '</div>'
-  );
-  document.getElementById('cancelCompleteBtn').onclick = renderSession;
-  document.getElementById('confirmCompleteBtn').onclick = function () {
-    const payload = { sessionId: s.Session_ID };
-    if (needsQty) {
-      payload.loggedQuantity = document.getElementById('qty').value;
-      payload.unit = document.getElementById('unit').value;
+  function renderTaxonomyPicker() {
+    let container = document.getElementById('activity-picker-container');
+    container.innerHTML = '';
+    
+    let select = document.createElement('select');
+    select.id = 'activity-select-dropdown';
+    
+    for (let group in state.taxonomyGroups) {
+      let optgroup = document.createElement('optgroup');
+      optgroup.label = group;
+      
+      state.taxonomyGroups[group].forEach(act => {
+        let opt = document.createElement('option');
+        opt.value = act;
+        opt.textContent = act;
+        optgroup.appendChild(opt);
+      });
+      select.appendChild(optgroup);
     }
-    render('<div class="spinner">Completing...</div>');
-    api('complete-session', payload)
-      .then(function () {
-        render('<div class="success-box">Session completed. A manager will verify it on the Live Board.</div>');
-        setTimeout(function () { state.activeSession = null; renderScan(); }, 1600);
-      })
-      .catch(function (err) { renderCompleteForm(); alert(err.message); });
-  };
-}
+    container.appendChild(select);
+  }
 
-const EXCEPTION_TYPES = [
-  ['PestDiscovered', 'Pest Discovered'], ['DiseaseDiscovered', 'Disease Discovered'],
-  ['IrrigationFailure', 'Irrigation Failure'], ['CropDamage', 'Crop Damage'],
-  ['MissingMaterial', 'Missing Material'], ['EquipmentFailure', 'Equipment Failure'],
-  ['SafetyIssue', 'Safety Issue'], ['Other', 'Other']
-];
+  function appScanBed() {
+    state.bedId = document.getElementById('scan-bed-input').value.toUpperCase();
+    if (!state.bedId) return alert('Please enter or scan a Bed ID');
 
-function renderExceptionForm() {
-  const s = state.activeSession;
-  let options = EXCEPTION_TYPES.map(function (t) { return '<option value="' + t[0] + '">' + t[1] + '</option>'; }).join('');
-  render(
-    '<div class="card">' +
-      '<b>Report exception</b>' +
-      '<div class="muted" style="margin-bottom:10px;">' + s.Bed_ID + ' \u00b7 ' + s.Activity_Type + '</div>' +
-      '<div class="field"><label>Type</label><select id="excType">' + options + '</select></div>' +
-      '<div class="field"><label>Severity</label><select id="excSeverity">' +
-        '<option value="Low">Low</option><option value="Medium" selected>Medium</option>' +
-        '<option value="High">High</option><option value="Critical">Critical</option>' +
-      '</select></div>' +
-      '<div class="field"><label>Notes</label><input id="excNotes" placeholder="What did you see?"></div>' +
-      '<button class="btn btn-danger" id="submitExcBtn">Submit Exception</button>' +
-      '<button class="btn btn-outline" id="cancelExcBtn">Back</button>' +
-    '</div>'
-  );
-  document.getElementById('cancelExcBtn').onclick = renderSession;
-  document.getElementById('submitExcBtn').onclick = function () {
-    render('<div class="spinner">Reporting...</div>');
-    api('report-exception', {
-      sessionId: s.Session_ID,
-      exceptionType: document.getElementById('excType').value,
-      severity: document.getElementById('excSeverity').value,
-      notes: document.getElementById('excNotes').value
-    })
-    .then(function (session) {
-      state.activeSession = session;
-      render('<div class="success-box">Exception logged. Manager alerted.</div>');
-      setTimeout(renderSession, 1200);
-    })
-    .catch(function (err) { renderExceptionForm(); alert(err.message); });
-  };
-}
+    apiCall('scan-bed', { bedId: state.bedId }, function(res) {
+      if (res.success) {
+        state.cohortId = res.bed.cohortId;
+        state.crop = res.bed.crop;
+        
+        document.getElementById('lbl-bed-id').textContent = state.bedId;
+        document.getElementById('lbl-cohort-id').textContent = state.cohortId;
+        document.getElementById('lbl-crop').textContent = state.crop;
+        
+        switchView('view-select-task');
+      }
+    });
+  }
 
-// ---------- Boot ----------
-renderLogin();
+  function appStartSession() {
+    state.selectedActivity = document.getElementById('activity-select-dropdown').value;
+    
+    let payload = {
+      workerId: state.workerId,
+      bedId: state.bedId,
+      cohortId: state.cohortId,
+      activity: state.selectedActivity
+    };
+
+    apiCall('start-session', payload, function(res) {
+      if (res.success) {
+        state.sessionId = res.sessionId;
+        document.getElementById('exec-bed').textContent = state.bedId;
+        document.getElementById('exec-task').textContent = state.selectedActivity;
+        document.getElementById('exec-start').textContent = new Date(res.startTime).toLocaleTimeString();
+        switchView('view-execution');
+      } else {
+        alert(res.error || 'Failed to start session');
+      }
+    });
+  }
+
+  function appCompleteSession() {
+    let quantity = 0;
+    if (state.selectedActivity === 'Harvest') {
+      quantity = prompt('Enter harvested quantity (lbs/crates):', '0');
+    }
+
+    apiCall('complete-session', { sessionId: state.sessionId, quantity: quantity }, function(res) {
+      if (res.success) {
+        alert('Activity completed. Duration: ' + res.elapsedMinutes + ' mins');
+        switchView('view-scan');
+      }
+    });
+  }
+
+  function appReportExceptionPrompt() {
+    switchView('view-exception');
+  }
+
+  function appSubmitException() {
+    let payload = {
+      workerId: state.workerId,
+      sessionId: state.sessionId,
+      exceptionType: document.getElementById('exc-type').value,
+      severity: document.getElementById('exc-severity').value,
+      notes: document.getElementById('exc-notes').value
+    };
+
+    apiCall('report-exception', payload, function(res) {
+      if (res.success) {
+        alert('Exception logged and manager notified.');
+        document.getElementById('lbl-status').className = 'badge badge-danger';
+        document.getElementById('lbl-status').textContent = 'ALERT';
+        switchView('view-execution');
+      }
+    });
+  }
+
+  function loadLiveBoard() {
+    apiCall('get-live-board', {}, function(res) {
+      if (res.success) {
+        let tbody = document.getElementById('live-board-rows');
+        tbody.innerHTML = '';
+        res.board.forEach(row => {
+          let tr = document.createElement('tr');
+          tr.innerHTML = `
+            <td>${row.workerId}</td>
+            <td>${row.bed}</td>
+            <td>${row.cohort}</td>
+            <td>${row.activity}</td>
+            <td>${row.elapsed}</td>
+            <td><span class="badge ${row.status === 'ACTIVE' ? 'badge-active' : 'badge-warning'}">${row.status}</span></td>
+            <td style="color:${row.exception !== '—' ? 'red' : 'inherit'};">${row.exception}</td>
+          `;
+          tbody.appendChild(tr);
+        });
+      }
+    });
+  }
+
+  function appArchiveSessions() {
+    apiCall('archive-completed-sessions', { managerId: state.workerId }, function(res) {
+      if (res.success) {
+        alert('Archived ' + res.archivedSessions + ' completed session(s) into permanent activity log.');
+        loadLiveBoard();
+      }
+    });
+  }
 </script>
 </body>
 </html>
