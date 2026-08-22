@@ -242,11 +242,16 @@
     });
   }
 
-  // Only safe to offer from view-scan -- if a session is active/paused,
-  // logging out would strand it with no way back in except the
-  // auto-resume-on-login path, so we route through that deliberately
-  // rather than blocking logout altogether.
+  // Logs the LOGOUT event server-side (LOGIN_LOG accountability trail) and
+  // then resets local state. Fired off before state is cleared since we
+  // need workerId to log it; the UI resets immediately rather than waiting
+  // on the network round-trip.
   function appLogout() {
+    var loggedOutWorkerId = state.workerId;
+    if (loggedOutWorkerId) {
+      apiCall('logout', { workerId: loggedOutWorkerId }, function() {});
+    }
+
     state = {
       workerId: '', bedId: '', cohortId: '', crop: '', selectedActivity: '',
       sessionId: '', taxonomyGroups: {}, allBeds: [], openSessions: []
