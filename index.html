@@ -164,10 +164,16 @@
   };
 
   function apiCall(action, payload, callback) {
-    google.script.run.withSuccessHandler(function(responseStr) {
-      let res = typeof responseStr === 'string' ? JSON.parse(responseStr) : responseStr;
-      callback(res);
-    }).doPost({ postData: { contents: JSON.stringify({ action: action, payload: payload }) } });
+    google.script.run
+      .withSuccessHandler(function(responseStr) {
+        let res = typeof responseStr === 'string' ? JSON.parse(responseStr) : responseStr;
+        callback(res);
+      })
+      .withFailureHandler(function(error) {
+        console.error('apiCall failed:', action, error);
+        alert('Something went wrong (' + action + '): ' + (error && error.message ? error.message : error));
+      })
+      .clientApiCall(action, payload);
   }
 
   function switchView(viewId) {
