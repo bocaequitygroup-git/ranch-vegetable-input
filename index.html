@@ -17,8 +17,12 @@
     .badge { display: inline-block; padding: 4px 8px; border-radius: 4px; font-weight: bold; font-size: 12px; color: #fff; background: #666; }
     .badge-active { background: #2e7d32; }
     .badge-danger { background: #c62828; }
-    .meta-box { background: #e8f5e9; padding: 12px; border-radius: 6px; margin-bottom: 16px; border-left: 4px solid #2e7d32; }
-    .meta-box p { margin: 4px 0; font-size: 15px; }
+    .meta-box { background: #e8f5e9; padding: 14px; border-radius: 8px; margin-bottom: 16px; border-left: 5px solid #2e7d32; }
+    .meta-box p { margin: 6px 0; font-size: 15px; }
+    .meta-headline { font-size: 18px; font-weight: bold; color: #1b5e20; }
+    .meta-sub { font-size: 14px; font-weight: normal; color: #555; }
+    .meta-crop { font-weight: bold; color: #2e7d32; }
+    .code-chip { font-family: monospace; font-size: 12px; color: #666; background: #dcedc8; padding: 2px 6px; border-radius: 4px; }
     .bed-result { padding: 10px 12px; border: 1px solid #ddd; border-radius: 6px; margin-top: 8px; cursor: pointer; background: #fafafa; }
     .bed-result:hover { background: #e8f5e9; border-color: #2e7d32; }
     .bed-result .bed-id { font-weight: bold; font-size: 15px; }
@@ -97,9 +101,12 @@
     <h2>Confirm Assignment</h2>
 
     <div class="meta-box">
-      <p><strong>Bed ID:</strong> <span id="lbl-bed-id">-</span></p>
-      <p><strong>Cohort:</strong> <span id="lbl-cohort-id">-</span></p>
-      <p><strong>Crop:</strong> <span id="lbl-crop">-</span></p>
+      <p class="meta-headline">📍 Bed <span id="lbl-bed-id">-</span> <span class="meta-sub">(Block <span id="lbl-block">-</span>)</span></p>
+      <p>🌱 <strong>Crop:</strong> <span class="meta-crop" id="lbl-crop">-</span> <span class="code-chip" id="lbl-crop-code"></span></p>
+      <p id="row-variety-stage">🧬 <strong>Variety / Stage:</strong> <span id="lbl-variety-stage">-</span></p>
+      <p id="row-bed-target">🎯 <strong>Bed Target:</strong> <span id="lbl-bed-target">-</span></p>
+      <p>🏷️ <strong>Cohort:</strong> <span class="code-chip" id="lbl-cohort-id">-</span></p>
+      <p>📋 <strong>Field Status:</strong> <span id="lbl-bed-state">-</span></p>
     </div>
 
     <div class="form-group">
@@ -371,7 +378,8 @@
     let matches = state.allBeds.filter(function(b) {
       return (b.bedId && b.bedId.toUpperCase().indexOf(query) !== -1) ||
              (b.block && b.block.toUpperCase().indexOf(query) !== -1) ||
-             (b.crop && b.crop.toUpperCase().indexOf(query) !== -1);
+             (b.crop && b.crop.toUpperCase().indexOf(query) !== -1) ||
+             (b.cropName && b.cropName.toUpperCase().indexOf(query) !== -1);
     }).slice(0, 25);
 
     if (matches.length === 0) {
@@ -384,7 +392,7 @@
       row.className = 'bed-result';
       row.onclick = function() { selectBedFromSearch(b.bedId); };
       row.innerHTML = '<div class="bed-id">' + b.bedId + '</div>' +
-        '<div class="bed-meta">Block ' + (b.block || '-') + ' &middot; ' + b.crop + ' &middot; ' + (b.state || '-') + '</div>';
+        '<div class="bed-meta">Block ' + (b.block || '-') + ' &middot; ' + (b.cropName || b.crop) + ' &middot; ' + (b.state || '-') + '</div>';
       container.appendChild(row);
     });
   }
@@ -447,11 +455,38 @@
       if (res && res.success) {
         state.bedId = res.bed.bedId;
         state.cohortId = res.bed.cohortId;
-        state.crop = res.bed.crop;
+        state.crop = res.bed.crop; // raw Crop_ID code, kept in state in case anything downstream needs it
 
         document.getElementById('lbl-bed-id').textContent = state.bedId;
+        document.getElementById('lbl-block').textContent = res.bed.block || '-';
+        document.getElementById('lbl-crop').textContent = res.bed.cropName || state.crop;
+        document.getElementById('lbl-bed-state').textContent = res.bed.bedState || '-';
+
+        // Only show the raw code chip when it actually differs from the
+        // display name -- avoids a redundant "Eggplant (Eggplant)" if
+        // CROP_REFERENCE ever stores the full name as the code too.
+        let cropCodeEl = document.getElementById('lbl-crop-code');
+        cropCodeEl.textContent = (res.bed.cropName && res.bed.cropName !== state.crop) ? state.crop : '';
+
         document.getElementById('lbl-cohort-id').textContent = state.cohortId;
-        document.getElementById('lbl-crop').textContent = state.crop;
+
+        // Variety/Stage and Bed Target only apply to beds with an assigned
+        // cohort -- hide those rows entirely for unplanted/general-use beds
+        // rather than showing "-" placeholders that look like missing data.
+        let cohort = res.bed.cohort;
+        let varietyRow = document.getElementById('row-variety-stage');
+        let targetRow = document.getElementById('row-bed-target');
+        if (cohort) {
+          varietyRow.classList.remove('hidden');
+          targetRow.classList.remove('hidden');
+          let varietyStage = [cohort.variety, cohort.stage].filter(Boolean).join(' \u00b7 ');
+          document.getElementById('lbl-variety-stage').textContent = varietyStage || '-';
+          document.getElementById('lbl-bed-target').textContent =
+            (cohort.targetQtyLbs !== null && cohort.targetQtyLbs !== undefined) ? cohort.targetQtyLbs + ' lbs' : '-';
+        } else {
+          varietyRow.classList.add('hidden');
+          targetRow.classList.add('hidden');
+        }
 
         switchView('view-select-task');
       } else {
