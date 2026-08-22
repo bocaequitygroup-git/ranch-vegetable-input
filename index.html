@@ -19,6 +19,11 @@
     .badge-danger { background: #c62828; }
     .meta-box { background: #e8f5e9; padding: 12px; border-radius: 6px; margin-bottom: 16px; border-left: 4px solid #2e7d32; }
     .meta-box p { margin: 4px 0; font-size: 15px; }
+    .bed-result { padding: 10px 12px; border: 1px solid #ddd; border-radius: 6px; margin-top: 8px; cursor: pointer; background: #fafafa; }
+    .bed-result:hover { background: #e8f5e9; border-color: #2e7d32; }
+    .bed-result .bed-id { font-weight: bold; font-size: 15px; }
+    .bed-result .bed-meta { font-size: 13px; color: #666; margin-top: 2px; }
+    .bed-empty-msg { font-size: 13px; color: #888; padding: 8px 0; }
   </style>
 </head>
 <body>
@@ -45,6 +50,12 @@
       <input type="text" id="scan-qr-input" placeholder="e.g. BED:B1-01">
     </div>
     <button onclick="appScanQR()">Process Scan</button>
+
+    <div class="form-group" style="margin-top:20px;">
+      <label for="bed-search-input">Or Search Beds (no camera needed)</label>
+      <input type="text" id="bed-search-input" placeholder="Search by bed, block, or crop..." oninput="renderBedSearchResults()">
+    </div>
+    <div id="bed-search-results"></div>
   </div>
 
   <!-- VIEW 3: CONFIRMATION & TASK SELECTION -->
@@ -112,8 +123,7 @@
 <script>
   // Paste your Apps Script Web App deployment URL below
   // Must be deployed as: "Execute as: Me" and "Who has access: Anyone"
-  const WEB_APP_URL = 'https://script.google.com/macros/s/AKfycbwUFXoHDFSUArQCIqkh2De8-fwPfWSG9LRvtagJPzmJdFaBx_95av5V57NzYs1J1IZLnA/exec';
-
+  const WEB_APP_URL = 'https://script.google.com/macros/s/PASTE_YOUR_DEPLOYMENT_ID/exec';
 
   // Every id in this list MUST have a matching <div> in the markup above,
   // or switchView() throws on document.getElementById(v).classList and the
@@ -130,7 +140,8 @@
     crop: '',
     selectedActivity: '',
     sessionId: '',
-    taxonomyGroups: {}
+    taxonomyGroups: {},
+    allBeds: []
   };
 
   function apiCall(action, payload, callback) {
@@ -172,11 +183,53 @@
     apiCall('login', { workerId: state.workerId, pin: pin }, function(res) {
       if (res && res.success) {
         loadTaxonomy();
+        loadBeds();
         switchView('view-scan');
       } else {
         alert('Authentication failed: ' + (res.error || 'Invalid credentials'));
       }
     });
+  }
+
+  function loadBeds() {
+    apiCall('list-beds', {}, function(res) {
+      if (res && res.success) {
+        state.allBeds = res.beds;
+      }
+    });
+  }
+
+  function renderBedSearchResults() {
+    let query = document.getElementById('bed-search-input').value.trim().toUpperCase();
+    let container = document.getElementById('bed-search-results');
+    container.innerHTML = '';
+
+    if (!query) return;
+
+    let matches = state.allBeds.filter(function(b) {
+      return (b.bedId && b.bedId.toUpperCase().indexOf(query) !== -1) ||
+             (b.block && b.block.toUpperCase().indexOf(query) !== -1) ||
+             (b.crop && b.crop.toUpperCase().indexOf(query) !== -1);
+    }).slice(0, 25);
+
+    if (matches.length === 0) {
+      container.innerHTML = '<div class="bed-empty-msg">No beds match "' + query + '"</div>';
+      return;
+    }
+
+    matches.forEach(function(b) {
+      let row = document.createElement('div');
+      row.className = 'bed-result';
+      row.onclick = function() { selectBedFromSearch(b.bedId); };
+      row.innerHTML = '<div class="bed-id">' + b.bedId + '</div>' +
+        '<div class="bed-meta">Block ' + (b.block || '-') + ' &middot; ' + b.crop + ' &middot; ' + (b.state || '-') + '</div>';
+      container.appendChild(row);
+    });
+  }
+
+  function selectBedFromSearch(bedId) {
+    document.getElementById('scan-qr-input').value = 'BED:' + bedId;
+    appScanQR();
   }
 
   function loadTaxonomy() {
@@ -266,9 +319,17 @@
     apiCall('complete-session', { sessionId: state.sessionId, quantity: quantity }, function(res) {
       if (res && res.success) {
         alert('Activity completed. Duration: ' + res.elapsedMinutes + ' mins');
+        resetBedSearch();
         switchView('view-scan');
       }
     });
+  }
+
+  function resetBedSearch() {
+    var input = document.getElementById('bed-search-input');
+    var results = document.getElementById('bed-search-results');
+    if (input) input.value = '';
+    if (results) results.innerHTML = '';
   }
 
   function appReportExceptionPrompt() {
