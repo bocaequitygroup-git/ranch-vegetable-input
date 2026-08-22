@@ -408,9 +408,9 @@
 
   function loadTaxonomy() {
     apiCall('get-taxonomy', {}, function(res) {
-      if (res && res.success) {
-        state.taxonomyGroups = res.groups;
-        state.taxonomyLabels = res.labels || {};
+      if (res && res.success && res.taxonomy) {
+        state.taxonomyGroups = res.taxonomy.groups;
+        state.taxonomyLabels = res.taxonomy.labels || {};
         renderTaxonomyPicker();
       }
     });
