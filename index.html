@@ -184,9 +184,39 @@
       if (res && res.success) {
         loadTaxonomy();
         loadBeds();
-        switchView('view-scan');
+        checkForOpenSession();
       } else {
         alert('Authentication failed: ' + (res.error || 'Invalid credentials'));
+      }
+    });
+  }
+
+  // If this worker already has an ACTIVE or PAUSED session (e.g. from a
+  // previous shift, a dropped connection, or a stray session that never
+  // got completed), resume straight into it instead of dropping them at
+  // the scan screen with no way back to it.
+  function checkForOpenSession() {
+    apiCall('get-open-session', { workerId: state.workerId }, function(res) {
+      if (res && res.success && res.session) {
+        var s = res.session;
+        state.bedId = s.bedId;
+        state.cohortId = s.cohortId;
+        state.selectedActivity = s.activity;
+        state.sessionId = s.sessionId;
+
+        document.getElementById('exec-bed').textContent = s.bedId;
+        document.getElementById('exec-task').textContent = s.activity;
+        document.getElementById('exec-start').textContent = new Date(s.startTime).toLocaleTimeString();
+
+        if (s.status === 'PAUSED') {
+          apiCall('resume-session', { sessionId: s.sessionId }, function() {
+            switchView('view-execution');
+          });
+        } else {
+          switchView('view-execution');
+        }
+      } else {
+        switchView('view-scan');
       }
     });
   }
@@ -276,7 +306,7 @@
     let raw = document.getElementById('scan-qr-input').value.trim().toUpperCase();
     if (!raw) return alert('Please enter or scan a QR code');
 
-    apiCall('scan-bed', { bedId: raw }, function(res) {
+    apiCall('scan-bed', { bedId: raw, workerId: state.workerId }, function(res) {
       if (res && res.success) {
         state.bedId = res.bed.bedId;
         state.cohortId = res.bed.cohortId;
