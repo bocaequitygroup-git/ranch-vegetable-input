@@ -1,10 +1,129 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <base target="_top">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; margin: 0; padding: 16px; background: #f4f6f8; color: #333; }
+    .card { background: #fff; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); max-width: 480px; margin: 0 auto 16px; }
+    .hidden { display: none !important; }
+    .form-group { margin-bottom: 16px; }
+    label { display: block; font-weight: bold; margin-bottom: 6px; font-size: 14px; }
+    input, select, button { width: 100%; padding: 12px; border: 1px solid #ccc; border-radius: 6px; box-sizing: border-box; font-size: 16px; }
+    button { background: #2e7d32; color: #fff; font-weight: bold; border: none; cursor: pointer; margin-top: 8px; }
+    button:hover { background: #1b5e20; }
+    button.btn-danger { background: #c62828; }
+    button.btn-secondary { background: #666; }
+    .badge { display: inline-block; padding: 4px 8px; border-radius: 4px; font-weight: bold; font-size: 12px; color: #fff; background: #666; }
+    .badge-active { background: #2e7d32; }
+    .badge-danger { background: #c62828; }
+    .meta-box { background: #e8f5e9; padding: 12px; border-radius: 6px; margin-bottom: 16px; border-left: 4px solid #2e7d32; }
+    .meta-box p { margin: 4px 0; font-size: 15px; }
+  </style>
+</head>
+<body>
+
+  <!-- VIEW 1: AUTHENTICATION -->
+  <div id="view-login" class="card">
+    <h2>Worker Login</h2>
+    <div class="form-group">
+      <label for="login-worker-id">User ID</label>
+      <input type="text" id="login-worker-id" placeholder="e.g. USR-WORKER1">
+    </div>
+    <div class="form-group">
+      <label for="login-pin">PIN</label>
+      <input type="password" id="login-pin" placeholder="****">
+    </div>
+    <button onclick="appLogin()">Sign In</button>
+  </div>
+
+  <!-- VIEW 2: QR / BED SCAN -->
+  <div id="view-scan" class="card hidden">
+    <h2>Scan Location</h2>
+    <div class="form-group">
+      <label for="scan-qr-input">Scan or Enter QR Code</label>
+      <input type="text" id="scan-qr-input" placeholder="e.g. BED:B1-01">
+    </div>
+    <button onclick="appScanQR()">Process Scan</button>
+  </div>
+
+  <!-- VIEW 3: CONFIRMATION & TASK SELECTION -->
+  <div id="view-select-task" class="card hidden">
+    <h2>Confirm Assignment</h2>
+
+    <div class="meta-box">
+      <p><strong>Bed ID:</strong> <span id="lbl-bed-id">-</span></p>
+      <p><strong>Cohort:</strong> <span id="lbl-cohort-id">-</span></p>
+      <p><strong>Crop:</strong> <span id="lbl-crop">-</span></p>
+    </div>
+
+    <div class="form-group">
+      <label for="activity-picker-container">Select Activity</label>
+      <div id="activity-picker-container"></div>
+    </div>
+
+    <button id="btn-use-bed" onclick="appStartSession()">Use This Bed &amp; Start Task</button>
+    <button class="btn-secondary" onclick="switchView('view-scan')">Cancel / Rescan</button>
+  </div>
+
+  <!-- VIEW 4: ACTIVE TIMER EXECUTION -->
+  <div id="view-execution" class="card hidden">
+    <h2>Active Session</h2>
+
+    <div class="meta-box">
+      <p><strong>Status:</strong> <span id="lbl-status" class="badge badge-active">ACTIVE</span></p>
+      <p><strong>Bed:</strong> <span id="exec-bed">-</span></p>
+      <p><strong>Task:</strong> <span id="exec-task">-</span></p>
+      <p><strong>Started:</strong> <span id="exec-start">-</span></p>
+    </div>
+
+    <button class="btn-danger" onclick="appReportExceptionPrompt()">Report Exception / Issue</button>
+    <button onclick="appCompleteSession()">Complete Activity</button>
+  </div>
+
+  <!-- VIEW 5: EXCEPTION LOGGING -->
+  <div id="view-exception" class="card hidden">
+    <h2>Report Field Issue</h2>
+    <div class="form-group">
+      <label for="exc-type">Issue Type</label>
+      <select id="exc-type">
+        <option value="PEST">Pest Outbreak</option>
+        <option value="DISEASE">Disease Symptoms</option>
+        <option value="IRRIGATION">Irrigation Failure</option>
+        <option value="EQUIPMENT">Equipment Breakdown</option>
+      </select>
+    </div>
+    <div class="form-group">
+      <label for="exc-severity">Severity Level</label>
+      <select id="exc-severity">
+        <option value="LOW">Low</option>
+        <option value="MEDIUM">Medium</option>
+        <option value="HIGH">High / Critical</option>
+      </select>
+    </div>
+    <div class="form-group">
+      <label for="exc-notes">Notes / Observations</label>
+      <input type="text" id="exc-notes" placeholder="Describe what you see...">
+    </div>
+    <button class="btn-danger" onclick="appSubmitException()">Submit Alert</button>
+    <button class="btn-secondary" onclick="switchView('view-execution')">Return to Task</button>
+  </div>
+
 <script>
   // Paste your Apps Script Web App deployment URL below
   // Must be deployed as: "Execute as: Me" and "Who has access: Anyone"
   const WEB_APP_URL = 'https://script.google.com/macros/s/PASTE_YOUR_DEPLOYMENT_ID/exec';
 
+  // Every id in this list MUST have a matching <div> in the markup above,
+  // or switchView() throws on document.getElementById(v).classList and the
+  // destination view never gets un-hidden. This was the root cause of
+  // buttons appearing to "do nothing" -- 'view-manager' was in this list
+  // with no corresponding element, so every switchView() call silently
+  // threw before reaching the line that shows the new view.
+  const VIEW_IDS = ['view-login', 'view-scan', 'view-select-task', 'view-execution', 'view-exception'];
+
   let state = {
-    workerId: 'W-017',
+    workerId: '',
     bedId: '',
     cohortId: '',
     crop: '',
@@ -37,16 +156,18 @@
   }
 
   function switchView(viewId) {
-    ['view-login', 'view-scan', 'view-select-task', 'view-execution', 'view-exception', 'view-manager'].forEach(v => {
-      document.getElementById(v).classList.add('hidden');
+    VIEW_IDS.forEach(v => {
+      var el = document.getElementById(v);
+      if (el) el.classList.add('hidden');
     });
-    document.getElementById(viewId).classList.remove('hidden');
+    var target = document.getElementById(viewId);
+    if (target) target.classList.remove('hidden');
   }
 
   function appLogin() {
     state.workerId = document.getElementById('login-worker-id').value;
     let pin = document.getElementById('login-pin').value;
-    
+
     apiCall('login', { workerId: state.workerId, pin: pin }, function(res) {
       if (res && res.success) {
         loadTaxonomy();
@@ -69,14 +190,14 @@
   function renderTaxonomyPicker() {
     let container = document.getElementById('activity-picker-container');
     container.innerHTML = '';
-    
+
     let select = document.createElement('select');
     select.id = 'activity-select-dropdown';
-    
+
     for (let group in state.taxonomyGroups) {
       let optgroup = document.createElement('optgroup');
       optgroup.label = group;
-      
+
       state.taxonomyGroups[group].forEach(act => {
         let opt = document.createElement('option');
         opt.value = act;
@@ -88,29 +209,33 @@
     container.appendChild(select);
   }
 
-  function appScanBed() {
-    state.bedId = document.getElementById('scan-bed-input').value.toUpperCase();
-    if (!state.bedId) return alert('Please enter or scan a Bed ID');
+  // Scans a full QR string (e.g. "BED:B1-01") or a bare Bed_ID.
+  function appScanQR() {
+    let raw = document.getElementById('scan-qr-input').value.trim().toUpperCase();
+    if (!raw) return alert('Please enter or scan a QR code');
 
-    apiCall('scan-bed', { bedId: state.bedId }, function(res) {
+    apiCall('scan-bed', { bedId: raw }, function(res) {
       if (res && res.success) {
+        state.bedId = res.bed.bedId;
         state.cohortId = res.bed.cohortId;
         state.crop = res.bed.crop;
-        
+
         document.getElementById('lbl-bed-id').textContent = state.bedId;
         document.getElementById('lbl-cohort-id').textContent = state.cohortId;
         document.getElementById('lbl-crop').textContent = state.crop;
-        
+
         switchView('view-select-task');
       } else {
-        alert('Bed scan failed: ' + (res.error || 'Unknown bed ID'));
+        alert('Scan failed: ' + (res.error || 'Unknown code'));
       }
     });
   }
 
   function appStartSession() {
-    state.selectedActivity = document.getElementById('activity-select-dropdown').value;
-    
+    let dropdown = document.getElementById('activity-select-dropdown');
+    if (!dropdown) return alert('Activity list not loaded yet -- try rescanning.');
+    state.selectedActivity = dropdown.value;
+
     let payload = {
       workerId: state.workerId,
       bedId: state.bedId,
@@ -167,35 +292,6 @@
       }
     });
   }
-
-  function loadLiveBoard() {
-    apiCall('get-live-board', {}, function(res) {
-      if (res && res.success) {
-        let tbody = document.getElementById('live-board-rows');
-        tbody.innerHTML = '';
-        res.board.forEach(row => {
-          let tr = document.createElement('tr');
-          tr.innerHTML = `
-            <td>${row.workerId}</td>
-            <td>${row.bed}</td>
-            <td>${row.cohort}</td>
-            <td>${row.activity}</td>
-            <td>${row.elapsed}</td>
-            <td><span class="badge ${row.status === 'ACTIVE' ? 'badge-active' : 'badge-warning'}">${row.status}</span></td>
-            <td style="color:${row.exception !== '—' ? 'red' : 'inherit'};">${row.exception}</td>
-          `;
-          tbody.appendChild(tr);
-        });
-      }
-    });
-  }
-
-  function appArchiveSessions() {
-    apiCall('archive-completed-sessions', { managerId: state.workerId }, function(res) {
-      if (res && res.success) {
-        alert('Archived ' + res.archivedSessions + ' completed session(s) into permanent activity log.');
-        loadLiveBoard();
-      }
-    });
-  }
 </script>
+</body>
+</html>
