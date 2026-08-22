@@ -1,161 +1,6 @@
-<!DOCTYPE html>
-<html>
-<head>
-  <style>
-    :root {
-      --primary: #2e7d32;
-      --primary-dark: #1b5e20;
-      --bg: #f4f6f8;
-      --card-bg: #ffffff;
-      --text: #333333;
-      --danger: #d32f2f;
-      --warning: #f57c00;
-    }
-    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; margin: 0; padding: 0; background: var(--bg); color: var(--text); }
-    .header { background: var(--primary); color: white; padding: 16px; text-align: center; font-weight: bold; font-size: 1.2rem; }
-    .container { padding: 16px; max-width: 600px; margin: 0 auto; }
-    .card { background: var(--card-bg); border-radius: 8px; padding: 16px; margin-bottom: 16px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
-    .btn { display: block; width: 100%; padding: 14px; margin: 8px 0; background: var(--primary); color: white; border: none; border-radius: 6px; font-size: 1rem; font-weight: bold; cursor: pointer; text-align: center; box-sizing: border-box; }
-    .btn-secondary { background: #757575; }
-    .btn-warning { background: var(--warning); }
-    .btn-danger { background: var(--danger); }
-    .form-group { margin-bottom: 12px; }
-    label { font-size: 0.85rem; color: #666; display: block; margin-bottom: 4px; }
-    input, select, textarea { width: 100%; padding: 12px; border: 1px solid #ccc; border-radius: 6px; font-size: 1rem; box-sizing: border-box; }
-    .group-header { font-weight: bold; color: var(--primary-dark); margin-top: 12px; margin-bottom: 6px; border-bottom: 1px solid #e0e0e0; padding-bottom: 4px; }
-    .badge { display: inline-block; padding: 4px 8px; border-radius: 4px; font-size: 0.75rem; font-weight: bold; color: white; }
-    .badge-active { background: var(--primary); }
-    .badge-warning { background: var(--warning); }
-    .badge-danger { background: var(--danger); }
-    table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
-    th, td { padding: 8px; text-align: left; border-bottom: 1px solid #ddd; }
-    th { background: #e8f5e9; color: var(--primary-dark); }
-    .hidden { display: none; }
-  </style>
-</head>
-<body>
-
-<div class="header">Ngapori Ranch VPOS</div>
-
-<div class="container">
-
-  <!-- View 1: Worker Login -->
-  <div id="view-login" class="card">
-    <h3>Worker Authentication</h3>
-    <div class="form-group">
-      <label>Worker ID</label>
-      <input type="text" id="login-worker-id" value="W-017">
-    </div>
-    <div class="form-group">
-      <label>PIN</label>
-      <input type="password" id="login-pin" value="1234">
-    </div>
-    <button class="btn" onclick="appLogin()">Login to VPOS</button>
-    <button class="btn btn-secondary" onclick="switchView('view-manager')">Switch to Manager Board</button>
-  </div>
-
-  <!-- View 2: Scan Bed -->
-  <div id="view-scan" class="card hidden">
-    <h3>Scan Operational Location</h3>
-    <div class="form-group">
-      <label>Scan Bed QR / NFC Code</label>
-      <input type="text" id="scan-bed-input" placeholder="e.g. B-17">
-    </div>
-    <button class="btn" onclick="appScanBed()">Resolve Location</button>
-  </div>
-
-  <!-- View 3: Select Activity & Start -->
-  <div id="view-select-task" class="card hidden">
-    <h3>Bed Assignment: <span id="lbl-bed-id" style="color:var(--primary);"></span></h3>
-    <p style="margin:4px 0;"><strong>Cohort:</strong> <span id="lbl-cohort-id"></span> | <strong>Crop:</strong> <span id="lbl-crop"></span></p>
-    
-    <div class="form-group" style="margin-top:16px;">
-      <label>Select 23-Taxonomy Activity</label>
-      <div id="activity-picker-container"></div>
-    </div>
-    
-    <button class="btn" onclick="appStartSession()">START ACTIVITY</button>
-    <button class="btn btn-secondary" onclick="switchView('view-scan')">Cancel</button>
-  </div>
-
-  <!-- View 4: Active Session Execution -->
-  <div id="view-execution" class="card hidden">
-    <div style="display:flex; justify-content:space-between; align-items:center;">
-      <h3>Session Active</h3>
-      <span class="badge badge-active" id="lbl-status">ACTIVE</span>
-    </div>
-    
-    <p><strong>Bed:</strong> <span id="exec-bed"></span> | <strong>Task:</strong> <span id="exec-task"></span></p>
-    <p><strong>Started:</strong> <span id="exec-start"></span></p>
-
-    <button class="btn btn-warning" onclick="appReportExceptionPrompt()">REPORT EXCEPTION</button>
-    <button class="btn" onclick="appCompleteSession()">COMPLETE ACTIVITY</button>
-  </div>
-
-  <!-- View 5: Exception Reporting -->
-  <div id="view-exception" class="card hidden">
-    <h3 style="color:var(--danger);">Report Anomaly</h3>
-    <div class="form-group">
-      <label>Exception Type</label>
-      <select id="exc-type">
-        <option value="Pest Discovered">Pest Discovered</option>
-        <option value="Disease Discovered">Disease Discovered</option>
-        <option value="Irrigation Failure">Irrigation Failure</option>
-        <option value="Crop Damage">Crop Damage</option>
-        <option value="Missing Material">Missing Material</option>
-        <option value="Equipment Failure">Equipment Failure</option>
-        <option value="Safety Issue">Safety Issue</option>
-        <option value="Other">Other</option>
-      </select>
-    </div>
-    <div class="form-group">
-      <label>Severity</label>
-      <select id="exc-severity">
-        <option value="Low">Low</option>
-        <option value="Medium">Medium</option>
-        <option value="High">High</option>
-        <option value="Critical">Critical</option>
-      </select>
-    </div>
-    <div class="form-group">
-      <label>Notes</label>
-      <textarea id="exc-notes" rows="3"></textarea>
-    </div>
-    <button class="btn btn-danger" onclick="appSubmitException()">Submit Alert</button>
-    <button class="btn btn-secondary" onclick="switchView('view-execution')">Back to Session</button>
-  </div>
-
-  <!-- View 6: Manager Operations Live Board -->
-  <div id="view-manager" class="card hidden">
-    <h3>FIELD LIVE BOARD</h3>
-    <button class="btn btn-secondary" onclick="loadLiveBoard()" style="margin-bottom:12px;">Refresh Board</button>
-    <div style="overflow-x:auto;">
-      <table>
-        <thead>
-          <tr>
-            <th>Worker</th>
-            <th>Bed</th>
-            <th>Cohort</th>
-            <th>Activity</th>
-            <th>Elapsed</th>
-            <th>Status</th>
-            <th>Exception</th>
-          </tr>
-        </thead>
-        <tbody id="live-board-rows"></tbody>
-      </table>
-    </div>
-    <button class="btn" onclick="appArchiveSessions()" style="margin-top:16px;">Archive Completed Sessions</button>
-    <button class="btn btn-secondary" onclick="switchView('view-login')">Logout / Switch View</button>
-  </div>
-
-</div>
-
 <script>
-  // ---- REQUIRED: paste your Apps Script Web App deployment URL below ----
-  // Deploy > Manage deployments > copy the URL ending in /exec
-  // Deployment must be set to "Execute as: Me" and "Who has access: Anyone"
-  // or the browser will be blocked by Google's login wall / CORS will fail.
+  // Paste your Apps Script Web App deployment URL below
+  // Must be deployed as: "Execute as: Me" and "Who has access: Anyone"
   const WEB_APP_URL = 'https://script.google.com/macros/s/PASTE_YOUR_DEPLOYMENT_ID/exec';
 
   let state = {
@@ -171,17 +16,18 @@
   function apiCall(action, payload, callback) {
     fetch(WEB_APP_URL, {
       method: 'POST',
-      // text/plain avoids a CORS preflight (OPTIONS request), which Apps
-      // Script web apps do not handle. The backend still JSON.parses the body fine.
-      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      mode: 'cors',
+      redirect: 'follow', // REQUIRED: Follows Google's 302 backend redirect
+      headers: {
+        'Content-Type': 'text/plain;charset=utf-8' // REQUIRED: Avoids CORS OPTIONS preflight
+      },
       body: JSON.stringify({ action: action, payload: payload })
     })
       .then(function(response) {
         if (!response.ok) throw new Error('HTTP ' + response.status);
-        return response.text();
+        return response.json();
       })
-      .then(function(responseStr) {
-        let res = JSON.parse(responseStr);
+      .then(function(res) {
         callback(res);
       })
       .catch(function(error) {
@@ -202,18 +48,18 @@
     let pin = document.getElementById('login-pin').value;
     
     apiCall('login', { workerId: state.workerId, pin: pin }, function(res) {
-      if (res.success) {
+      if (res && res.success) {
         loadTaxonomy();
         switchView('view-scan');
       } else {
-        alert('Authentication failed');
+        alert('Authentication failed: ' + (res.error || 'Invalid credentials'));
       }
     });
   }
 
   function loadTaxonomy() {
     apiCall('get-taxonomy', {}, function(res) {
-      if (res.success) {
+      if (res && res.success) {
         state.taxonomyGroups = res.groups;
         renderTaxonomyPicker();
       }
@@ -247,7 +93,7 @@
     if (!state.bedId) return alert('Please enter or scan a Bed ID');
 
     apiCall('scan-bed', { bedId: state.bedId }, function(res) {
-      if (res.success) {
+      if (res && res.success) {
         state.cohortId = res.bed.cohortId;
         state.crop = res.bed.crop;
         
@@ -256,6 +102,8 @@
         document.getElementById('lbl-crop').textContent = state.crop;
         
         switchView('view-select-task');
+      } else {
+        alert('Bed scan failed: ' + (res.error || 'Unknown bed ID'));
       }
     });
   }
@@ -271,7 +119,7 @@
     };
 
     apiCall('start-session', payload, function(res) {
-      if (res.success) {
+      if (res && res.success) {
         state.sessionId = res.sessionId;
         document.getElementById('exec-bed').textContent = state.bedId;
         document.getElementById('exec-task').textContent = state.selectedActivity;
@@ -290,7 +138,7 @@
     }
 
     apiCall('complete-session', { sessionId: state.sessionId, quantity: quantity }, function(res) {
-      if (res.success) {
+      if (res && res.success) {
         alert('Activity completed. Duration: ' + res.elapsedMinutes + ' mins');
         switchView('view-scan');
       }
@@ -311,7 +159,7 @@
     };
 
     apiCall('report-exception', payload, function(res) {
-      if (res.success) {
+      if (res && res.success) {
         alert('Exception logged and manager notified.');
         document.getElementById('lbl-status').className = 'badge badge-danger';
         document.getElementById('lbl-status').textContent = 'ALERT';
@@ -322,7 +170,7 @@
 
   function loadLiveBoard() {
     apiCall('get-live-board', {}, function(res) {
-      if (res.success) {
+      if (res && res.success) {
         let tbody = document.getElementById('live-board-rows');
         tbody.innerHTML = '';
         res.board.forEach(row => {
@@ -344,12 +192,10 @@
 
   function appArchiveSessions() {
     apiCall('archive-completed-sessions', { managerId: state.workerId }, function(res) {
-      if (res.success) {
+      if (res && res.success) {
         alert('Archived ' + res.archivedSessions + ' completed session(s) into permanent activity log.');
         loadLiveBoard();
       }
     });
   }
 </script>
-</body>
-</html>
