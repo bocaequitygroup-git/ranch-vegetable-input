@@ -24,16 +24,34 @@
     .bed-result .bed-id { font-weight: bold; font-size: 15px; }
     .bed-result .bed-meta { font-size: 13px; color: #666; margin-top: 2px; }
     .bed-empty-msg { font-size: 13px; color: #888; padding: 8px 0; }
+    #app-header { position: sticky; top: 0; display: flex; align-items: center; justify-content: space-between;
+      background: #263238; color: #fff; padding: 10px 16px; margin-bottom: 12px; font-size: 13px; z-index: 10; }
+    #app-header.hidden { display: none !important; }
+    .conn-status { display: flex; align-items: center; gap: 6px; }
+    .conn-dot { width: 9px; height: 9px; border-radius: 50%; background: #888; flex-shrink: 0; }
+    .conn-dot.online { background: #66bb6a; }
+    .conn-dot.checking { background: #ffb300; }
+    .conn-dot.offline { background: #e53935; }
+    #btn-logout { width: auto; padding: 6px 12px; margin: 0; font-size: 12px; background: #455a64; }
+    #btn-logout:hover { background: #37474f; }
   </style>
 </head>
 <body>
+
+  <div id="app-header" class="hidden">
+    <div class="conn-status">
+      <span id="conn-dot" class="conn-dot"></span>
+      <span id="conn-text">Not connected</span>
+    </div>
+    <button id="btn-logout" onclick="appLogout()">Log Out</button>
+  </div>
 
   <!-- VIEW 1: AUTHENTICATION -->
   <div id="view-login" class="card">
     <h2>Worker Login</h2>
     <div class="form-group">
       <label for="login-worker-id">User ID</label>
-      <input type="text" id="login-worker-id" placeholder="e.g. USR-WORKER1">
+      <input type="text" id="login-worker-id" placeholder="e.g. USR-WORKER1" autocapitalize="off" autocorrect="off" spellcheck="false">
     </div>
     <div class="form-group">
       <label for="login-pin">PIN</label>
@@ -90,6 +108,7 @@
 
     <button class="btn-danger" onclick="appReportExceptionPrompt()">Report Exception / Issue</button>
     <button onclick="appCompleteSession()">Complete Activity</button>
+    <button class="btn-secondary" onclick="appPauseAndExit()">Pause &amp; Exit to Scan</button>
   </div>
 
   <!-- VIEW 5: EXCEPTION LOGGING -->
@@ -144,7 +163,16 @@
     allBeds: []
   };
 
+  function setConnStatus(status, label) {
+    var dot = document.getElementById('conn-dot');
+    var text = document.getElementById('conn-text');
+    if (!dot || !text) return;
+    dot.className = 'conn-dot ' + status;
+    text.textContent = label;
+  }
+
   function apiCall(action, payload, callback) {
+    setConnStatus('checking', 'Connecting...');
     fetch(WEB_APP_URL, {
       method: 'POST',
       mode: 'cors',
@@ -159,10 +187,12 @@
         return response.json();
       })
       .then(function(res) {
+        setConnStatus('online', 'Connected');
         callback(res);
       })
       .catch(function(error) {
         console.error('apiCall failed:', action, error);
+        setConnStatus('offline', 'Connection error');
         alert('Something went wrong (' + action + '): ' + error.message);
       });
   }
@@ -182,6 +212,8 @@
 
     apiCall('login', { workerId: state.workerId, pin: pin }, function(res) {
       if (res && res.success) {
+        state.workerId = res.user.workerId; // canonical ID from the sheet, not whatever case was typed
+        document.getElementById('app-header').classList.remove('hidden');
         loadTaxonomy();
         loadBeds();
         checkForOpenSession();
@@ -189,6 +221,22 @@
         alert('Authentication failed: ' + (res.error || 'Invalid credentials'));
       }
     });
+  }
+
+  // Only safe to offer from view-scan -- if a session is active/paused,
+  // logging out would strand it with no way back in except the
+  // auto-resume-on-login path, so we route through that deliberately
+  // rather than blocking logout altogether.
+  function appLogout() {
+    state = {
+      workerId: '', bedId: '', cohortId: '', crop: '', selectedActivity: '',
+      sessionId: '', taxonomyGroups: {}, allBeds: []
+    };
+    document.getElementById('login-worker-id').value = '';
+    document.getElementById('login-pin').value = '';
+    document.getElementById('app-header').classList.add('hidden');
+    resetBedSearch();
+    switchView('view-login');
   }
 
   // If this worker already has an ACTIVE or PAUSED session (e.g. from a
@@ -368,6 +416,20 @@
     var results = document.getElementById('bed-search-results');
     if (input) input.value = '';
     if (results) results.innerHTML = '';
+  }
+
+  // The only previous way off this screen was completing the task or
+  // reporting an exception -- there was no way to just step away from a
+  // task without losing it. Pauses the session (already supported
+  // server-side) and returns to the scan screen; checkForOpenSession on
+  // next login (or a rescan) will pick it back up.
+  function appPauseAndExit() {
+    apiCall('pause-session', { sessionId: state.sessionId }, function(res) {
+      if (res && res.success) {
+        resetBedSearch();
+        switchView('view-scan');
+      }
+    });
   }
 
   function appReportExceptionPrompt() {
