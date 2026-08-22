@@ -47,7 +47,7 @@
     <h2>Scan Location</h2>
     <div class="form-group">
       <label for="scan-qr-input">Scan or Enter QR Code</label>
-      <input type="text" id="scan-qr-input" placeholder="e.g. BED:B1-01">
+      <input type="text" id="scan-qr-input" placeholder="e.g. BED:B1-01" onkeypress="handleScanKeyPress(event)">
     </div>
     <button onclick="appScanQR()">Process Scan</button>
 
@@ -123,7 +123,7 @@
 <script>
   // Paste your Apps Script Web App deployment URL below
   // Must be deployed as: "Execute as: Me" and "Who has access: Anyone"
-  const WEB_APP_URL = 'https://script.google.com/macros/s/AKfycbwUFXoHDFSUArQCIqkh2De8-fwPfWSG9LRvtagJPzmJdFaBx_95av5V57NzYs1J1IZLnA/exec';
+  const WEB_APP_URL = 'https://script.google.com/macros/s/PASTE_YOUR_DEPLOYMENT_ID/exec';
 
   // Every id in this list MUST have a matching <div> in the markup above,
   // or switchView() throws on document.getElementById(v).classList and the
@@ -261,6 +261,14 @@
       select.appendChild(optgroup);
     }
     container.appendChild(select);
+  }
+
+  // Allows scanner hardware (which types the code then sends Enter) to
+  // trigger a scan without touching the "Process Scan" button.
+  function handleScanKeyPress(e) {
+    if (e.key === 'Enter') {
+      appScanQR();
+    }
   }
 
   // Scans a full QR string (e.g. "BED:B1-01") or a bare Bed_ID.
