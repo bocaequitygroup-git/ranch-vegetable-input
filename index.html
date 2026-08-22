@@ -1,7 +1,6 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <base target="_top">
   <style>
     :root {
       --primary: #2e7d32;
@@ -153,6 +152,12 @@
 </div>
 
 <script>
+  // ---- REQUIRED: paste your Apps Script Web App deployment URL below ----
+  // Deploy > Manage deployments > copy the URL ending in /exec
+  // Deployment must be set to "Execute as: Me" and "Who has access: Anyone"
+  // or the browser will be blocked by Google's login wall / CORS will fail.
+  const WEB_APP_URL = 'https://script.google.com/macros/s/PASTE_YOUR_DEPLOYMENT_ID/exec';
+
   let state = {
     workerId: 'W-017',
     bedId: '',
@@ -164,16 +169,25 @@
   };
 
   function apiCall(action, payload, callback) {
-    google.script.run
-      .withSuccessHandler(function(responseStr) {
-        let res = typeof responseStr === 'string' ? JSON.parse(responseStr) : responseStr;
+    fetch(WEB_APP_URL, {
+      method: 'POST',
+      // text/plain avoids a CORS preflight (OPTIONS request), which Apps
+      // Script web apps do not handle. The backend still JSON.parses the body fine.
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify({ action: action, payload: payload })
+    })
+      .then(function(response) {
+        if (!response.ok) throw new Error('HTTP ' + response.status);
+        return response.text();
+      })
+      .then(function(responseStr) {
+        let res = JSON.parse(responseStr);
         callback(res);
       })
-      .withFailureHandler(function(error) {
+      .catch(function(error) {
         console.error('apiCall failed:', action, error);
-        alert('Something went wrong (' + action + '): ' + (error && error.message ? error.message : error));
-      })
-      .clientApiCall(action, payload);
+        alert('Something went wrong (' + action + '): ' + error.message);
+      });
   }
 
   function switchView(viewId) {
