@@ -24,6 +24,14 @@
     .bed-result .bed-id { font-weight: bold; font-size: 15px; }
     .bed-result .bed-meta { font-size: 13px; color: #666; margin-top: 2px; }
     .bed-empty-msg { font-size: 13px; color: #888; padding: 8px 0; }
+    .session-row { border: 1px solid #ddd; border-radius: 6px; padding: 12px; margin-bottom: 10px; background: #fafafa; }
+    .session-row-top { display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px; }
+    .session-row .sr-bed { font-weight: bold; font-size: 15px; }
+    .session-row .sr-meta { font-size: 13px; color: #666; margin-bottom: 8px; }
+    .session-row .sr-actions { display: flex; gap: 8px; }
+    .session-row .sr-actions button { width: auto; flex: 1; padding: 8px; font-size: 13px; margin-top: 0; }
+    .badge-paused { background: #ef6c00; }
+    .empty-state { text-align: center; color: #888; padding: 24px 8px; font-size: 14px; }
     #app-header { position: sticky; top: 0; display: flex; align-items: center; justify-content: space-between;
       background: #263238; color: #fff; padding: 10px 16px; margin-bottom: 12px; font-size: 13px; z-index: 10; }
     #app-header.hidden { display: none !important; }
@@ -60,6 +68,13 @@
     <button onclick="appLogin()">Sign In</button>
   </div>
 
+  <!-- VIEW 1.5: MY ACTIVE SESSIONS (post-login hub -- supports multiple parallel tasks) -->
+  <div id="view-my-sessions" class="card hidden">
+    <h2>My Active Sessions</h2>
+    <div id="my-sessions-list"></div>
+    <button onclick="switchView('view-scan')">+ Start New Task</button>
+  </div>
+
   <!-- VIEW 2: QR / BED SCAN -->
   <div id="view-scan" class="card hidden">
     <h2>Scan Location</h2>
@@ -74,6 +89,7 @@
       <input type="text" id="bed-search-input" placeholder="Search by bed, block, or crop..." oninput="renderBedSearchResults()">
     </div>
     <div id="bed-search-results"></div>
+    <button class="btn-secondary" style="margin-top:16px;" onclick="switchView('view-my-sessions')">Back to My Sessions</button>
   </div>
 
   <!-- VIEW 3: CONFIRMATION & TASK SELECTION -->
@@ -93,6 +109,7 @@
 
     <button id="btn-use-bed" onclick="appStartSession()">Use This Bed &amp; Start Task</button>
     <button class="btn-secondary" onclick="switchView('view-scan')">Cancel / Rescan</button>
+    <button class="btn-secondary" onclick="switchView('view-my-sessions')">Back to My Sessions</button>
   </div>
 
   <!-- VIEW 4: ACTIVE TIMER EXECUTION -->
@@ -108,7 +125,8 @@
 
     <button class="btn-danger" onclick="appReportExceptionPrompt()">Report Exception / Issue</button>
     <button onclick="appCompleteSession()">Complete Activity</button>
-    <button class="btn-secondary" onclick="appPauseAndExit()">Pause &amp; Exit to Scan</button>
+    <button class="btn-secondary" onclick="appPauseAndExit()">Pause &amp; Back to My Sessions</button>
+    <button class="btn-secondary" onclick="switchView('view-my-sessions')">Back to My Sessions</button>
   </div>
 
   <!-- VIEW 5: EXCEPTION LOGGING -->
@@ -150,7 +168,7 @@
   // buttons appearing to "do nothing" -- 'view-manager' was in this list
   // with no corresponding element, so every switchView() call silently
   // threw before reaching the line that shows the new view.
-  const VIEW_IDS = ['view-login', 'view-scan', 'view-select-task', 'view-execution', 'view-exception'];
+  const VIEW_IDS = ['view-login', 'view-my-sessions', 'view-scan', 'view-select-task', 'view-execution', 'view-exception'];
 
   let state = {
     workerId: '',
@@ -160,7 +178,8 @@
     selectedActivity: '',
     sessionId: '',
     taxonomyGroups: {},
-    allBeds: []
+    allBeds: [],
+    openSessions: [] // all of this worker's ACTIVE/PAUSED sessions -- multi-tasking means there can be more than one
   };
 
   function setConnStatus(status, label) {
@@ -216,7 +235,7 @@
         document.getElementById('app-header').classList.remove('hidden');
         loadTaxonomy();
         loadBeds();
-        checkForOpenSession();
+        loadMySessions();
       } else {
         alert('Authentication failed: ' + (res.error || 'Invalid credentials'));
       }
@@ -230,7 +249,7 @@
   function appLogout() {
     state = {
       workerId: '', bedId: '', cohortId: '', crop: '', selectedActivity: '',
-      sessionId: '', taxonomyGroups: {}, allBeds: []
+      sessionId: '', taxonomyGroups: {}, allBeds: [], openSessions: []
     };
     document.getElementById('login-worker-id').value = '';
     document.getElementById('login-pin').value = '';
@@ -239,32 +258,91 @@
     switchView('view-login');
   }
 
-  // If this worker already has an ACTIVE or PAUSED session (e.g. from a
-  // previous shift, a dropped connection, or a stray session that never
-  // got completed), resume straight into it instead of dropping them at
-  // the scan screen with no way back to it.
-  function checkForOpenSession() {
-    apiCall('get-open-session', { workerId: state.workerId }, function(res) {
-      if (res && res.success && res.session) {
-        var s = res.session;
-        state.bedId = s.bedId;
-        state.cohortId = s.cohortId;
-        state.selectedActivity = s.activity;
-        state.sessionId = s.sessionId;
+  // Loads ALL of this worker's ACTIVE/PAUSED sessions and lands them on the
+  // "My Active Sessions" hub -- workers can multi-task, so login no longer
+  // assumes there's just one session to resume into. An empty list still
+  // lands here (with a "+ Start New Task" button) rather than jumping
+  // straight to the scan screen, so the hub is always the consistent home base.
+  function loadMySessions() {
+    apiCall('get-open-sessions', { workerId: state.workerId }, function(res) {
+      state.openSessions = (res && res.success && res.sessions) ? res.sessions : [];
+      renderMySessions();
+      switchView('view-my-sessions');
+    });
+  }
 
-        document.getElementById('exec-bed').textContent = s.bedId;
-        document.getElementById('exec-task').textContent = s.activity;
-        document.getElementById('exec-start').textContent = new Date(s.startTime).toLocaleTimeString();
+  function renderMySessions() {
+    let container = document.getElementById('my-sessions-list');
+    container.innerHTML = '';
 
-        if (s.status === 'PAUSED') {
-          apiCall('resume-session', { sessionId: s.sessionId }, function() {
-            switchView('view-execution');
-          });
-        } else {
-          switchView('view-execution');
-        }
-      } else {
-        switchView('view-scan');
+    if (state.openSessions.length === 0) {
+      container.innerHTML = '<div class="empty-state">No active tasks right now. Scan a bed to start one.</div>';
+      return;
+    }
+
+    state.openSessions.forEach(function(s) {
+      let row = document.createElement('div');
+      row.className = 'session-row';
+
+      let badgeClass = s.status === 'PAUSED' ? 'badge badge-paused' : 'badge badge-active';
+      let primaryLabel = s.status === 'PAUSED' ? 'Resume' : 'Open';
+
+      row.innerHTML =
+        '<div class="session-row-top">' +
+          '<span class="sr-bed">' + s.bedId + '</span>' +
+          '<span class="' + badgeClass + '">' + s.status + '</span>' +
+        '</div>' +
+        '<div class="sr-meta">' + s.activity + ' &middot; started ' + new Date(s.startTime).toLocaleTimeString() + '</div>' +
+        '<div class="sr-actions">' +
+          '<button class="sr-btn-primary">' + primaryLabel + '</button>' +
+          '<button class="sr-btn-complete btn-secondary">Complete</button>' +
+        '</div>';
+
+      row.querySelector('.sr-btn-primary').onclick = function() { openSessionDetail(s); };
+      row.querySelector('.sr-btn-complete').onclick = function() { quickCompleteSession(s); };
+
+      container.appendChild(row);
+    });
+  }
+
+  // Opens a specific session's execution screen (pause/complete/report
+  // exception act on THIS session only -- other open sessions are untouched).
+  function openSessionDetail(s) {
+    state.bedId = s.bedId;
+    state.cohortId = s.cohortId;
+    state.selectedActivity = s.activity;
+    state.sessionId = s.sessionId;
+
+    document.getElementById('exec-bed').textContent = s.bedId;
+    document.getElementById('exec-task').textContent = s.activity;
+    document.getElementById('exec-start').textContent = new Date(s.startTime).toLocaleTimeString();
+
+    let statusLbl = document.getElementById('lbl-status');
+    statusLbl.className = 'badge ' + (s.status === 'PAUSED' ? 'badge-paused' : 'badge-active');
+    statusLbl.textContent = s.status;
+
+    if (s.status === 'PAUSED') {
+      apiCall('resume-session', { sessionId: s.sessionId }, function() {
+        statusLbl.className = 'badge badge-active';
+        statusLbl.textContent = 'ACTIVE';
+        switchView('view-execution');
+      });
+    } else {
+      switchView('view-execution');
+    }
+  }
+
+  // Completes a session directly from the hub list without opening its
+  // detail screen -- lets a worker close out one task while others keep running.
+  function quickCompleteSession(s) {
+    let quantity = 0;
+    if (s.activity === 'Harvest') {
+      quantity = prompt('Enter harvested quantity (lbs/crates) for ' + s.bedId + ':', '0');
+      if (quantity === null) return; // cancelled
+    }
+    apiCall('complete-session', { sessionId: s.sessionId, quantity: quantity }, function(res) {
+      if (res && res.success) {
+        loadMySessions();
       }
     });
   }
@@ -383,12 +461,19 @@
       activity: state.selectedActivity
     };
 
+    // Starting a new task no longer touches or is blocked by any of this
+    // worker's other open sessions -- it just logs independently. This
+    // sessionId becomes the "focused" session for the execution view that
+    // follows, but any others keep running untouched in the background.
     apiCall('start-session', payload, function(res) {
       if (res && res.success) {
         state.sessionId = res.sessionId;
         document.getElementById('exec-bed').textContent = state.bedId;
         document.getElementById('exec-task').textContent = state.selectedActivity;
         document.getElementById('exec-start').textContent = new Date(res.startTime).toLocaleTimeString();
+        let statusLbl = document.getElementById('lbl-status');
+        statusLbl.className = 'badge badge-active';
+        statusLbl.textContent = 'ACTIVE';
         switchView('view-execution');
       } else {
         alert(res.error || 'Failed to start session');
@@ -396,6 +481,9 @@
     });
   }
 
+  // Completes whichever session is currently focused in the execution view.
+  // Any other open sessions for this worker are untouched and still listed
+  // on the hub afterward.
   function appCompleteSession() {
     let quantity = 0;
     if (state.selectedActivity === 'Harvest') {
@@ -406,7 +494,7 @@
       if (res && res.success) {
         alert('Activity completed. Duration: ' + res.elapsedMinutes + ' mins');
         resetBedSearch();
-        switchView('view-scan');
+        loadMySessions();
       }
     });
   }
@@ -418,16 +506,14 @@
     if (results) results.innerHTML = '';
   }
 
-  // The only previous way off this screen was completing the task or
-  // reporting an exception -- there was no way to just step away from a
-  // task without losing it. Pauses the session (already supported
-  // server-side) and returns to the scan screen; checkForOpenSession on
-  // next login (or a rescan) will pick it back up.
+  // Pauses whichever session is currently focused in the execution view and
+  // returns to the "My Active Sessions" hub, where it'll show up as PAUSED
+  // alongside any other open sessions -- tapping it there resumes it.
   function appPauseAndExit() {
     apiCall('pause-session', { sessionId: state.sessionId }, function(res) {
       if (res && res.success) {
         resetBedSearch();
-        switchView('view-scan');
+        loadMySessions();
       }
     });
   }
