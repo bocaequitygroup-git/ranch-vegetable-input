@@ -35,6 +35,10 @@
     .session-row .sr-actions { display: flex; gap: 8px; }
     .session-row .sr-actions button { width: auto; flex: 1; padding: 8px; font-size: 13px; margin-top: 0; }
     .badge-paused { background: #ef6c00; }
+    .pause-group { margin-top: 8px; }
+    .pause-group > label { font-weight: bold; margin-bottom: 6px; font-size: 14px; }
+    .pause-group-buttons { display: flex; gap: 8px; }
+    .pause-group-buttons button { width: auto; flex: 1; padding: 10px 6px; font-size: 12px; margin-top: 0; }
     .empty-state { text-align: center; color: #888; padding: 24px 8px; font-size: 14px; }
     #app-header { position: sticky; top: 0; display: flex; align-items: center; justify-content: space-between;
       background: #263238; color: #fff; padding: 10px 16px; margin-bottom: 12px; font-size: 13px; z-index: 10; }
@@ -132,7 +136,16 @@
 
     <button class="btn-danger" onclick="appReportExceptionPrompt()">Report Exception / Issue</button>
     <button onclick="appCompleteSession()">Complete Activity</button>
-    <button class="btn-secondary" onclick="appPauseAndExit()">Pause &amp; Back to My Sessions</button>
+
+    <div class="pause-group">
+      <label>Pause &amp; Back to My Sessions</label>
+      <div class="pause-group-buttons">
+        <button class="btn-secondary" onclick="appPauseAndExit('BREAK')">Take Break</button>
+        <button class="btn-secondary" onclick="appPauseAndExit('LUNCH')">Take Lunch</button>
+        <button class="btn-secondary" onclick="appPauseAndExit('END_OF_DAY')">End of Day</button>
+      </div>
+    </div>
+
     <button class="btn-secondary" onclick="switchView('view-my-sessions')">Back to My Sessions</button>
   </div>
 
@@ -299,13 +312,16 @@
 
       let badgeClass = s.status === 'PAUSED' ? 'badge badge-paused' : 'badge badge-active';
       let primaryLabel = s.status === 'PAUSED' ? 'Resume' : 'Open';
+      let pauseNote = (s.status === 'PAUSED' && s.pauseType)
+        ? ' &middot; ' + pauseTypeLabel(s.pauseType)
+        : '';
 
       row.innerHTML =
         '<div class="session-row-top">' +
           '<span class="sr-bed">' + s.bedId + '</span>' +
           '<span class="' + badgeClass + '">' + s.status + '</span>' +
         '</div>' +
-        '<div class="sr-meta">' + labelForActivity(s.activity) + ' &middot; started ' + new Date(s.startTime).toLocaleTimeString() + '</div>' +
+        '<div class="sr-meta">' + labelForActivity(s.activity) + ' &middot; started ' + new Date(s.startTime).toLocaleTimeString() + pauseNote + '</div>' +
         '<div class="sr-actions">' +
           '<button class="sr-btn-primary">' + primaryLabel + '</button>' +
           '<button class="sr-btn-complete btn-secondary">Complete</button>' +
@@ -404,6 +420,11 @@
 
   function labelForActivity(act) {
     return (state.taxonomyLabels && state.taxonomyLabels[act]) || act;
+  }
+
+  var PAUSE_TYPE_LABELS = { BREAK: 'On Break', LUNCH: 'On Lunch', END_OF_DAY: 'Done for Day' };
+  function pauseTypeLabel(pauseType) {
+    return PAUSE_TYPE_LABELS[pauseType] || pauseType;
   }
 
   function loadTaxonomy() {
@@ -554,12 +575,17 @@
 
   // Pauses whichever session is currently focused in the execution view and
   // returns to the "My Active Sessions" hub, where it'll show up as PAUSED
-  // alongside any other open sessions -- tapping it there resumes it.
-  function appPauseAndExit() {
-    apiCall('pause-session', { sessionId: state.sessionId }, function(res) {
+  // (labeled with the chosen pauseType) alongside any other open sessions --
+  // tapping it there resumes it. pauseType is one of BREAK / LUNCH /
+  // END_OF_DAY -- purely descriptive of worker intent, doesn't change the
+  // elapsed-time math on the backend at all.
+  function appPauseAndExit(pauseType) {
+    apiCall('pause-session', { sessionId: state.sessionId, pauseType: pauseType }, function(res) {
       if (res && res.success) {
         resetBedSearch();
         loadMySessions();
+      } else {
+        alert(res && res.error ? res.error : 'Pause failed');
       }
     });
   }
