@@ -409,12 +409,13 @@
              (b.cropName && b.cropName.toUpperCase().indexOf(query) !== -1);
     });
 
-    // Render cap kept only to avoid dumping an unwieldy DOM list on a very
-    // broad query (e.g. a single letter) -- NOT a data limit. state.allBeds
+    // Render cap kept only as a safety ceiling, not a practical limit at
+    // current ranch scale (~220 beds) -- NOT a data limit. state.allBeds
     // already holds every bed from the backend, and everything up to this
     // cap is shown; only truncation past RENDER_CAP is disclosed to the
-    // worker via the count note below.
-    var RENDER_CAP = 60;
+    // worker via the count note below. Raise this if the bed count grows
+    // well past ~250 and DOM render time becomes noticeable on field devices.
+    var RENDER_CAP = 250;
     let matches = allMatches.slice(0, RENDER_CAP);
 
     if (matches.length === 0) {
