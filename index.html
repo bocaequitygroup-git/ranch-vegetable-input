@@ -32,6 +32,7 @@
     .session-row-top { display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px; }
     .session-row .sr-bed { font-weight: bold; font-size: 15px; }
     .session-row .sr-meta { font-size: 13px; color: #666; margin-bottom: 8px; }
+    .session-row .sr-reassigned { font-size: 12px; color: #ef6c00; font-weight: bold; margin-bottom: 8px; }
     .session-row .sr-actions { display: flex; gap: 8px; }
     .session-row .sr-actions button { width: auto; flex: 1; padding: 8px; font-size: 13px; margin-top: 0; }
     .badge-paused { background: #ef6c00; }
@@ -78,7 +79,10 @@
 
   <!-- VIEW 1.5: MY ACTIVE SESSIONS (post-login hub -- supports multiple parallel tasks) -->
   <div id="view-my-sessions" class="card hidden">
-    <h2>My Active Sessions</h2>
+    <div style="display:flex; align-items:center; justify-content:space-between;">
+      <h2 style="margin:0;">My Active Sessions</h2>
+      <button style="width:auto; padding:6px 12px; font-size:12px; margin:0;" onclick="loadMySessions()">Refresh</button>
+    </div>
     <div id="my-sessions-list"></div>
     <button onclick="switchView('view-scan')">+ Start New Task</button>
   </div>
@@ -97,7 +101,7 @@
       <input type="text" id="bed-search-input" placeholder="Search by bed, block, or crop..." oninput="renderBedSearchResults()">
     </div>
     <div id="bed-search-results"></div>
-    <button class="btn-secondary" style="margin-top:16px;" onclick="switchView('view-my-sessions')">Back to My Sessions</button>
+    <button class="btn-secondary" style="margin-top:16px;" onclick="loadMySessions()">Back to My Sessions</button>
   </div>
 
   <!-- VIEW 3: CONFIRMATION & TASK SELECTION -->
@@ -120,7 +124,7 @@
 
     <button id="btn-use-bed" onclick="appStartSession()">Use This Bed &amp; Start Task</button>
     <button class="btn-secondary" onclick="switchView('view-scan')">Cancel / Rescan</button>
-    <button class="btn-secondary" onclick="switchView('view-my-sessions')">Back to My Sessions</button>
+    <button class="btn-secondary" onclick="loadMySessions()">Back to My Sessions</button>
   </div>
 
   <!-- VIEW 4: ACTIVE TIMER EXECUTION -->
@@ -146,7 +150,7 @@
       </div>
     </div>
 
-    <button class="btn-secondary" onclick="switchView('view-my-sessions')">Back to My Sessions</button>
+    <button class="btn-secondary" onclick="loadMySessions()">Back to My Sessions</button>
   </div>
 
   <!-- VIEW 5: EXCEPTION LOGGING -->
@@ -315,6 +319,12 @@
       let pauseNote = (s.status === 'PAUSED' && s.pauseType)
         ? ' &middot; ' + pauseTypeLabel(s.pauseType)
         : '';
+      let reassignedHtml = s.reassignedToMe
+        ? '<div class="sr-reassigned">&#8635; Reassigned to you from ' + s.reassignedFromName +
+          (s.reassignedByName ? ' by ' + s.reassignedByName : '') +
+          (s.reassignedNote ? ': "' + s.reassignedNote + '"' : '') +
+          '</div>'
+        : '';
 
       row.innerHTML =
         '<div class="session-row-top">' +
@@ -322,6 +332,7 @@
           '<span class="' + badgeClass + '">' + s.status + '</span>' +
         '</div>' +
         '<div class="sr-meta">' + labelForActivity(s.activity) + ' &middot; started ' + new Date(s.startTime).toLocaleTimeString() + pauseNote + '</div>' +
+        reassignedHtml +
         '<div class="sr-actions">' +
           '<button class="sr-btn-primary">' + primaryLabel + '</button>' +
           '<button class="sr-btn-complete btn-secondary">Complete</button>' +
@@ -391,12 +402,20 @@
 
     if (!query) return;
 
-    let matches = state.allBeds.filter(function(b) {
+    let allMatches = state.allBeds.filter(function(b) {
       return (b.bedId && b.bedId.toUpperCase().indexOf(query) !== -1) ||
              (b.block && b.block.toUpperCase().indexOf(query) !== -1) ||
              (b.crop && b.crop.toUpperCase().indexOf(query) !== -1) ||
              (b.cropName && b.cropName.toUpperCase().indexOf(query) !== -1);
-    }).slice(0, 25);
+    });
+
+    // Render cap kept only to avoid dumping an unwieldy DOM list on a very
+    // broad query (e.g. a single letter) -- NOT a data limit. state.allBeds
+    // already holds every bed from the backend, and everything up to this
+    // cap is shown; only truncation past RENDER_CAP is disclosed to the
+    // worker via the count note below.
+    var RENDER_CAP = 60;
+    let matches = allMatches.slice(0, RENDER_CAP);
 
     if (matches.length === 0) {
       container.innerHTML = '<div class="bed-empty-msg">No beds match "' + query + '"</div>';
@@ -411,6 +430,14 @@
         '<div class="bed-meta">Block ' + (b.block || '-') + ' &middot; ' + (b.cropName || b.crop) + ' &middot; ' + (b.state || '-') + '</div>';
       container.appendChild(row);
     });
+
+    if (allMatches.length > RENDER_CAP) {
+      let note = document.createElement('div');
+      note.className = 'bed-meta';
+      note.style.marginTop = '8px';
+      note.textContent = 'Showing ' + RENDER_CAP + ' of ' + allMatches.length + ' matches — refine your search to narrow it down.';
+      container.appendChild(note);
+    }
   }
 
   function selectBedFromSearch(bedId) {
