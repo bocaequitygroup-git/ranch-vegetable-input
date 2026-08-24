@@ -85,6 +85,17 @@
     </div>
     <div id="my-sessions-list"></div>
     <button onclick="switchView('view-scan')">+ Start New Task</button>
+    <button class="btn-secondary" onclick="loadMyHistory()">View Completed History</button>
+  </div>
+
+  <!-- VIEW 1.6: MY COMPLETED HISTORY (read-only feed of this worker's own FIELD_ACTIVITY_LOG rows) -->
+  <div id="view-my-history" class="card hidden">
+    <div style="display:flex; align-items:center; justify-content:space-between;">
+      <h2 style="margin:0;">Completed History</h2>
+      <button style="width:auto; padding:6px 12px; font-size:12px; margin:0;" onclick="loadMyHistory()">Refresh</button>
+    </div>
+    <div id="my-history-list"></div>
+    <button class="btn-secondary" style="margin-top:16px;" onclick="loadMySessions()">Back to My Sessions</button>
   </div>
 
   <!-- VIEW 2: QR / BED SCAN -->
@@ -192,7 +203,7 @@
   // buttons appearing to "do nothing" -- 'view-manager' was in this list
   // with no corresponding element, so every switchView() call silently
   // threw before reaching the line that shows the new view.
-  const VIEW_IDS = ['view-login', 'view-my-sessions', 'view-scan', 'view-select-task', 'view-execution', 'view-exception'];
+  const VIEW_IDS = ['view-login', 'view-my-sessions', 'view-my-history', 'view-scan', 'view-select-task', 'view-execution', 'view-exception'];
 
   let state = {
     workerId: '',
@@ -204,7 +215,8 @@
     taxonomyGroups: {},
     taxonomyLabels: {},
     allBeds: [],
-    openSessions: [] // all of this worker's ACTIVE/PAUSED sessions -- multi-tasking means there can be more than one
+    openSessions: [], // all of this worker's ACTIVE/PAUSED sessions -- multi-tasking means there can be more than one
+    myHistory: [] // this worker's own completed-activity feed from FIELD_ACTIVITY_LOG, via get-activity-history
   };
 
   function setConnStatus(status, label) {
@@ -279,7 +291,7 @@
 
     state = {
       workerId: '', bedId: '', cohortId: '', crop: '', selectedActivity: '',
-      sessionId: '', taxonomyGroups: {}, taxonomyLabels: {}, allBeds: [], openSessions: []
+      sessionId: '', taxonomyGroups: {}, taxonomyLabels: {}, allBeds: [], openSessions: [], myHistory: []
     };
     document.getElementById('login-worker-id').value = '';
     document.getElementById('login-pin').value = '';
@@ -340,6 +352,62 @@
 
       row.querySelector('.sr-btn-primary').onclick = function() { openSessionDetail(s); };
       row.querySelector('.sr-btn-complete').onclick = function() { quickCompleteSession(s); };
+
+      container.appendChild(row);
+    });
+  }
+
+  // Completed-activity history for THIS worker only -- get-activity-history
+  // is called with just workerId (no managerId), so the backend scopes it to
+  // this worker's own FIELD_ACTIVITY_LOG rows. This is where a completed
+  // session actually shows up once it drops off "My Active Sessions".
+  function loadMyHistory() {
+    apiCall('get-activity-history', { workerId: state.workerId, limit: 50 }, function(res) {
+      if (!res || !res.success) {
+        alert(res && res.error ? res.error : 'Failed to load history');
+        return;
+      }
+      state.myHistory = res.entries;
+      renderMyHistory();
+      switchView('view-my-history');
+    });
+  }
+
+  function renderMyHistory() {
+    let container = document.getElementById('my-history-list');
+    container.innerHTML = '';
+
+    if (state.myHistory.length === 0) {
+      container.innerHTML = '<div class="empty-state">No completed activity yet.</div>';
+      return;
+    }
+
+    state.myHistory.forEach(function(h) {
+      let row = document.createElement('div');
+      row.className = 'session-row';
+      let when = h.timestamp ? new Date(h.timestamp).toLocaleString() : '';
+
+      let bodyHtml;
+      if (h.isStateChange) {
+        bodyHtml = '<div class="sr-meta">' + h.fromState + ' &rarr; ' + h.toState + '</div>';
+      } else {
+        let qtyNote = h.quantity ? (' &middot; ' + h.quantity + (h.unit ? ' ' + h.unit : '')) : '';
+        let excNote = h.exceptionFlag ? (' &middot; ' + h.exceptionType) : '';
+        bodyHtml = '<div class="sr-meta">' +
+          (h.elapsedMinutes !== null ? h.elapsedMinutes + ' min active' : '') + qtyNote + excNote +
+        '</div>';
+        if (h.exceptionFlag) {
+          bodyHtml = bodyHtml.replace('class="sr-meta"', 'class="sr-meta" style="color:#c62828;"');
+        }
+      }
+
+      row.innerHTML =
+        '<div class="session-row-top">' +
+          '<span class="sr-bed">' + (h.bedId || h.cohortId || '-') + '</span>' +
+          '<span class="badge">' + h.activityLabel + '</span>' +
+        '</div>' +
+        bodyHtml +
+        '<div class="sr-meta">' + when + '</div>';
 
       container.appendChild(row);
     });
