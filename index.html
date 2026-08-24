@@ -51,6 +51,7 @@
     .conn-dot.offline { background: #e53935; }
     #btn-logout { width: auto; padding: 6px 12px; margin: 0; font-size: 12px; background: #455a64; }
     #btn-logout:hover { background: #37474f; }
+    .header-user { font-weight: bold; font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 40vw; }
   </style>
 </head>
 <body>
@@ -60,6 +61,7 @@
       <span id="conn-dot" class="conn-dot"></span>
       <span id="conn-text">Not connected</span>
     </div>
+    <span id="header-user-name" class="header-user"></span>
     <button id="btn-logout" onclick="appLogout()">Log Out</button>
   </div>
 
@@ -83,6 +85,7 @@
       <h2 style="margin:0;">My Active Sessions</h2>
       <button style="width:auto; padding:6px 12px; font-size:12px; margin:0;" onclick="loadMySessions()">Refresh</button>
     </div>
+    <div id="my-sessions-subtitle" style="font-size:13px; color:#666; margin-bottom:10px;"></div>
     <div id="my-sessions-list"></div>
     <button onclick="switchView('view-scan')">+ Start New Task</button>
     <button class="btn-secondary" onclick="loadMyHistory()">View Completed History</button>
@@ -207,6 +210,7 @@
 
   let state = {
     workerId: '',
+    workerName: '',
     bedId: '',
     cohortId: '',
     crop: '',
@@ -269,7 +273,9 @@
     apiCall('login', { workerId: state.workerId, pin: pin }, function(res) {
       if (res && res.success) {
         state.workerId = res.user.workerId; // canonical ID from the sheet, not whatever case was typed
+        state.workerName = res.user.name;
         document.getElementById('app-header').classList.remove('hidden');
+        document.getElementById('header-user-name').textContent = res.user.name + ' (' + res.user.workerId + ')';
         loadTaxonomy();
         loadBeds();
         loadMySessions();
@@ -290,12 +296,13 @@
     }
 
     state = {
-      workerId: '', bedId: '', cohortId: '', crop: '', selectedActivity: '',
+      workerId: '', workerName: '', bedId: '', cohortId: '', crop: '', selectedActivity: '',
       sessionId: '', taxonomyGroups: {}, taxonomyLabels: {}, allBeds: [], openSessions: [], myHistory: []
     };
     document.getElementById('login-worker-id').value = '';
     document.getElementById('login-pin').value = '';
     document.getElementById('app-header').classList.add('hidden');
+    document.getElementById('header-user-name').textContent = '';
     resetBedSearch();
     switchView('view-login');
   }
@@ -314,6 +321,9 @@
   }
 
   function renderMySessions() {
+    let subtitle = document.getElementById('my-sessions-subtitle');
+    if (subtitle) subtitle.textContent = state.workerName ? ('Logged in as ' + state.workerName + ' (' + state.workerId + ')') : '';
+
     let container = document.getElementById('my-sessions-list');
     container.innerHTML = '';
 
