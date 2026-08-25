@@ -182,6 +182,11 @@
           </select>
         </div>
       </div>
+      <div class="form-group" style="margin-top:8px;">
+        <label for="tote-photo">Attach Photo (optional)</label>
+        <input type="file" id="tote-photo" accept="image/*" capture="environment" onchange="handleTotePhotoSelect(event)">
+        <div id="tote-photo-preview" style="margin-top:8px;"></div>
+      </div>
       <button class="btn-secondary" onclick="appLogHarvestTote()" style="margin-top:10px;">Log Tote</button>
       <div id="tote-log-list" style="margin-top:10px;"></div>
       <div id="tote-log-total" style="font-size:13px; color:#666; margin-top:6px;"></div>
@@ -263,7 +268,9 @@
     myHistory: [], // this worker's own completed-activity feed from FIELD_ACTIVITY_LOG, via get-activity-history
     sessionTotes: [], // totes logged via log-harvest-tote during THIS execution-view visit (client-side only -- see handleLogHarvestTote_ in Code.gs for why)
     exceptionPhotoBase64: '', // base64 payload (no data: prefix) of a photo attached to the current exception report, if any
-    exceptionPhotoMime: ''
+    exceptionPhotoMime: '',
+    totePhotoBase64: '', // base64 payload of a photo attached to the tote CURRENTLY being logged, if any -- cleared after each successful log-harvest-tote call
+    totePhotoMime: ''
   };
 
   function setConnStatus(status, label) {
@@ -341,7 +348,8 @@
     state = {
       workerId: '', workerName: '', bedId: '', cohortId: '', crop: '', selectedActivity: '',
       sessionId: '', taxonomyGroups: {}, taxonomyLabels: {}, allBeds: [], openSessions: [], myHistory: [],
-      sessionTotes: [], exceptionPhotoBase64: '', exceptionPhotoMime: ''
+      sessionTotes: [], exceptionPhotoBase64: '', exceptionPhotoMime: '',
+      totePhotoBase64: '', totePhotoMime: ''
     };
     document.getElementById('login-worker-id').value = '';
     document.getElementById('login-pin').value = '';
@@ -658,23 +666,73 @@
     if (tare < 0) return alert('Tare weight cannot be negative.');
     if (tare >= gross) return alert('Tare weight must be less than gross weight.');
 
-    apiCall('log-harvest-tote', {
+    let payload = {
       sessionId: state.sessionId,
       grossWeightLbs: gross,
       tareWeightLbs: tare,
       crateCount: crates,
       qualityGrade: grade
-    }, function(res) {
+    };
+    if (state.totePhotoBase64) {
+      payload.photoBase64 = state.totePhotoBase64;
+      payload.photoMimeType = state.totePhotoMime;
+    }
+
+    apiCall('log-harvest-tote', payload, function(res) {
       if (res && res.success) {
         state.sessionTotes.push(res);
         renderToteLog();
         document.getElementById('tote-gross').value = '';
         document.getElementById('tote-tare').value = '0';
         document.getElementById('tote-crates').value = '1';
+        clearTotePhoto();
       } else {
         alert(res && res.error ? res.error : 'Failed to log tote');
       }
     });
+  }
+
+  // Same downsample-and-preview pattern as handleExceptionPhotoSelect, kept
+  // as its own copy (rather than a shared helper) since the two attach to
+  // different state fields, DOM ids, and payload shapes -- a tote photo
+  // tags ONE tote row on HARVEST_LOG, not the session's Photo_URL.
+  function handleTotePhotoSelect(evt) {
+    let file = evt.target.files && evt.target.files[0];
+    let preview = document.getElementById('tote-photo-preview');
+    if (!file) { clearTotePhoto(); return; }
+
+    if (!file.type.startsWith('image/')) {
+      alert('Please select an image file.');
+      evt.target.value = '';
+      return;
+    }
+    const MAX_BYTES = 8 * 1024 * 1024;
+    if (file.size > MAX_BYTES) {
+      alert('Photo is too large (max 8MB). Please choose a smaller image.');
+      evt.target.value = '';
+      return;
+    }
+
+    let reader = new FileReader();
+    reader.onload = function() {
+      let dataUrl = reader.result;
+      let commaIdx = dataUrl.indexOf(',');
+      state.totePhotoBase64 = dataUrl.substring(commaIdx + 1);
+      state.totePhotoMime = file.type;
+      preview.innerHTML =
+        '<img src="' + dataUrl + '" style="max-width:100%; border-radius:6px;">' +
+        '<button type="button" class="btn-secondary" style="margin-top:6px;" onclick="clearTotePhoto()">Remove Photo</button>';
+    };
+    reader.readAsDataURL(file);
+  }
+
+  function clearTotePhoto() {
+    state.totePhotoBase64 = '';
+    state.totePhotoMime = '';
+    let input = document.getElementById('tote-photo');
+    if (input) input.value = '';
+    let preview = document.getElementById('tote-photo-preview');
+    if (preview) preview.innerHTML = '';
   }
 
   function renderToteLog() {
