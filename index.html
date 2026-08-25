@@ -136,6 +136,19 @@
       <div id="activity-picker-container"></div>
     </div>
 
+    <div class="form-group" id="harvest-plan-toggle-group" style="display:none;">
+      <label style="display:flex; align-items:center; gap:8px; font-weight:normal;">
+        <input type="checkbox" id="harvest-plan-check" style="width:auto;" onchange="toggleHarvestPlanFields()">
+        Schedule this as a planned harvest (optional)
+      </label>
+      <div id="harvest-plan-fields" class="hidden" style="margin-top:10px;">
+        <label for="harvest-plan-start">Planned Start</label>
+        <input type="datetime-local" id="harvest-plan-start">
+        <label for="harvest-plan-end" style="margin-top:8px;">Planned End</label>
+        <input type="datetime-local" id="harvest-plan-end">
+      </div>
+    </div>
+
     <button id="btn-use-bed" onclick="appStartSession()">Use This Bed &amp; Start Task</button>
     <button class="btn-secondary" onclick="switchView('view-scan')">Cancel / Rescan</button>
     <button class="btn-secondary" onclick="loadMySessions()">Back to My Sessions</button>
@@ -150,6 +163,28 @@
       <p><strong>Bed:</strong> <span id="exec-bed">-</span></p>
       <p><strong>Task:</strong> <span id="exec-task">-</span></p>
       <p><strong>Started:</strong> <span id="exec-start">-</span></p>
+    </div>
+
+    <div class="form-group hidden" id="harvest-tote-section">
+      <h3 style="margin:16px 0 8px; font-size:15px;">Log Harvest Tote</h3>
+      <div style="display:flex; gap:8px;">
+        <div style="flex:1;"><label for="tote-gross">Gross (lbs)</label><input type="number" id="tote-gross" step="0.1" min="0"></div>
+        <div style="flex:1;"><label for="tote-tare">Tare (lbs)</label><input type="number" id="tote-tare" step="0.1" min="0" value="0"></div>
+      </div>
+      <div style="display:flex; gap:8px; margin-top:8px;">
+        <div style="flex:1;"><label for="tote-crates">Crate/Tote Count</label><input type="number" id="tote-crates" step="1" min="1" value="1"></div>
+        <div style="flex:1;">
+          <label for="tote-grade">Quality Grade</label>
+          <select id="tote-grade">
+            <option value="A">A</option>
+            <option value="B">B</option>
+            <option value="C">C</option>
+          </select>
+        </div>
+      </div>
+      <button class="btn-secondary" onclick="appLogHarvestTote()" style="margin-top:10px;">Log Tote</button>
+      <div id="tote-log-list" style="margin-top:10px;"></div>
+      <div id="tote-log-total" style="font-size:13px; color:#666; margin-top:6px;"></div>
     </div>
 
     <button class="btn-danger" onclick="appReportExceptionPrompt()">Report Exception / Issue</button>
@@ -191,6 +226,11 @@
       <label for="exc-notes">Notes / Observations</label>
       <input type="text" id="exc-notes" placeholder="Describe what you see...">
     </div>
+    <div class="form-group">
+      <label for="exc-photo">Attach Photo (optional)</label>
+      <input type="file" id="exc-photo" accept="image/*" capture="environment" onchange="handleExceptionPhotoSelect(event)">
+      <div id="exc-photo-preview" style="margin-top:8px;"></div>
+    </div>
     <button class="btn-danger" onclick="appSubmitException()">Submit Alert</button>
     <button class="btn-secondary" onclick="switchView('view-execution')">Return to Task</button>
   </div>
@@ -220,7 +260,10 @@
     taxonomyLabels: {},
     allBeds: [],
     openSessions: [], // all of this worker's ACTIVE/PAUSED sessions -- multi-tasking means there can be more than one
-    myHistory: [] // this worker's own completed-activity feed from FIELD_ACTIVITY_LOG, via get-activity-history
+    myHistory: [], // this worker's own completed-activity feed from FIELD_ACTIVITY_LOG, via get-activity-history
+    sessionTotes: [], // totes logged via log-harvest-tote during THIS execution-view visit (client-side only -- see handleLogHarvestTote_ in Code.gs for why)
+    exceptionPhotoBase64: '', // base64 payload (no data: prefix) of a photo attached to the current exception report, if any
+    exceptionPhotoMime: ''
   };
 
   function setConnStatus(status, label) {
@@ -297,7 +340,8 @@
 
     state = {
       workerId: '', workerName: '', bedId: '', cohortId: '', crop: '', selectedActivity: '',
-      sessionId: '', taxonomyGroups: {}, taxonomyLabels: {}, allBeds: [], openSessions: [], myHistory: []
+      sessionId: '', taxonomyGroups: {}, taxonomyLabels: {}, allBeds: [], openSessions: [], myHistory: [],
+      sessionTotes: [], exceptionPhotoBase64: '', exceptionPhotoMime: ''
     };
     document.getElementById('login-worker-id').value = '';
     document.getElementById('login-pin').value = '';
@@ -439,6 +483,14 @@
     statusLbl.className = 'badge ' + (s.status === 'PAUSED' ? 'badge-paused' : 'badge-active');
     statusLbl.textContent = s.status;
 
+    // Resuming a session in a fresh app visit has no client-side tote
+    // history to show (see the note in handleLogHarvestTote_, Code.gs) --
+    // the HARVEST_LOG rows already written are safe either way, only this
+    // running-list display resets.
+    state.sessionTotes = [];
+    renderToteLog();
+    updateHarvestSectionVisibility();
+
     if (s.status === 'PAUSED') {
       apiCall('resume-session', { sessionId: s.sessionId }, function() {
         statusLbl.className = 'badge badge-active';
@@ -563,6 +615,133 @@
       select.appendChild(optgroup);
     }
     container.appendChild(select);
+    select.addEventListener('change', updateHarvestPlanVisibility);
+    updateHarvestPlanVisibility();
+  }
+
+  // Only Harvest exposes the "schedule as a planned harvest" toggle -- every
+  // other activity's Confirm Assignment screen looks exactly as it did
+  // before this feature existed.
+  function updateHarvestPlanVisibility() {
+    let dropdown = document.getElementById('activity-select-dropdown');
+    let group = document.getElementById('harvest-plan-toggle-group');
+    if (!dropdown || !group) return;
+    let isHarvest = dropdown.value === 'Harvest';
+    group.style.display = isHarvest ? 'block' : 'none';
+    if (!isHarvest) {
+      let check = document.getElementById('harvest-plan-check');
+      if (check) check.checked = false;
+      let fields = document.getElementById('harvest-plan-fields');
+      if (fields) fields.classList.add('hidden');
+    }
+  }
+
+  function toggleHarvestPlanFields() {
+    let checked = document.getElementById('harvest-plan-check').checked;
+    document.getElementById('harvest-plan-fields').classList.toggle('hidden', !checked);
+  }
+
+  // Only Harvest sessions show the tote-logging block on the execution view.
+  function updateHarvestSectionVisibility() {
+    let section = document.getElementById('harvest-tote-section');
+    if (!section) return;
+    section.classList.toggle('hidden', state.selectedActivity !== 'Harvest');
+  }
+
+  function appLogHarvestTote() {
+    let gross = parseFloat(document.getElementById('tote-gross').value);
+    let tare = parseFloat(document.getElementById('tote-tare').value) || 0;
+    let crates = parseInt(document.getElementById('tote-crates').value, 10) || 1;
+    let grade = document.getElementById('tote-grade').value;
+
+    if (isNaN(gross) || gross <= 0) return alert('Enter a gross weight greater than 0.');
+    if (tare < 0) return alert('Tare weight cannot be negative.');
+    if (tare >= gross) return alert('Tare weight must be less than gross weight.');
+
+    apiCall('log-harvest-tote', {
+      sessionId: state.sessionId,
+      grossWeightLbs: gross,
+      tareWeightLbs: tare,
+      crateCount: crates,
+      qualityGrade: grade
+    }, function(res) {
+      if (res && res.success) {
+        state.sessionTotes.push(res);
+        renderToteLog();
+        document.getElementById('tote-gross').value = '';
+        document.getElementById('tote-tare').value = '0';
+        document.getElementById('tote-crates').value = '1';
+      } else {
+        alert(res && res.error ? res.error : 'Failed to log tote');
+      }
+    });
+  }
+
+  function renderToteLog() {
+    let list = document.getElementById('tote-log-list');
+    let totalEl = document.getElementById('tote-log-total');
+    if (!list || !totalEl) return;
+    list.innerHTML = '';
+    let totalNet = 0;
+
+    state.sessionTotes.forEach(function(t) {
+      totalNet += Number(t.netWeightLbs) || 0;
+      let row = document.createElement('div');
+      row.className = 'bed-result';
+      row.style.cursor = 'default';
+      row.innerHTML =
+        '<div class="bed-id">' + t.netWeightLbs + ' lbs net &middot; ' + t.crateCount + ' crate(s) &middot; Grade ' + t.qualityGrade + '</div>' +
+        '<div class="bed-meta"><span class="code-chip">' + t.qrCode + '</span></div>';
+      list.appendChild(row);
+    });
+
+    totalEl.textContent = state.sessionTotes.length
+      ? ('Total logged this session: ' + totalNet.toFixed(1) + ' lbs across ' + state.sessionTotes.length + ' tote(s).')
+      : '';
+  }
+
+  // Reads the selected photo file, downsamples it into a base64 payload the
+  // exception report can carry, and shows a preview + remove option. Kept
+  // to a generous-but-bounded size so a full-resolution phone photo doesn't
+  // blow past what a single POST body can comfortably carry on a field
+  // connection.
+  function handleExceptionPhotoSelect(evt) {
+    let file = evt.target.files && evt.target.files[0];
+    let preview = document.getElementById('exc-photo-preview');
+    if (!file) { clearExceptionPhoto(); return; }
+
+    if (!file.type.startsWith('image/')) {
+      alert('Please select an image file.');
+      evt.target.value = '';
+      return;
+    }
+    const MAX_BYTES = 8 * 1024 * 1024;
+    if (file.size > MAX_BYTES) {
+      alert('Photo is too large (max 8MB). Please choose a smaller image.');
+      evt.target.value = '';
+      return;
+    }
+
+    let reader = new FileReader();
+    reader.onload = function() {
+      let dataUrl = reader.result; // "data:image/jpeg;base64,...."
+      let commaIdx = dataUrl.indexOf(',');
+      state.exceptionPhotoBase64 = dataUrl.substring(commaIdx + 1);
+      state.exceptionPhotoMime = file.type;
+      preview.innerHTML =
+        '<img src="' + dataUrl + '" style="max-width:100%; border-radius:6px;">' +
+        '<button type="button" class="btn-secondary" style="margin-top:6px;" onclick="clearExceptionPhoto()">Remove Photo</button>';
+    };
+    reader.readAsDataURL(file);
+  }
+
+  function clearExceptionPhoto() {
+    state.exceptionPhotoBase64 = '';
+    state.exceptionPhotoMime = '';
+    let input = document.getElementById('exc-photo');
+    if (input) input.value = '';
+    let preview = document.getElementById('exc-photo-preview');
+    if (preview) preview.innerHTML = '';
   }
 
   // Allows scanner hardware (which types the code then sends Enter) to
@@ -634,6 +813,26 @@
       activity: state.selectedActivity
     };
 
+    // Optional harvest-plan window -- only ever sent when Harvest is
+    // selected and the worker opted into it; every other activity keeps
+    // starting exactly as before (plannedFlag defaults false server-side).
+    let planCheck = document.getElementById('harvest-plan-check');
+    if (state.selectedActivity === 'Harvest' && planCheck && planCheck.checked) {
+      let startVal = document.getElementById('harvest-plan-start').value;
+      let endVal = document.getElementById('harvest-plan-end').value;
+      if (!startVal || !endVal) {
+        return alert('Enter both a planned start and end time, or uncheck the planned-harvest option.');
+      }
+      let startDate = new Date(startVal);
+      let endDate = new Date(endVal);
+      if (endDate <= startDate) {
+        return alert('Planned end must be after planned start.');
+      }
+      payload.plannedFlag = true;
+      payload.plannedStart = startDate.toISOString();
+      payload.plannedEnd = endDate.toISOString();
+    }
+
     // Starting a new task no longer touches or is blocked by any of this
     // worker's other open sessions -- it just logs independently. This
     // sessionId becomes the "focused" session for the execution view that
@@ -647,6 +846,9 @@
         let statusLbl = document.getElementById('lbl-status');
         statusLbl.className = 'badge badge-active';
         statusLbl.textContent = 'ACTIVE';
+        state.sessionTotes = [];
+        renderToteLog();
+        updateHarvestSectionVisibility();
         switchView('view-execution');
       } else {
         alert(res.error || 'Failed to start session');
@@ -660,7 +862,12 @@
   function appCompleteSession() {
     let quantity = 0;
     if (state.selectedActivity === 'Harvest') {
-      quantity = prompt('Enter harvested quantity (lbs/crates):', '0');
+      // Prefill with the running total from any totes logged this visit --
+      // still fully editable/confirmable by the worker, and still falls
+      // back to a blank '0' prompt if no totes were logged (e.g. a Harvest
+      // session that just used the old single quantity-at-completion flow).
+      let defaultQty = state.sessionTotes.reduce(function(sum, t) { return sum + (Number(t.netWeightLbs) || 0); }, 0);
+      quantity = prompt('Enter harvested quantity (lbs):', defaultQty ? defaultQty.toFixed(1) : '0');
     }
 
     apiCall('complete-session', { sessionId: state.sessionId, quantity: quantity }, function(res) {
@@ -709,12 +916,21 @@
       notes: document.getElementById('exc-notes').value
     };
 
+    if (state.exceptionPhotoBase64) {
+      payload.photoBase64 = state.exceptionPhotoBase64;
+      payload.photoMimeType = state.exceptionPhotoMime;
+    }
+
     apiCall('report-exception', payload, function(res) {
       if (res && res.success) {
         alert('Exception logged and manager notified.');
+        document.getElementById('exc-notes').value = '';
+        clearExceptionPhoto();
         document.getElementById('lbl-status').className = 'badge badge-danger';
         document.getElementById('lbl-status').textContent = 'ALERT';
         switchView('view-execution');
+      } else {
+        alert(res && res.error ? res.error : 'Failed to submit exception');
       }
     });
   }
