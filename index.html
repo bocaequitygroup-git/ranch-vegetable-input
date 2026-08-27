@@ -17,6 +17,9 @@
     .badge { display: inline-block; padding: 4px 8px; border-radius: 4px; font-weight: bold; font-size: 12px; color: #fff; background: #666; }
     .badge-active { background: #2e7d32; }
     .badge-danger { background: #c62828; }
+    .badge-critical { background: #6a1b9a; }
+    .badge-low { background: #558b2f; }
+    .badge-medium { background: #ef6c00; }
     .meta-box { background: #e8f5e9; padding: 14px; border-radius: 8px; margin-bottom: 16px; border-left: 5px solid #2e7d32; }
     .meta-box p { margin: 6px 0; font-size: 15px; }
     .meta-headline { font-size: 18px; font-weight: bold; color: #1b5e20; }
@@ -182,14 +185,16 @@
           </select>
         </div>
       </div>
-      <div class="form-group" style="margin-top:8px;">
-        <label for="tote-photo">Attach Photo (optional)</label>
-        <input type="file" id="tote-photo" accept="image/*" capture="environment" onchange="handleTotePhotoSelect(event)">
-        <div id="tote-photo-preview" style="margin-top:8px;"></div>
-      </div>
       <button class="btn-secondary" onclick="appLogHarvestTote()" style="margin-top:10px;">Log Tote</button>
       <div id="tote-log-list" style="margin-top:10px;"></div>
       <div id="tote-log-total" style="font-size:13px; color:#666; margin-top:6px;"></div>
+    </div>
+
+    <div class="form-group hidden" id="scout-finding-section">
+      <h3 style="margin:16px 0 8px; font-size:15px;">Scouting</h3>
+      <button class="btn-secondary" onclick="appOpenScoutFinding()">+ Log Scout Finding</button>
+      <div id="scout-finding-log-list" style="margin-top:10px;"></div>
+      <div id="scout-finding-log-total" style="font-size:13px; color:#666; margin-top:6px;"></div>
     </div>
 
     <button class="btn-danger" onclick="appReportExceptionPrompt()">Report Exception / Issue</button>
@@ -240,6 +245,56 @@
     <button class="btn-secondary" onclick="switchView('view-execution')">Return to Task</button>
   </div>
 
+  <!-- VIEW 6: SCOUT FINDING ENTRY -->
+  <div id="view-scout-finding" class="card hidden">
+    <h2>Log Scout Finding</h2>
+    <div class="meta-box">
+      <p class="meta-headline">📍 Bed <span id="scout-lbl-bed">-</span></p>
+      <p class="meta-sub">Pass: <span id="scout-lbl-activity">-</span></p>
+    </div>
+
+    <div class="form-group">
+      <label for="scout-domain">What kind of finding?</label>
+      <select id="scout-domain"></select>
+    </div>
+    <div class="form-group">
+      <label for="scout-symptom">What did you see?</label>
+      <input type="text" id="scout-symptom" placeholder="e.g. Aphids on undersides of leaves">
+    </div>
+    <div class="form-group">
+      <label for="scout-severity">Severity</label>
+      <select id="scout-severity"></select>
+    </div>
+    <div class="form-group">
+      <label for="scout-location">Location on Bed (optional)</label>
+      <input type="text" id="scout-location" placeholder="e.g. NW corner, row 3">
+    </div>
+    <div class="form-group">
+      <label for="scout-notes">Notes (optional)</label>
+      <input type="text" id="scout-notes" placeholder="Additional detail...">
+    </div>
+    <div class="form-group">
+      <label style="display:flex; align-items:center; gap:8px; font-weight:normal;">
+        <input type="checkbox" id="scout-requires-action" style="width:auto;">
+        Flag for manager attention (opens an exception)
+      </label>
+    </div>
+    <div class="form-group">
+      <label for="scout-photo">Attach Photo (optional)</label>
+      <input type="file" id="scout-photo" accept="image/*" capture="environment" onchange="handleScoutPhotoSelect(event)">
+      <div id="scout-photo-preview" style="margin-top:8px;"></div>
+    </div>
+
+    <button onclick="appSubmitScoutFinding()">Submit Finding</button>
+
+    <div id="scout-recap-wrap" class="hidden" style="margin-top:16px;">
+      <label style="margin-bottom:6px;">Logged This Pass</label>
+      <div id="scout-finding-recap-list"></div>
+    </div>
+
+    <button class="btn-secondary" style="margin-top:16px;" onclick="switchView('view-execution')">Done &mdash; Back to Session</button>
+  </div>
+
 <script>
   // Paste your Apps Script Web App deployment URL below
   // Must be deployed as: "Execute as: Me" and "Who has access: Anyone"
@@ -251,7 +306,20 @@
   // buttons appearing to "do nothing" -- 'view-manager' was in this list
   // with no corresponding element, so every switchView() call silently
   // threw before reaching the line that shows the new view.
-  const VIEW_IDS = ['view-login', 'view-my-sessions', 'view-my-history', 'view-scan', 'view-select-task', 'view-execution', 'view-exception'];
+  const VIEW_IDS = ['view-login', 'view-my-sessions', 'view-my-history', 'view-scan', 'view-select-task', 'view-execution', 'view-exception', 'view-scout-finding'];
+
+  // Must match SCOUTING_ACTIVITY_TYPES_ in ActivityTaxonomy.gs -- the
+  // activity types a scouting finding may legally be logged against. Kept
+  // as its own small constant here (rather than derived from
+  // state.taxonomyGroups) so the "Log Scout Finding" section can show/hide
+  // correctly even before get-taxonomy's response lands.
+  const SCOUTING_ACTIVITY_TYPES = ['PestScouting', 'DiseaseScouting', 'CropInspection', 'MaturityInspection'];
+
+  var SCOUT_SEVERITY_LABELS = { LOW: 'Low', MEDIUM: 'Medium', HIGH: 'High', CRITICAL: 'Critical' };
+  function scoutSeverityLabel(sev) { return SCOUT_SEVERITY_LABELS[sev] || sev; }
+  function scoutSeverityBadgeClass(sev) {
+    return { LOW: 'badge-low', MEDIUM: 'badge-medium', HIGH: 'badge-danger', CRITICAL: 'badge-critical' }[sev] || '';
+  }
 
   let state = {
     workerId: '',
@@ -263,14 +331,18 @@
     sessionId: '',
     taxonomyGroups: {},
     taxonomyLabels: {},
+    scoutDomains: [], // e.g. ['PlantCondition','PestPressure',...] -- from get-taxonomy (ActivityTaxonomy.gs SCOUT_DOMAINS)
+    scoutDomainLabels: {},
+    scoutSeverities: [], // ['LOW','MEDIUM','HIGH','CRITICAL']
     allBeds: [],
     openSessions: [], // all of this worker's ACTIVE/PAUSED sessions -- multi-tasking means there can be more than one
     myHistory: [], // this worker's own completed-activity feed from FIELD_ACTIVITY_LOG, via get-activity-history
     sessionTotes: [], // totes logged via log-harvest-tote during THIS execution-view visit (client-side only -- see handleLogHarvestTote_ in Code.gs for why)
+    sessionFindings: [], // scout findings logged via log-scout-finding during THIS execution-view visit (client-side recap only -- SCOUT_FINDING rows are already durable server-side)
     exceptionPhotoBase64: '', // base64 payload (no data: prefix) of a photo attached to the current exception report, if any
     exceptionPhotoMime: '',
-    totePhotoBase64: '', // base64 payload of a photo attached to the tote CURRENTLY being logged, if any -- cleared after each successful log-harvest-tote call
-    totePhotoMime: ''
+    findingPhotoBase64: '', // same pattern as exceptionPhotoBase64, but for the scout finding photo
+    findingPhotoMime: ''
   };
 
   function setConnStatus(status, label) {
@@ -347,9 +419,12 @@
 
     state = {
       workerId: '', workerName: '', bedId: '', cohortId: '', crop: '', selectedActivity: '',
-      sessionId: '', taxonomyGroups: {}, taxonomyLabels: {}, allBeds: [], openSessions: [], myHistory: [],
-      sessionTotes: [], exceptionPhotoBase64: '', exceptionPhotoMime: '',
-      totePhotoBase64: '', totePhotoMime: ''
+      sessionId: '', taxonomyGroups: {}, taxonomyLabels: {},
+      scoutDomains: [], scoutDomainLabels: {}, scoutSeverities: [],
+      allBeds: [], openSessions: [], myHistory: [],
+      sessionTotes: [], sessionFindings: [],
+      exceptionPhotoBase64: '', exceptionPhotoMime: '',
+      findingPhotoBase64: '', findingPhotoMime: ''
     };
     document.getElementById('login-worker-id').value = '';
     document.getElementById('login-pin').value = '';
@@ -496,8 +571,11 @@
     // the HARVEST_LOG rows already written are safe either way, only this
     // running-list display resets.
     state.sessionTotes = [];
+    state.sessionFindings = [];
     renderToteLog();
+    renderSessionFindings();
     updateHarvestSectionVisibility();
+    updateScoutSectionVisibility();
 
     if (s.status === 'PAUSED') {
       apiCall('resume-session', { sessionId: s.sessionId }, function() {
@@ -598,8 +676,38 @@
       if (res && res.success && res.taxonomy) {
         state.taxonomyGroups = res.taxonomy.groups;
         state.taxonomyLabels = res.taxonomy.labels || {};
+        state.scoutDomains = res.taxonomy.scoutDomains || [];
+        state.scoutDomainLabels = res.taxonomy.scoutDomainLabels || {};
+        state.scoutSeverities = res.taxonomy.scoutSeverities || [];
         renderTaxonomyPicker();
+        renderScoutFormOptions();
       }
+    });
+  }
+
+  // Populates the domain/severity <select> elements on the scout finding
+  // form. Called once taxonomy loads, and again defensively when the form
+  // is opened (appOpenScoutFinding) in case it's ever reached before
+  // get-taxonomy's response lands.
+  function renderScoutFormOptions() {
+    let domainSelect = document.getElementById('scout-domain');
+    let severitySelect = document.getElementById('scout-severity');
+    if (!domainSelect || !severitySelect) return;
+
+    domainSelect.innerHTML = '';
+    state.scoutDomains.forEach(function(d) {
+      let opt = document.createElement('option');
+      opt.value = d;
+      opt.textContent = state.scoutDomainLabels[d] || d;
+      domainSelect.appendChild(opt);
+    });
+
+    severitySelect.innerHTML = '';
+    state.scoutSeverities.forEach(function(s) {
+      let opt = document.createElement('option');
+      opt.value = s;
+      opt.textContent = scoutSeverityLabel(s);
+      severitySelect.appendChild(opt);
     });
   }
 
@@ -656,6 +764,17 @@
     section.classList.toggle('hidden', state.selectedActivity !== 'Harvest');
   }
 
+  // Only PestScouting/DiseaseScouting/CropInspection/MaturityInspection
+  // sessions show the "Log Scout Finding" block -- matches
+  // SCOUTING_ACTIVITY_TYPES_ in ActivityTaxonomy.gs, which is what
+  // logScoutFinding_ actually enforces server-side. Hiding it for other
+  // activities here is just a UX nicety; the real gate is server-side.
+  function updateScoutSectionVisibility() {
+    let section = document.getElementById('scout-finding-section');
+    if (!section) return;
+    section.classList.toggle('hidden', SCOUTING_ACTIVITY_TYPES.indexOf(state.selectedActivity) === -1);
+  }
+
   function appLogHarvestTote() {
     let gross = parseFloat(document.getElementById('tote-gross').value);
     let tare = parseFloat(document.getElementById('tote-tare').value) || 0;
@@ -666,73 +785,23 @@
     if (tare < 0) return alert('Tare weight cannot be negative.');
     if (tare >= gross) return alert('Tare weight must be less than gross weight.');
 
-    let payload = {
+    apiCall('log-harvest-tote', {
       sessionId: state.sessionId,
       grossWeightLbs: gross,
       tareWeightLbs: tare,
       crateCount: crates,
       qualityGrade: grade
-    };
-    if (state.totePhotoBase64) {
-      payload.photoBase64 = state.totePhotoBase64;
-      payload.photoMimeType = state.totePhotoMime;
-    }
-
-    apiCall('log-harvest-tote', payload, function(res) {
+    }, function(res) {
       if (res && res.success) {
         state.sessionTotes.push(res);
         renderToteLog();
         document.getElementById('tote-gross').value = '';
         document.getElementById('tote-tare').value = '0';
         document.getElementById('tote-crates').value = '1';
-        clearTotePhoto();
       } else {
         alert(res && res.error ? res.error : 'Failed to log tote');
       }
     });
-  }
-
-  // Same downsample-and-preview pattern as handleExceptionPhotoSelect, kept
-  // as its own copy (rather than a shared helper) since the two attach to
-  // different state fields, DOM ids, and payload shapes -- a tote photo
-  // tags ONE tote row on HARVEST_LOG, not the session's Photo_URL.
-  function handleTotePhotoSelect(evt) {
-    let file = evt.target.files && evt.target.files[0];
-    let preview = document.getElementById('tote-photo-preview');
-    if (!file) { clearTotePhoto(); return; }
-
-    if (!file.type.startsWith('image/')) {
-      alert('Please select an image file.');
-      evt.target.value = '';
-      return;
-    }
-    const MAX_BYTES = 8 * 1024 * 1024;
-    if (file.size > MAX_BYTES) {
-      alert('Photo is too large (max 8MB). Please choose a smaller image.');
-      evt.target.value = '';
-      return;
-    }
-
-    let reader = new FileReader();
-    reader.onload = function() {
-      let dataUrl = reader.result;
-      let commaIdx = dataUrl.indexOf(',');
-      state.totePhotoBase64 = dataUrl.substring(commaIdx + 1);
-      state.totePhotoMime = file.type;
-      preview.innerHTML =
-        '<img src="' + dataUrl + '" style="max-width:100%; border-radius:6px;">' +
-        '<button type="button" class="btn-secondary" style="margin-top:6px;" onclick="clearTotePhoto()">Remove Photo</button>';
-    };
-    reader.readAsDataURL(file);
-  }
-
-  function clearTotePhoto() {
-    state.totePhotoBase64 = '';
-    state.totePhotoMime = '';
-    let input = document.getElementById('tote-photo');
-    if (input) input.value = '';
-    let preview = document.getElementById('tote-photo-preview');
-    if (preview) preview.innerHTML = '';
   }
 
   function renderToteLog() {
@@ -799,6 +868,157 @@
     let input = document.getElementById('exc-photo');
     if (input) input.value = '';
     let preview = document.getElementById('exc-photo-preview');
+    if (preview) preview.innerHTML = '';
+  }
+
+  // Opens the scout finding form for whichever session is currently
+  // focused in the execution view. Resets the form to a blank state each
+  // time (rather than leaving stale values from a prior finding) since a
+  // single scouting pass commonly logs several distinct findings in a row.
+  function appOpenScoutFinding() {
+    document.getElementById('scout-lbl-bed').textContent = state.bedId;
+    document.getElementById('scout-lbl-activity').textContent = labelForActivity(state.selectedActivity);
+    renderScoutFormOptions(); // defensive re-populate in case taxonomy wasn't ready when the page first loaded
+    document.getElementById('scout-symptom').value = '';
+    document.getElementById('scout-location').value = '';
+    document.getElementById('scout-notes').value = '';
+    document.getElementById('scout-requires-action').checked = false;
+    clearScoutPhoto();
+    switchView('view-scout-finding');
+  }
+
+  function appSubmitScoutFinding() {
+    let domain = document.getElementById('scout-domain').value;
+    let symptom = document.getElementById('scout-symptom').value.trim();
+    let severity = document.getElementById('scout-severity').value;
+    if (!domain) return alert('Select a finding type.');
+    if (!symptom) return alert('Describe what you saw.');
+    if (!severity) return alert('Select a severity.');
+
+    let payload = {
+      workerId: state.workerId,
+      sessionId: state.sessionId,
+      domain: domain,
+      symptom: symptom,
+      severity: severity,
+      locationDetail: document.getElementById('scout-location').value.trim(),
+      notes: document.getElementById('scout-notes').value.trim(),
+      requiresAction: document.getElementById('scout-requires-action').checked
+    };
+
+    if (state.findingPhotoBase64) {
+      payload.photoBase64 = state.findingPhotoBase64;
+      payload.photoMimeType = state.findingPhotoMime;
+    }
+
+    apiCall('log-scout-finding', payload, function(res) {
+      if (res && res.success) {
+        state.sessionFindings.push({
+          domain: domain,
+          domainLabel: state.scoutDomainLabels[domain] || domain,
+          symptom: symptom,
+          severity: severity,
+          locationDetail: payload.locationDetail,
+          requiresAction: payload.requiresAction
+        });
+        renderSessionFindings();
+
+        // Reset for the next finding but stay on this form -- scouting a
+        // bed thoroughly usually means logging several findings back to back.
+        document.getElementById('scout-symptom').value = '';
+        document.getElementById('scout-location').value = '';
+        document.getElementById('scout-notes').value = '';
+        document.getElementById('scout-requires-action').checked = false;
+        clearScoutPhoto();
+
+        alert(payload.requiresAction ? 'Finding logged and manager notified.' : 'Finding logged.');
+      } else {
+        alert(res && res.error ? res.error : 'Failed to log finding');
+      }
+    });
+  }
+
+  // Renders the running "logged this pass" recap in two places that share
+  // the same underlying state.sessionFindings: the collapsed summary on the
+  // execution view, and the fuller list at the bottom of the finding form
+  // itself. Client-side only, same posture as sessionTotes/renderToteLog --
+  // the SCOUT_FINDING rows themselves are already durable server-side the
+  // moment log-scout-finding succeeds.
+  function renderSessionFindings() {
+    let execList = document.getElementById('scout-finding-log-list');
+    let execTotal = document.getElementById('scout-finding-log-total');
+    let recapWrap = document.getElementById('scout-recap-wrap');
+    let recapList = document.getElementById('scout-finding-recap-list');
+    if (!execList || !execTotal) return;
+
+    execList.innerHTML = '';
+    if (recapList) recapList.innerHTML = '';
+
+    state.sessionFindings.forEach(function(f) {
+      let flagNote = f.requiresAction ? ' &middot; \u{1F6A9} flagged' : '';
+      let locNote = f.locationDetail ? ' &middot; ' + f.locationDetail : '';
+      let rowHtml =
+        '<div class="bed-result" style="cursor:default;">' +
+          '<div class="bed-id">' + f.domainLabel + ' <span class="badge ' + scoutSeverityBadgeClass(f.severity) + '">' + scoutSeverityLabel(f.severity) + '</span></div>' +
+          '<div class="bed-meta">' + f.symptom + locNote + flagNote + '</div>' +
+        '</div>';
+
+      let execRow = document.createElement('div');
+      execRow.innerHTML = rowHtml;
+      execList.appendChild(execRow.firstElementChild);
+
+      if (recapList) {
+        let recapRow = document.createElement('div');
+        recapRow.innerHTML = rowHtml;
+        recapList.appendChild(recapRow.firstElementChild);
+      }
+    });
+
+    execTotal.textContent = state.sessionFindings.length
+      ? (state.sessionFindings.length + ' finding(s) logged this pass.')
+      : '';
+    if (recapWrap) recapWrap.classList.toggle('hidden', state.sessionFindings.length === 0);
+  }
+
+  // Same downsample-free base64 read as handleExceptionPhotoSelect, kept as
+  // a separate buffer (state.findingPhotoBase64) so an in-progress
+  // exception photo and an in-progress finding photo never collide.
+  function handleScoutPhotoSelect(evt) {
+    let file = evt.target.files && evt.target.files[0];
+    let preview = document.getElementById('scout-photo-preview');
+    if (!file) { clearScoutPhoto(); return; }
+
+    if (!file.type.startsWith('image/')) {
+      alert('Please select an image file.');
+      evt.target.value = '';
+      return;
+    }
+    const MAX_BYTES = 8 * 1024 * 1024;
+    if (file.size > MAX_BYTES) {
+      alert('Photo is too large (max 8MB). Please choose a smaller image.');
+      evt.target.value = '';
+      return;
+    }
+
+    let reader = new FileReader();
+    reader.onload = function() {
+      let dataUrl = reader.result;
+      let commaIdx = dataUrl.indexOf(',');
+      state.findingPhotoBase64 = dataUrl.substring(commaIdx + 1);
+      state.findingPhotoMime = file.type;
+      preview.innerHTML =
+        '<img src="' + dataUrl + '" style="max-width:100%; border-radius:6px;">' +
+        '<button type="button" class="btn-secondary" style="margin-top:6px;" onclick="clearScoutPhoto()">Remove Photo</button>';
+    };
+    reader.readAsDataURL(file);
+  }
+
+  function clearScoutPhoto() {
+    state.findingPhotoBase64 = '';
+    state.findingPhotoMime = '';
+    let input = document.getElementById('scout-photo');
+    if (input) input.value = '';
+    let preview = document.getElementById('scout-photo-preview');
     if (preview) preview.innerHTML = '';
   }
 
@@ -905,8 +1125,11 @@
         statusLbl.className = 'badge badge-active';
         statusLbl.textContent = 'ACTIVE';
         state.sessionTotes = [];
+        state.sessionFindings = [];
         renderToteLog();
+        renderSessionFindings();
         updateHarvestSectionVisibility();
+        updateScoutSectionVisibility();
         switchView('view-execution');
       } else {
         alert(res.error || 'Failed to start session');
