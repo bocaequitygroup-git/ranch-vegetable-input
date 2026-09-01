@@ -475,9 +475,25 @@
       let pauseNote = (s.status === 'PAUSED' && s.pauseType)
         ? ' &middot; ' + pauseTypeLabel(s.pauseType)
         : '';
-      // PLANNED rows have no Start_Time yet -- show "assigned to you" instead
-      // of a bogus timestamp (new Date('') is Invalid Date).
-      let metaTail = s.isPlanned ? 'assigned to you' : ('started ' + new Date(s.startTime).toLocaleTimeString() + pauseNote);
+      // PLANNED rows have no Start_Time yet -- show who dispatched it and
+      // when instead of a bogus timestamp (new Date('') is Invalid Date).
+      // dispatchedByName/dispatchedAt come from Dispatched_By/Dispatched_At
+      // (see handleDispatchTask_/handleGetOpenSessions_, Code.gs) -- both
+      // are optional, so this still degrades gracefully to "assigned to
+      // you" if either is missing (e.g. an older row from before those
+      // columns existed).
+      let metaTail;
+      if (s.isPlanned) {
+        if (s.dispatchedByName && s.dispatchedAt) {
+          metaTail = 'assigned by ' + s.dispatchedByName + ' at ' + new Date(s.dispatchedAt).toLocaleTimeString();
+        } else if (s.dispatchedByName) {
+          metaTail = 'assigned by ' + s.dispatchedByName;
+        } else {
+          metaTail = 'assigned to you';
+        }
+      } else {
+        metaTail = 'started ' + new Date(s.startTime).toLocaleTimeString() + pauseNote;
+      }
       let reassignedHtml = s.reassignedToMe
         ? '<div class="sr-reassigned">&#8635; Reassigned to you from ' + s.reassignedFromName +
           (s.reassignedByName ? ' by ' + s.reassignedByName : '') +
