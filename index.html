@@ -39,6 +39,7 @@
     .session-row .sr-actions { display: flex; gap: 8px; }
     .session-row .sr-actions button { width: auto; flex: 1; padding: 8px; font-size: 13px; margin-top: 0; }
     .badge-paused { background: #ef6c00; }
+    .badge-planned { background: #546e7a; }
     .pause-group { margin-top: 8px; }
     .pause-group > label { font-weight: bold; margin-bottom: 6px; font-size: 14px; }
     .pause-group-buttons { display: flex; gap: 8px; }
@@ -463,11 +464,20 @@
       let row = document.createElement('div');
       row.className = 'session-row';
 
-      let badgeClass = s.status === 'PAUSED' ? 'badge badge-paused' : 'badge badge-active';
-      let primaryLabel = s.status === 'PAUSED' ? 'Resume' : 'Open';
+      // PLANNED: a manager dispatched this task but nobody has started it
+      // yet (see handleDispatchTask_ / get-open-sessions, Code.gs). It gets
+      // its own badge/label/action rather than being lumped in with
+      // ACTIVE -- that's the whole point of this status existing: a
+      // dispatched task shouldn't look or act like it's already underway.
+      let badgeClass = s.isPlanned ? 'badge badge-planned' : (s.status === 'PAUSED' ? 'badge badge-paused' : 'badge badge-active');
+      let badgeLabel = s.isPlanned ? 'ASSIGNED' : s.status;
+      let primaryLabel = s.isPlanned ? 'Start' : (s.status === 'PAUSED' ? 'Resume' : 'Open');
       let pauseNote = (s.status === 'PAUSED' && s.pauseType)
         ? ' &middot; ' + pauseTypeLabel(s.pauseType)
         : '';
+      // PLANNED rows have no Start_Time yet -- show "assigned to you" instead
+      // of a bogus timestamp (new Date('') is Invalid Date).
+      let metaTail = s.isPlanned ? 'assigned to you' : ('started ' + new Date(s.startTime).toLocaleTimeString() + pauseNote);
       let reassignedHtml = s.reassignedToMe
         ? '<div class="sr-reassigned">&#8635; Reassigned to you from ' + s.reassignedFromName +
           (s.reassignedByName ? ' by ' + s.reassignedByName : '') +
@@ -478,19 +488,45 @@
       row.innerHTML =
         '<div class="session-row-top">' +
           '<span class="sr-bed">' + s.bedId + '</span>' +
-          '<span class="' + badgeClass + '">' + s.status + '</span>' +
+          '<span class="' + badgeClass + '">' + badgeLabel + '</span>' +
         '</div>' +
-        '<div class="sr-meta">' + labelForActivity(s.activity) + ' &middot; started ' + new Date(s.startTime).toLocaleTimeString() + pauseNote + '</div>' +
+        '<div class="sr-meta">' + labelForActivity(s.activity) + ' &middot; ' + metaTail + '</div>' +
         reassignedHtml +
         '<div class="sr-actions">' +
           '<button class="sr-btn-primary">' + primaryLabel + '</button>' +
-          '<button class="sr-btn-complete btn-secondary">Complete</button>' +
+          (s.isPlanned ? '' : '<button class="sr-btn-complete btn-secondary">Complete</button>') +
         '</div>';
 
-      row.querySelector('.sr-btn-primary').onclick = function() { openSessionDetail(s); };
-      row.querySelector('.sr-btn-complete').onclick = function() { quickCompleteSession(s); };
+      // PLANNED goes through startPlannedSession (start-planned-session
+      // action) instead of straight into the execution screen -- it needs
+      // to stamp the real Start_Time server-side first (see
+      // handleStartPlannedSession_, Code.gs).
+      row.querySelector('.sr-btn-primary').onclick = s.isPlanned
+        ? function() { startPlannedSession(s); }
+        : function() { openSessionDetail(s); };
+      if (!s.isPlanned) {
+        row.querySelector('.sr-btn-complete').onclick = function() { quickCompleteSession(s); };
+      }
 
       container.appendChild(row);
+    });
+  }
+
+  // Worker's "Start" tap on a dispatched-but-not-started (PLANNED) task from
+  // the "My Active Sessions" hub. Calls start-planned-session to flip the
+  // session to ACTIVE server-side (stamping the real Start_Time there, not
+  // here), then opens the normal execution screen exactly like any other
+  // freshly-started session.
+  function startPlannedSession(s) {
+    apiCall('start-planned-session', { sessionId: s.sessionId, workerId: state.workerId }, function(res) {
+      if (!res || !res.success) {
+        alert(res && res.error ? res.error : 'Failed to start task');
+        return;
+      }
+      s.status = 'ACTIVE';
+      s.isPlanned = false;
+      s.startTime = res.startTime;
+      openSessionDetail(s);
     });
   }
 
