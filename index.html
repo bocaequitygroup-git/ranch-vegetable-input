@@ -410,15 +410,47 @@
       if (res && res.success) {
         state.workerId = res.user.workerId; // canonical ID from the sheet, not whatever case was typed
         state.workerName = res.user.name;
-        document.getElementById('app-header').classList.remove('hidden');
-        document.getElementById('header-user-name').textContent = res.user.name + ' (' + res.user.workerId + ')';
-        loadTaxonomy();
-        loadBeds();
-        loadMySessions();
+        // Persisted so a browser refresh (or the worker app losing focus/
+        // reloading on a field device) doesn't drop the worker back to the
+        // login screen -- see restoreSessionOnLoad(). sessionStorage (not
+        // localStorage) so it clears itself once the tab/app is fully
+        // closed, rather than leaving a standing login on a shared device.
+        try {
+          sessionStorage.setItem('vpos_workerId', state.workerId);
+          sessionStorage.setItem('vpos_workerName', state.workerName);
+        } catch (e) { /* storage unavailable -- login still works, just won't survive a refresh */ }
+        enterAppAsWorker_();
       } else {
         alert('Authentication failed: ' + (res.error || 'Invalid credentials'));
       }
     });
+  }
+
+  // Shared by a fresh login and a restored session -- shows the app header
+  // and loads the same three things either way, so a restored session ends
+  // up in an identical state to one that just logged in.
+  function enterAppAsWorker_() {
+    document.getElementById('app-header').classList.remove('hidden');
+    document.getElementById('header-user-name').textContent = state.workerName + ' (' + state.workerId + ')';
+    loadTaxonomy();
+    loadBeds();
+    loadMySessions();
+  }
+
+  // Runs once on page load. If a worker was logged in before a refresh,
+  // skip the login screen and restore them straight to their active
+  // sessions instead of making them re-enter their PIN.
+  function restoreSessionOnLoad() {
+    var workerId, workerName;
+    try {
+      workerId = sessionStorage.getItem('vpos_workerId');
+      workerName = sessionStorage.getItem('vpos_workerName');
+    } catch (e) { return; }
+    if (!workerId) return;
+
+    state.workerId = workerId;
+    state.workerName = workerName || workerId;
+    enterAppAsWorker_();
   }
 
   // Logs the LOGOUT event server-side (LOGIN_LOG accountability trail) and
@@ -430,6 +462,10 @@
     if (loggedOutWorkerId) {
       apiCall('logout', { workerId: loggedOutWorkerId }, function() {});
     }
+    try {
+      sessionStorage.removeItem('vpos_workerId');
+      sessionStorage.removeItem('vpos_workerName');
+    } catch (e) { /* storage unavailable -- nothing to clear */ }
 
     state = {
       workerId: '', workerName: '', bedId: '', cohortId: '', crop: '', selectedActivity: '',
@@ -1386,6 +1422,8 @@
       }
     });
   }
+
+  restoreSessionOnLoad();
 </script>
 </body>
 </html>
