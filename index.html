@@ -31,6 +31,7 @@
     .bed-result .bed-id { font-weight: bold; font-size: 15px; }
     .bed-result .bed-meta { font-size: 13px; color: #666; margin-top: 2px; }
     .bed-empty-msg { font-size: 13px; color: #888; padding: 8px 0; }
+    #bed-search-results { max-height: 320px; overflow-y: auto; }
     .session-row { border: 1px solid #ddd; border-radius: 6px; padding: 12px; margin-bottom: 10px; background: #fafafa; }
     .session-row-top { display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px; }
     .session-row .sr-bed { font-weight: bold; font-size: 15px; }
@@ -125,7 +126,7 @@
 
     <div class="form-group" style="margin-top:20px;">
       <label for="bed-search-input">Or Search Beds (no camera needed)</label>
-      <input type="text" id="bed-search-input" placeholder="Search by bed, block, or crop..." oninput="renderBedSearchResults()">
+      <input type="text" id="bed-search-input" placeholder="Search by bed, block, or crop..." oninput="renderBedSearchResults()" onfocus="renderBedSearchResults()">
     </div>
     <div id="bed-search-results"></div>
     <button class="btn-secondary" style="margin-top:16px;" onclick="loadMySessions()">Back to My Sessions</button>
@@ -680,14 +681,14 @@
     let container = document.getElementById('bed-search-results');
     container.innerHTML = '';
 
-    if (!query) return;
-
-    let allMatches = state.allBeds.filter(function(b) {
+    // Empty query -> show the full bed list (acts like a tap-to-open
+    // dropdown) instead of nothing; typing narrows it from there.
+    let allMatches = query ? state.allBeds.filter(function(b) {
       return (b.bedId && b.bedId.toUpperCase().indexOf(query) !== -1) ||
              (b.block && b.block.toUpperCase().indexOf(query) !== -1) ||
              (b.crop && b.crop.toUpperCase().indexOf(query) !== -1) ||
              (b.cropName && b.cropName.toUpperCase().indexOf(query) !== -1);
-    });
+    }) : state.allBeds.slice().sort(function(a, b) { return String(a.bedId).localeCompare(String(b.bedId)); });
 
     // Render cap kept only as a safety ceiling, not a practical limit at
     // current ranch scale (~220 beds) -- NOT a data limit. state.allBeds
@@ -699,7 +700,9 @@
     let matches = allMatches.slice(0, RENDER_CAP);
 
     if (matches.length === 0) {
-      container.innerHTML = '<div class="bed-empty-msg">No beds match "' + query + '"</div>';
+      container.innerHTML = query
+        ? '<div class="bed-empty-msg">No beds match "' + query + '"</div>'
+        : '<div class="bed-empty-msg">No beds loaded yet.</div>';
       return;
     }
 
