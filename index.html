@@ -45,6 +45,15 @@
     .pause-group-buttons { display: flex; gap: 8px; }
     .pause-group-buttons button { width: auto; flex: 1; padding: 10px 6px; font-size: 12px; margin-top: 0; }
     .empty-state { text-align: center; color: #888; padding: 24px 8px; font-size: 14px; }
+    .bed-history-toggle { background: none; border: none; color: #2e7d32; font-weight: bold; font-size: 14px; padding: 6px 0; text-align: left; width: auto; cursor: pointer; }
+    .bed-history-body { margin-top: 6px; }
+    .bh-group-label { font-size: 12px; font-weight: bold; color: #666; text-transform: uppercase; letter-spacing: 0.02em; margin: 12px 0 6px; }
+    .bh-group-label:first-child { margin-top: 0; }
+    .bh-row { border: 1px solid #ddd; border-radius: 6px; padding: 10px 12px; margin-bottom: 8px; background: #fafafa; font-size: 13px; }
+    .bh-row-top { display: flex; align-items: center; justify-content: space-between; margin-bottom: 4px; }
+    .bh-row-top .bh-title { font-weight: bold; }
+    .bh-row .bh-meta { color: #666; }
+    .bh-row.bh-exception { background: #fdecea; border-color: #f3c2be; }
     #app-header { position: sticky; top: 0; display: flex; align-items: center; justify-content: space-between;
       background: #263238; color: #fff; padding: 10px 16px; margin-bottom: 12px; font-size: 13px; z-index: 10; }
     #app-header.hidden { display: none !important; }
@@ -134,6 +143,9 @@
       <p>🏷️ <strong>Cohort:</strong> <span class="code-chip" id="lbl-cohort-id">-</span></p>
       <p>📋 <strong>Field Status:</strong> <span id="lbl-bed-state">-</span></p>
     </div>
+
+    <button type="button" class="bed-history-toggle" id="bed-history-toggle" onclick="toggleBedHistory()">▸ Bed History</button>
+    <div id="bed-history-body" class="bed-history-body hidden"></div>
 
     <div class="form-group">
       <label for="activity-picker-container">Select Activity</label>
@@ -1124,11 +1136,115 @@
           targetRow.classList.add('hidden');
         }
 
+        // Bed history (recent activity, latest scout finding, unresolved
+        // exceptions, last irrigation) -- from getBedHistory() via
+        // scan-bed's response. Collapsed by default so it doesn't get in
+        // the way of the primary "confirm and start task" flow; comes
+        // back empty until real activity/irrigation rows exist.
+        renderBedHistory(res.history);
+        document.getElementById('bed-history-body').classList.add('hidden');
+        document.getElementById('bed-history-toggle').textContent = '▸ Bed History';
+
         switchView('view-select-task');
       } else {
         alert('Scan failed: ' + (res.error || 'Unknown code'));
       }
     });
+  }
+
+  function toggleBedHistory() {
+    let body = document.getElementById('bed-history-body');
+    let toggle = document.getElementById('bed-history-toggle');
+    let isHidden = body.classList.contains('hidden');
+    body.classList.toggle('hidden');
+    toggle.textContent = (isHidden ? '▾' : '▸') + ' Bed History';
+  }
+
+  // history = { recentActivities, latestScoutFinding, unresolvedExceptions,
+  // lastIrrigation } from getBedHistory() (VPOS_bed_history_patch.gs).
+  // Defensive throughout -- a bed with no history yet, or a scan-bed call
+  // from an older backend version without the history field, should just
+  // show empty groups rather than break the Confirm Assignment screen.
+  function renderBedHistory(history) {
+    let container = document.getElementById('bed-history-body');
+    container.innerHTML = '';
+    history = history || {};
+
+    let activities = history.recentActivities || [];
+    let scout = history.latestScoutFinding;
+    let exceptions = history.unresolvedExceptions || [];
+    let irrigation = history.lastIrrigation;
+
+    if (activities.length === 0 && !scout && exceptions.length === 0 && !irrigation) {
+      container.innerHTML = '<div class="empty-state">No history logged for this bed yet.</div>';
+      return;
+    }
+
+    let html = '';
+
+    if (exceptions.length > 0) {
+      html += '<div class="bh-group-label">Unresolved Exceptions</div>';
+      exceptions.forEach(function(ex) {
+        html += '<div class="bh-row bh-exception">' +
+          '<div class="bh-row-top"><span class="bh-title">' + (ex.Exception_Type || 'Exception') + '</span>' +
+          '<span class="badge ' + scoutSeverityBadgeClass(ex.Severity) + '">' + scoutSeverityLabel(ex.Severity) + '</span></div>' +
+          (ex.Notes ? '<div>' + ex.Notes + '</div>' : '') +
+          '<div class="bh-meta">' + fmtBedHistoryTime(ex.Reported_At) + '</div>' +
+        '</div>';
+      });
+    }
+
+    if (scout) {
+      html += '<div class="bh-group-label">Latest Scout Finding</div>';
+      html += '<div class="bh-row">' +
+        '<div class="bh-row-top"><span class="bh-title">' + (scout.Domain || '-') + (scout.Symptom ? ': ' + scout.Symptom : '') + '</span>' +
+        '<span class="badge ' + scoutSeverityBadgeClass(scout.Severity) + '">' + scoutSeverityLabel(scout.Severity) + '</span></div>' +
+        (scout.Notes ? '<div>' + scout.Notes + '</div>' : '') +
+        '<div class="bh-meta">' + fmtBedHistoryTime(scout.Timestamp) + '</div>' +
+      '</div>';
+    }
+
+    if (activities.length > 0) {
+      html += '<div class="bh-group-label">Recent Activity</div>';
+      activities.forEach(function(a) {
+        let isStateChange = a.Activity_Type === 'COHORT_STATE_CHANGE';
+        let d = a.details || {};
+        let meta = isStateChange
+          ? ((d.from || '?') + ' \u2192 ' + (d.to || '?'))
+          : [
+              (d.elapsed_minutes !== undefined ? d.elapsed_minutes + ' min' : ''),
+              (d.logged_quantity !== undefined ? d.logged_quantity + (d.unit ? ' ' + d.unit : '') : '')
+            ].filter(Boolean).join(' \u00b7 ');
+        let title = isStateChange ? 'Cohort State Change' : labelForActivity(a.Activity_Type);
+        html += '<div class="bh-row">' +
+          '<div class="bh-row-top"><span class="bh-title">' + title + '</span>' +
+          '<span class="bh-meta">' + (a.Worker_ID || '') + '</span></div>' +
+          (meta ? '<div class="bh-meta">' + meta + '</div>' : '') +
+          '<div class="bh-meta">' + fmtBedHistoryTime(a.Timestamp) + '</div>' +
+        '</div>';
+      });
+    }
+
+    if (irrigation) {
+      html += '<div class="bh-group-label">Last Irrigation</div>';
+      html += '<div class="bh-row">' +
+        '<div class="bh-row-top"><span class="bh-title">' + (irrigation.Trigger_Type || 'Irrigation') + '</span>' +
+        '<span class="bh-meta">' + (irrigation.Status || '') + '</span></div>' +
+        '<div class="bh-meta">' +
+          (irrigation.Duration_Minutes !== undefined && irrigation.Duration_Minutes !== '' ? irrigation.Duration_Minutes + ' min' : '') +
+          (irrigation.Actual_PSI !== undefined && irrigation.Actual_PSI !== '' ? ' \u00b7 ' + irrigation.Actual_PSI + ' PSI' : '') +
+        '</div>' +
+        '<div class="bh-meta">' + fmtBedHistoryTime(irrigation.Timestamp) + '</div>' +
+      '</div>';
+    }
+
+    container.innerHTML = html;
+  }
+
+  function fmtBedHistoryTime(ts) {
+    if (!ts) return '';
+    let d = new Date(ts);
+    return isNaN(d.getTime()) ? '' : d.toLocaleString();
   }
 
   function appStartSession() {
