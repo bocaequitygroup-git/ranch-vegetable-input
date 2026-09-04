@@ -222,6 +222,7 @@
       <p><strong>Bed:</strong> <span id="exec-bed">-</span></p>
       <p><strong>Task:</strong> <span id="exec-task">-</span></p>
       <p><strong>Started:</strong> <span id="exec-start">-</span></p>
+      <p><strong>Elapsed:</strong> <span id="exec-elapsed" style="font-family:monospace; font-weight:800; color:#ffe082;">⏱️ 00:00:00</span></p>
     </div>
 
     <div class="form-group hidden" id="harvest-tote-section">
@@ -492,6 +493,7 @@
   }
 
   function switchView(viewId) {
+    if (viewId !== 'view-execution') stopExecTimer_();
     VIEW_IDS.forEach(v => {
       var el = document.getElementById(v);
       if (el) el.classList.add('hidden');
@@ -751,6 +753,33 @@
 
   // Opens a specific session's execution screen (pause/complete/report
   // exception act on THIS session only -- other open sessions are untouched).
+  // Live "Active Elapsed" ticker for the execution view -- purely a display
+  // convenience (mirrors ranch_aab.html's session-timer-card), computed
+  // client-side from the session's Start_Time. The authoritative elapsed
+  // total actually used server-side (Accumulated_Active_Minutes) is only
+  // recomputed on pause/complete -- see handlePauseResume_/
+  // handleCompleteSession_ in Code_main.gs.
+  var EXEC_TIMER_INTERVAL_ = null;
+  function fmtExecElapsed_(startDate) {
+    var elapsedSec = Math.max(0, Math.floor((Date.now() - startDate.getTime()) / 1000));
+    var hh = String(Math.floor(elapsedSec / 3600)).padStart(2, '0');
+    var mm = String(Math.floor((elapsedSec % 3600) / 60)).padStart(2, '0');
+    var ss = String(elapsedSec % 60).padStart(2, '0');
+    return '⏱️ ' + hh + ':' + mm + ':' + ss;
+  }
+  function startExecTimer_(startDate) {
+    stopExecTimer_();
+    var el = document.getElementById('exec-elapsed');
+    if (!el || isNaN(startDate.getTime())) return;
+    el.textContent = fmtExecElapsed_(startDate);
+    EXEC_TIMER_INTERVAL_ = setInterval(function() {
+      el.textContent = fmtExecElapsed_(startDate);
+    }, 1000);
+  }
+  function stopExecTimer_() {
+    if (EXEC_TIMER_INTERVAL_) { clearInterval(EXEC_TIMER_INTERVAL_); EXEC_TIMER_INTERVAL_ = null; }
+  }
+
   function openSessionDetail(s) {
     state.bedId = s.bedId;
     state.cohortId = s.cohortId;
@@ -760,6 +789,7 @@
     document.getElementById('exec-bed').textContent = s.bedId;
     document.getElementById('exec-task').textContent = labelForActivity(s.activity);
     document.getElementById('exec-start').textContent = new Date(s.startTime).toLocaleTimeString();
+    startExecTimer_(new Date(s.startTime));
 
     let statusLbl = document.getElementById('lbl-status');
     statusLbl.className = 'badge ' + (s.status === 'PAUSED' ? 'badge-paused' : 'badge-active');
@@ -1584,6 +1614,7 @@
         document.getElementById('exec-bed').textContent = state.bedId;
         document.getElementById('exec-task').textContent = labelForActivity(state.selectedActivity);
         document.getElementById('exec-start').textContent = new Date(res.startTime).toLocaleTimeString();
+        startExecTimer_(new Date(res.startTime));
         let statusLbl = document.getElementById('lbl-status');
         statusLbl.className = 'badge badge-active';
         statusLbl.textContent = 'ACTIVE';
