@@ -4,80 +4,100 @@
   <base target="_top">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <style>
-    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; margin: 0; padding: 16px; background: #f4f6f8; color: #333; }
-    .card { background: #fff; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); max-width: 480px; margin: 0 auto 16px; }
+    :root {
+      --bg-dark: #0f1416;
+      --card-bg: #182328;
+      --inner-bg: #10171a;
+      --border: #26373e;
+      --text: #eceff1;
+      --text-muted: #78909c;
+      --green: #43a047;
+      --amber: #fb8c00;
+      --gold: #c9a227;
+      --blue: #2196f3;
+      --red: #e53935;
+      --purple: #8e24aa;
+      --gray: #37474f;
+    }
+    * { box-sizing: border-box; }
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; margin: 0; padding: 16px; background: var(--bg-dark); color: var(--text); }
+    .card { background: var(--card-bg); border: 1px solid var(--border); padding: 20px; border-radius: 16px; max-width: 480px; margin: 0 auto 16px; }
     .hidden { display: none !important; }
     .form-group { margin-bottom: 16px; }
-    label { display: block; font-weight: bold; margin-bottom: 6px; font-size: 14px; }
-    input, select, button { width: 100%; padding: 12px; border: 1px solid #ccc; border-radius: 6px; box-sizing: border-box; font-size: 16px; }
-    button { background: #2e7d32; color: #fff; font-weight: bold; border: none; cursor: pointer; margin-top: 8px; }
-    button:hover { background: #1b5e20; }
-    button.btn-danger { background: #c62828; }
-    button.btn-secondary { background: #666; }
-    .badge { display: inline-block; padding: 4px 8px; border-radius: 4px; font-weight: bold; font-size: 12px; color: #fff; background: #666; }
-    .badge-active { background: #2e7d32; }
-    .badge-danger { background: #c62828; }
-    .badge-critical { background: #6a1b9a; }
+    label { display: block; font-weight: bold; margin-bottom: 6px; font-size: 14px; color: var(--text); }
+    input, select, button { width: 100%; padding: 12px; border: 1px solid var(--border); border-radius: 10px; box-sizing: border-box; font-size: 16px; }
+    input, select { background: var(--inner-bg); color: var(--text); }
+    input::placeholder { color: var(--text-muted); }
+    button { background: var(--green); color: #fff; font-weight: bold; border: none; cursor: pointer; margin-top: 8px; }
+    button:hover { filter: brightness(1.08); }
+    button.btn-danger { background: var(--red); }
+    button.btn-secondary { background: #243338; color: var(--text); border: 1px solid var(--border); }
+    .badge { display: inline-block; padding: 4px 8px; border-radius: 6px; font-weight: bold; font-size: 12px; color: #fff; background: var(--gray); }
+    .badge-active { background: var(--green); }
+    .badge-danger { background: var(--red); }
+    .badge-critical { background: var(--purple); }
     .badge-low { background: #558b2f; }
-    .badge-medium { background: #ef6c00; }
-    .meta-box { background: #e8f5e9; padding: 14px; border-radius: 8px; margin-bottom: 16px; border-left: 5px solid #2e7d32; }
+    .badge-medium { background: var(--amber); }
+    .meta-box { background: var(--inner-bg); border: 1px solid var(--border); padding: 14px; border-radius: 12px; margin-bottom: 16px; border-left: 4px solid var(--green); }
     .meta-box p { margin: 6px 0; font-size: 15px; }
-    .meta-headline { font-size: 18px; font-weight: bold; color: #1b5e20; }
-    .meta-sub { font-size: 14px; font-weight: normal; color: #555; }
-    .meta-crop { font-weight: bold; color: #2e7d32; }
-    .code-chip { font-family: monospace; font-size: 12px; color: #666; background: #dcedc8; padding: 2px 6px; border-radius: 4px; }
-    .bed-result { padding: 10px 12px; border: 1px solid #ddd; border-radius: 6px; margin-top: 8px; cursor: pointer; background: #fafafa; }
-    .bed-result:hover { background: #e8f5e9; border-color: #2e7d32; }
+    .meta-headline { font-size: 18px; font-weight: bold; color: var(--text); }
+    .meta-sub { font-size: 14px; font-weight: normal; color: var(--text-muted); }
+    .meta-crop { font-weight: bold; color: #81c784; }
+    .code-chip { font-family: monospace; font-size: 12px; color: var(--text-muted); background: rgba(255,255,255,0.06); padding: 2px 6px; border-radius: 4px; }
+    .bed-result { padding: 10px 12px; border: 1px solid var(--border); border-radius: 10px; margin-top: 8px; cursor: pointer; background: var(--inner-bg); }
+    .bed-result:hover { background: #1c282e; border-color: var(--green); }
     .bed-result .bed-id { font-weight: bold; font-size: 15px; }
-    .bed-result .bed-meta { font-size: 13px; color: #666; margin-top: 2px; }
-    .bed-empty-msg { font-size: 13px; color: #888; padding: 8px 0; }
+    .bed-result .bed-meta { font-size: 13px; color: var(--text-muted); margin-top: 2px; }
+    .bed-empty-msg { font-size: 13px; color: var(--text-muted); padding: 8px 0; }
     #bed-search-results { max-height: 320px; overflow-y: auto; }
-    .session-row { border: 1px solid #ddd; border-radius: 6px; padding: 12px; margin-bottom: 10px; background: #fafafa; }
+    .session-row { border: 1px solid var(--border); border-radius: 10px; padding: 12px; margin-bottom: 10px; background: var(--inner-bg); }
     .session-row-top { display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px; }
     .session-row .sr-bed { font-weight: bold; font-size: 15px; }
-    .session-row .sr-meta { font-size: 13px; color: #666; margin-bottom: 8px; }
-    .session-row .sr-reassigned { font-size: 12px; color: #ef6c00; font-weight: bold; margin-bottom: 8px; }
+    .session-row .sr-meta { font-size: 13px; color: var(--text-muted); margin-bottom: 8px; }
+    .session-row .sr-reassigned { font-size: 12px; color: var(--amber); font-weight: bold; margin-bottom: 8px; }
     .session-row .sr-actions { display: flex; gap: 8px; }
     .session-row .sr-actions button { width: auto; flex: 1; padding: 8px; font-size: 13px; margin-top: 0; }
-    .badge-paused { background: #ef6c00; }
-    .badge-planned { background: #546e7a; }
+    .badge-paused { background: var(--amber); }
+    .badge-planned { background: var(--gray); }
     .pause-group { margin-top: 8px; }
     .pause-group > label { font-weight: bold; margin-bottom: 6px; font-size: 14px; }
     .pause-group-buttons { display: flex; gap: 8px; }
     .pause-group-buttons button { width: auto; flex: 1; padding: 10px 6px; font-size: 12px; margin-top: 0; }
-    .empty-state { text-align: center; color: #888; padding: 24px 8px; font-size: 14px; }
-    .bed-history-toggle { background: none; border: none; color: #2e7d32; font-weight: bold; font-size: 14px; padding: 6px 0; text-align: left; width: auto; cursor: pointer; }
+    .empty-state { text-align: center; color: var(--text-muted); padding: 24px 8px; font-size: 14px; }
+    .bed-history-toggle { background: none; border: none; color: #81c784; font-weight: bold; font-size: 14px; padding: 6px 0; text-align: left; width: auto; cursor: pointer; }
     .bed-history-body { margin-top: 6px; }
-    .bh-group-label { font-size: 12px; font-weight: bold; color: #666; text-transform: uppercase; letter-spacing: 0.02em; margin: 12px 0 6px; }
+    .bh-group-label { font-size: 12px; font-weight: bold; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.02em; margin: 12px 0 6px; }
     .bh-group-label:first-child { margin-top: 0; }
-    .bh-row { border: 1px solid #ddd; border-radius: 6px; padding: 10px 12px; margin-bottom: 8px; background: #fafafa; font-size: 13px; }
+    .bh-row { border: 1px solid var(--border); border-radius: 10px; padding: 10px 12px; margin-bottom: 8px; background: var(--inner-bg); font-size: 13px; }
     .bh-row-top { display: flex; align-items: center; justify-content: space-between; margin-bottom: 4px; }
     .bh-row-top .bh-title { font-weight: bold; }
-    .bh-row .bh-meta { color: #666; }
-    .bh-row.bh-exception { background: #fdecea; border-color: #f3c2be; }
-    .field-actions-label { font-size: 12px; font-weight: bold; color: #666; text-transform: uppercase; letter-spacing: 0.02em; margin: 4px 0 8px; }
+    .bh-row .bh-meta { color: var(--text-muted); }
+    .bh-row.bh-exception { background: rgba(229,57,53,0.12); border-color: var(--red); }
+    .field-actions-label { font-size: 12px; font-weight: bold; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.02em; margin: 4px 0 8px; }
     .field-actions-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; margin-bottom: 16px; }
-    .field-actions-grid button { width: auto; padding: 10px 4px; font-size: 12px; margin-top: 0; background: #2e7d32; line-height: 1.3; }
-    .field-actions-grid button:hover { background: #1b5e20; }
-    .field-actions-grid button:disabled { background: #b0bec5; cursor: default; }
-    #quick-launch-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center; padding: 20px; z-index: 50; }
+    .field-actions-grid button { width: auto; padding: 10px 4px; font-size: 12px; margin-top: 0; background: #1c282e; border: 1px solid var(--border); color: var(--text); line-height: 1.3; }
+    .field-actions-grid button:hover { background: #243338; }
+    .field-actions-grid button:disabled { background: var(--gray); opacity: 0.5; cursor: default; }
+    #quick-launch-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.7); display: flex; align-items: center; justify-content: center; padding: 20px; z-index: 50; }
     #quick-launch-overlay.hidden { display: none !important; }
-    .modal-box { background: #fff; border-radius: 10px; padding: 20px; max-width: 400px; width: 100%; }
-    .modal-box h3 { margin: 0 0 8px; font-size: 17px; }
-    .modal-box p { margin: 4px 0; font-size: 14px; color: #555; }
+    .modal-box { background: var(--card-bg); border: 1px solid var(--border); border-radius: 16px; padding: 20px; max-width: 400px; width: 100%; }
+    .modal-box h3 { margin: 0 0 8px; font-size: 17px; color: var(--text); }
+    .modal-box p { margin: 4px 0; font-size: 14px; color: var(--text-muted); }
     .modal-actions { display: flex; gap: 8px; margin-top: 16px; }
     .modal-actions button { width: auto; flex: 1; margin-top: 0; }
     #app-header { position: sticky; top: 0; display: flex; align-items: center; justify-content: space-between;
-      background: #263238; color: #fff; padding: 10px 16px; margin-bottom: 12px; font-size: 13px; z-index: 10; }
+      background: var(--card-bg); border: 1px solid var(--border); border-radius: 14px; color: var(--text); padding: 10px 14px; margin-bottom: 12px; font-size: 13px; z-index: 10; }
     #app-header.hidden { display: none !important; }
     .conn-status { display: flex; align-items: center; gap: 6px; }
-    .conn-dot { width: 9px; height: 9px; border-radius: 50%; background: #888; flex-shrink: 0; }
-    .conn-dot.online { background: #66bb6a; }
-    .conn-dot.checking { background: #ffb300; }
-    .conn-dot.offline { background: #e53935; }
-    #btn-logout { width: auto; padding: 6px 12px; margin: 0; font-size: 12px; background: #455a64; }
-    #btn-logout:hover { background: #37474f; }
+    .conn-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--text-muted); flex-shrink: 0; }
+    .conn-dot.online { background: var(--green); box-shadow: 0 0 8px var(--green); }
+    .conn-dot.checking { background: var(--amber); }
+    .conn-dot.offline { background: var(--red); }
+    #btn-logout { width: auto; padding: 6px 12px; margin: 0; font-size: 11px; background: none; border: none; color: var(--text-muted); text-decoration: underline; cursor: pointer; }
+    #btn-logout:hover { color: var(--text); background: none; }
     .header-user { font-weight: bold; font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 40vw; }
+    h2 { color: var(--text); }
+    h3 { color: var(--text); }
   </style>
 </head>
 <body>
@@ -111,7 +131,7 @@
       <h2 style="margin:0;">My Active Sessions</h2>
       <button style="width:auto; padding:6px 12px; font-size:12px; margin:0;" onclick="loadMySessions()">Refresh</button>
     </div>
-    <div id="my-sessions-subtitle" style="font-size:13px; color:#666; margin-bottom:10px;"></div>
+    <div id="my-sessions-subtitle" style="font-size:13px; color:var(--text-muted); margin-bottom:10px;"></div>
     <div id="my-sessions-list"></div>
     <button onclick="switchView('view-scan')">+ Start New Task</button>
     <button class="btn-secondary" onclick="loadMyHistory()">View Completed History</button>
@@ -223,14 +243,14 @@
       </div>
       <button class="btn-secondary" onclick="appLogHarvestTote()" style="margin-top:10px;">Log Tote</button>
       <div id="tote-log-list" style="margin-top:10px;"></div>
-      <div id="tote-log-total" style="font-size:13px; color:#666; margin-top:6px;"></div>
+      <div id="tote-log-total" style="font-size:13px; color:var(--text-muted); margin-top:6px;"></div>
     </div>
 
     <div class="form-group hidden" id="scout-finding-section">
       <h3 style="margin:16px 0 8px; font-size:15px;">Scouting</h3>
       <button class="btn-secondary" onclick="appOpenScoutFinding()">+ Log Scout Finding</button>
       <div id="scout-finding-log-list" style="margin-top:10px;"></div>
-      <div id="scout-finding-log-total" style="font-size:13px; color:#666; margin-top:6px;"></div>
+      <div id="scout-finding-log-total" style="font-size:13px; color:var(--text-muted); margin-top:6px;"></div>
     </div>
 
     <button class="btn-danger" onclick="appReportExceptionPrompt()">Report Exception / Issue</button>
@@ -340,7 +360,7 @@
     <div class="modal-box">
       <h3>Assign a Crop to Plant</h3>
       <p id="cohort-modal-bed">-</p>
-      <p style="color:#607d8b; font-size:13px;">This bed has no active cohort. Pick what's being planted to create one before starting the task.</p>
+      <p style="color:var(--text-muted); font-size:13px;">This bed has no active cohort. Pick what's being planted to create one before starting the task.</p>
       <div id="cohort-modal-picker-container"></div>
       <div class="modal-actions">
         <button type="button" class="btn-secondary" onclick="cancelCohortModal()">Cancel</button>
@@ -713,7 +733,7 @@
           (h.elapsedMinutes !== null ? h.elapsedMinutes + ' min active' : '') + qtyNote + excNote +
         '</div>';
         if (h.exceptionFlag) {
-          bodyHtml = bodyHtml.replace('class="sr-meta"', 'class="sr-meta" style="color:#c62828;"');
+          bodyHtml = bodyHtml.replace('class="sr-meta"', 'class="sr-meta" style="color:#ff8a80;"');
         }
       }
 
