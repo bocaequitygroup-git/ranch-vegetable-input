@@ -55,6 +55,18 @@
     .bh-row-top .bh-title { font-weight: bold; }
     .bh-row .bh-meta { color: #666; }
     .bh-row.bh-exception { background: #fdecea; border-color: #f3c2be; }
+    .field-actions-label { font-size: 12px; font-weight: bold; color: #666; text-transform: uppercase; letter-spacing: 0.02em; margin: 4px 0 8px; }
+    .field-actions-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; margin-bottom: 16px; }
+    .field-actions-grid button { width: auto; padding: 10px 4px; font-size: 12px; margin-top: 0; background: #2e7d32; line-height: 1.3; }
+    .field-actions-grid button:hover { background: #1b5e20; }
+    .field-actions-grid button:disabled { background: #b0bec5; cursor: default; }
+    #quick-launch-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center; padding: 20px; z-index: 50; }
+    #quick-launch-overlay.hidden { display: none !important; }
+    .modal-box { background: #fff; border-radius: 10px; padding: 20px; max-width: 400px; width: 100%; }
+    .modal-box h3 { margin: 0 0 8px; font-size: 17px; }
+    .modal-box p { margin: 4px 0; font-size: 14px; color: #555; }
+    .modal-actions { display: flex; gap: 8px; margin-top: 16px; }
+    .modal-actions button { width: auto; flex: 1; margin-top: 0; }
     #app-header { position: sticky; top: 0; display: flex; align-items: center; justify-content: space-between;
       background: #263238; color: #fff; padding: 10px 16px; margin-bottom: 12px; font-size: 13px; z-index: 10; }
     #app-header.hidden { display: none !important; }
@@ -137,19 +149,29 @@
     <h2>Confirm Assignment</h2>
 
     <div class="meta-box">
-      <p class="meta-headline">📍 Bed <span id="lbl-bed-id">-</span> <span class="meta-sub">(Block <span id="lbl-block">-</span>)</span></p>
-      <p>🌱 <strong>Crop:</strong> <span class="meta-crop" id="lbl-crop">-</span> <span class="code-chip" id="lbl-crop-code"></span></p>
-      <p id="row-variety-stage">🧬 <strong>Variety / Stage:</strong> <span id="lbl-variety-stage">-</span></p>
-      <p id="row-bed-target">🎯 <strong>Bed Target:</strong> <span id="lbl-bed-target">-</span></p>
+      <p class="meta-headline">📍 Bed <span id="lbl-bed-id">-</span> <span class="meta-sub">(Block <span id="lbl-block">-</span><span id="row-zone">&nbsp;· Zone <span id="lbl-zone">-</span></span>)</span></p>
+      <p>🌱 <strong>Crop:</strong> <span><span class="meta-crop" id="lbl-crop">-</span> <span class="code-chip" id="lbl-crop-code"></span></span></p>
       <p>🏷️ <strong>Cohort:</strong> <span class="code-chip" id="lbl-cohort-id">-</span></p>
+      <p id="row-variety-stage">🧬 <strong>Variety:</strong> <span id="lbl-variety-stage">-</span></p>
+      <p id="row-stage-day">📈 <strong>Stage:</strong> <span id="lbl-stage-day">-</span></p>
+      <p id="row-planted">📅 <strong>Planted:</strong> <span id="lbl-planted">-</span></p>
+      <p id="row-harvest-est">🌾 <strong>Harvest:</strong> <span id="lbl-harvest-est">-</span></p>
+      <p id="row-bed-target">🎯 <strong>Bed Target:</strong> <span id="lbl-bed-target">-</span></p>
       <p>📋 <strong>Field Status:</strong> <span id="lbl-bed-state">-</span></p>
     </div>
 
     <button type="button" class="bed-history-toggle" id="bed-history-toggle" onclick="toggleBedHistory()">▸ Bed History</button>
     <div id="bed-history-body" class="bed-history-body hidden"></div>
 
+    <div class="field-actions-label">Field Actions</div>
+    <div class="field-actions-grid">
+      <button type="button" onclick="quickLaunch('water')">💧<br>Log Water Pass</button>
+      <button type="button" onclick="quickLaunch('fertilizer')">🧪<br>Log Fertilizer</button>
+      <button type="button" onclick="quickLaunch('weeding')">🌿<br>Log Weeding</button>
+    </div>
+
     <div class="form-group">
-      <label for="activity-picker-container">Select Activity</label>
+      <label for="activity-picker-container">Or Choose Any Activity</label>
       <div id="activity-picker-container"></div>
     </div>
 
@@ -166,7 +188,7 @@
       </div>
     </div>
 
-    <button id="btn-use-bed" onclick="appStartSession()">Use This Bed &amp; Start Task</button>
+    <button id="btn-use-bed" onclick="appStartSession()">▶ Start Task</button>
     <button class="btn-secondary" onclick="switchView('view-scan')">Cancel / Rescan</button>
     <button class="btn-secondary" onclick="loadMySessions()">Back to My Sessions</button>
   </div>
@@ -309,6 +331,20 @@
     <button class="btn-secondary" style="margin-top:16px;" onclick="switchView('view-execution')">Done &mdash; Back to Session</button>
   </div>
 
+  <!-- QUICK-LAUNCH CONFIRM MODAL -- shown by quickLaunch() before handing off to the
+       existing appStartSession() pipeline; never writes anything itself. -->
+  <div id="quick-launch-overlay" class="hidden">
+    <div class="modal-box">
+      <h3 id="ql-modal-title">Start Task?</h3>
+      <p id="ql-modal-bed">-</p>
+      <p id="ql-modal-cohort">-</p>
+      <div class="modal-actions">
+        <button type="button" class="btn-secondary" onclick="cancelQuickLaunch()">Cancel</button>
+        <button type="button" onclick="confirmQuickLaunch()">▶ Start Timer</button>
+      </div>
+    </div>
+  </div>
+
 <script>
   // Paste your Apps Script Web App deployment URL below
   // Must be deployed as: "Execute as: Me" and "Who has access: Anyone"
@@ -356,7 +392,20 @@
     exceptionPhotoBase64: '', // base64 payload (no data: prefix) of a photo attached to the current exception report, if any
     exceptionPhotoMime: '',
     findingPhotoBase64: '', // same pattern as exceptionPhotoBase64, but for the scout finding photo
-    findingPhotoMime: ''
+    findingPhotoMime: '',
+    pendingQuickActivity: '' // activity id staged by quickLaunch(), consumed by confirmQuickLaunch()
+  };
+
+  // Field Actions quick-launch buttons -- each maps to a keyword used to find
+  // a matching activity id in the taxonomy loaded from get-taxonomy (see
+  // findActivityIdForKeywords_). Matching by keyword rather than a hardcoded
+  // canonical id means this keeps working even if ActivityTaxonomy.gs's
+  // exact id spelling changes, as long as the id or its label still contains
+  // the keyword.
+  const QUICK_ACTIONS = {
+    water: { label: 'Water Pass', keywords: ['water', 'irrigation'] },
+    fertilizer: { label: 'Fertilization', keywords: ['fertiliz'] },
+    weeding: { label: 'Weeding', keywords: ['weed'] }
   };
 
   function setConnStatus(status, label) {
@@ -1149,6 +1198,16 @@
         document.getElementById('lbl-crop').textContent = res.bed.cropName || state.crop;
         document.getElementById('lbl-bed-state').textContent = res.bed.bedState || '-';
 
+        // Irrigation zone -- shown inline next to Block; hidden entirely for
+        // a bed with no zone assigned rather than showing "Zone -".
+        let zoneEl = document.getElementById('row-zone');
+        if (res.bed.irrigationZone) {
+          zoneEl.classList.remove('hidden');
+          document.getElementById('lbl-zone').textContent = res.bed.irrigationZone;
+        } else {
+          zoneEl.classList.add('hidden');
+        }
+
         // Only show the raw code chip when it actually differs from the
         // display name -- avoids a redundant "Eggplant (Eggplant)" if
         // CROP_REFERENCE ever stores the full name as the code too.
@@ -1163,16 +1222,52 @@
         let cohort = res.bed.cohort;
         let varietyRow = document.getElementById('row-variety-stage');
         let targetRow = document.getElementById('row-bed-target');
+        let stageDayRow = document.getElementById('row-stage-day');
+        let plantedRow = document.getElementById('row-planted');
+        let harvestRow = document.getElementById('row-harvest-est');
         if (cohort) {
           varietyRow.classList.remove('hidden');
           targetRow.classList.remove('hidden');
-          let varietyStage = [cohort.variety, cohort.stage].filter(Boolean).join(' \u00b7 ');
-          document.getElementById('lbl-variety-stage').textContent = varietyStage || '-';
+          document.getElementById('lbl-variety-stage').textContent = cohort.variety || '-';
           document.getElementById('lbl-bed-target').textContent =
             (cohort.targetQtyLbs !== null && cohort.targetQtyLbs !== undefined) ? cohort.targetQtyLbs + ' lbs' : '-';
+
+          // Stage · Day N -- only meaningful once the cohort has an actual
+          // planting date; a cohort still in nursery/pre-plant shows just the
+          // stage with no day count rather than a misleading "Day NaN".
+          let dayNum = cohort.actualPlantingDate ? daysBetween_(cohort.actualPlantingDate, new Date()) : null;
+          if (cohort.stage) {
+            stageDayRow.classList.remove('hidden');
+            document.getElementById('lbl-stage-day').textContent =
+              cohort.stage + (dayNum !== null && dayNum >= 0 ? ' \u00b7 Day ' + (dayNum + 1) : '');
+          } else {
+            stageDayRow.classList.add('hidden');
+          }
+
+          if (cohort.actualPlantingDate) {
+            plantedRow.classList.remove('hidden');
+            document.getElementById('lbl-planted').textContent = fmtDateOnly(cohort.actualPlantingDate);
+          } else {
+            plantedRow.classList.add('hidden');
+          }
+
+          if (cohort.expectedHarvestDate) {
+            harvestRow.classList.remove('hidden');
+            let remaining = daysBetween_(new Date().toISOString(), new Date(cohort.expectedHarvestDate));
+            let remainingTxt = (remaining === null) ? ''
+              : remaining > 0 ? ' (' + remaining + ' days remaining)'
+              : remaining === 0 ? ' (today)'
+              : ' (' + Math.abs(remaining) + ' days overdue)';
+            document.getElementById('lbl-harvest-est').textContent = 'Est. ' + fmtDateOnly(cohort.expectedHarvestDate) + remainingTxt;
+          } else {
+            harvestRow.classList.add('hidden');
+          }
         } else {
           varietyRow.classList.add('hidden');
           targetRow.classList.add('hidden');
+          stageDayRow.classList.add('hidden');
+          plantedRow.classList.add('hidden');
+          harvestRow.classList.add('hidden');
         }
 
         // Bed history (recent activity, latest scout finding, unresolved
@@ -1284,6 +1379,79 @@
     if (!ts) return '';
     let d = new Date(ts);
     return isNaN(d.getTime()) ? '' : d.toLocaleString();
+  }
+
+  // Date-only formatting + day-math for the Bed Snapshot's Stage/Planted/
+  // Harvest lines. Both cohort dates arrive as ISO strings (or '') from
+  // handleScanQr_ -- never assume they're present, since an unplanted cohort
+  // legitimately has no Actual_Planting_Date yet.
+  function fmtDateOnly(iso) {
+    if (!iso) return '';
+    let d = new Date(iso);
+    return isNaN(d.getTime()) ? '' : d.toLocaleDateString();
+  }
+  function daysBetween_(fromIso, toDate) {
+    let from = new Date(fromIso);
+    if (isNaN(from.getTime())) return null;
+    let msPerDay = 24 * 60 * 60 * 1000;
+    // Compare calendar days, not exact 24h windows, so "planted this
+    // morning" reads as Day 1 all day rather than Day 0 until the next
+    // clock-exact hour.
+    let fromDay = new Date(from.getFullYear(), from.getMonth(), from.getDate());
+    let toDay = new Date(toDate.getFullYear(), toDate.getMonth(), toDate.getDate());
+    return Math.round((toDay - fromDay) / msPerDay);
+  }
+
+  // Finds the first activity id in the loaded taxonomy whose id or label
+  // contains any of the given keywords (case-insensitive). Returns '' if
+  // nothing matches -- callers must handle that (taxonomy not loaded yet, or
+  // this ranch's taxonomy just doesn't have that activity type).
+  function findActivityIdForKeywords_(keywords) {
+    for (let group in state.taxonomyGroups) {
+      let ids = state.taxonomyGroups[group] || [];
+      for (let i = 0; i < ids.length; i++) {
+        let id = ids[i];
+        let label = labelForActivity(id);
+        let haystack = (id + ' ' + label).toLowerCase();
+        for (let k = 0; k < keywords.length; k++) {
+          if (haystack.indexOf(keywords[k].toLowerCase()) !== -1) return id;
+        }
+      }
+    }
+    return '';
+  }
+
+  // Field Actions quick-launch buttons -- stages an activity and shows a
+  // brief confirm modal, then hands off to the existing appStartSession()
+  // pipeline exactly as if the worker had picked it from the dropdown and
+  // tapped "Start Task". No separate write path, no bypassing the timer.
+  function quickLaunch(key) {
+    let config = QUICK_ACTIONS[key];
+    if (!config) return;
+    let activityId = findActivityIdForKeywords_(config.keywords);
+    if (!activityId) {
+      return alert('"' + config.label + '" isn\'t set up in this ranch\'s activity list yet -- use "Or Choose Any Activity" below instead.');
+    }
+    state.pendingQuickActivity = activityId;
+    document.getElementById('ql-modal-title').textContent = 'Start ' + labelForActivity(activityId) + ' on Bed ' + state.bedId + '?';
+    document.getElementById('ql-modal-bed').textContent = 'Bed: ' + state.bedId;
+    document.getElementById('ql-modal-cohort').textContent = 'Cohort: ' + (state.cohortId || '-');
+    document.getElementById('quick-launch-overlay').classList.remove('hidden');
+  }
+
+  function cancelQuickLaunch() {
+    state.pendingQuickActivity = '';
+    document.getElementById('quick-launch-overlay').classList.add('hidden');
+  }
+
+  function confirmQuickLaunch() {
+    let dropdown = document.getElementById('activity-select-dropdown');
+    if (dropdown && state.pendingQuickActivity) {
+      dropdown.value = state.pendingQuickActivity;
+      updateHarvestPlanVisibility();
+    }
+    document.getElementById('quick-launch-overlay').classList.add('hidden');
+    appStartSession();
   }
 
   function appStartSession() {
