@@ -1,8 +1,9 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-  <base target="_top">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta charset="UTF-8">
+  <title>Ngapori Ranch - Worker App</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <style>
     :root {
       --bg-dark: #0f1416;
@@ -13,1785 +14,257 @@
       --text-muted: #78909c;
       --green: #43a047;
       --amber: #fb8c00;
-      --gold: #c9a227;
       --blue: #2196f3;
       --red: #e53935;
-      --purple: #8e24aa;
-      --gray: #37474f;
     }
-    * { box-sizing: border-box; }
-    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; margin: 0; padding: 16px; background: var(--bg-dark); color: var(--text); }
-    .card { background: var(--card-bg); border: 1px solid var(--border); padding: 20px; border-radius: 16px; max-width: 480px; margin: 0 auto 16px; }
-    .hidden { display: none !important; }
-    .form-group { margin-bottom: 16px; }
-    label { display: block; font-weight: bold; margin-bottom: 6px; font-size: 14px; color: var(--text); }
-    input, select, button { width: 100%; padding: 12px; border: 1px solid var(--border); border-radius: 10px; box-sizing: border-box; font-size: 16px; }
-    input, select { background: var(--inner-bg); color: var(--text); }
-    input::placeholder { color: var(--text-muted); }
-    button { background: var(--green); color: #fff; font-weight: bold; border: none; cursor: pointer; margin-top: 8px; }
-    button:hover { filter: brightness(1.08); }
-    button.btn-danger { background: var(--red); }
-    button.btn-secondary { background: #243338; color: var(--text); border: 1px solid var(--border); }
-    .badge { display: inline-block; padding: 4px 8px; border-radius: 6px; font-weight: bold; font-size: 12px; color: #fff; background: var(--gray); }
-    .badge-active { background: var(--green); }
-    .badge-danger { background: var(--red); }
-    .badge-critical { background: var(--purple); }
-    .badge-low { background: #558b2f; }
-    .badge-medium { background: var(--amber); }
-    .meta-box { background: var(--inner-bg); border: 1px solid var(--border); padding: 14px; border-radius: 12px; margin-bottom: 16px; border-left: 4px solid var(--green); }
-    .meta-box p { margin: 6px 0; font-size: 15px; }
-    .meta-headline { font-size: 18px; font-weight: bold; color: var(--text); }
-    .meta-sub { font-size: 14px; font-weight: normal; color: var(--text-muted); }
-    .meta-crop { font-weight: bold; color: #81c784; }
-    .code-chip { font-family: monospace; font-size: 12px; color: var(--text-muted); background: rgba(255,255,255,0.06); padding: 2px 6px; border-radius: 4px; }
-    .bed-result { padding: 10px 12px; border: 1px solid var(--border); border-radius: 10px; margin-top: 8px; cursor: pointer; background: var(--inner-bg); }
-    .bed-result:hover { background: #1c282e; border-color: var(--green); }
-    .bed-result .bed-id { font-weight: bold; font-size: 15px; }
-    .bed-result .bed-meta { font-size: 13px; color: var(--text-muted); margin-top: 2px; }
-    .bed-empty-msg { font-size: 13px; color: var(--text-muted); padding: 8px 0; }
-    #bed-search-results { max-height: 320px; overflow-y: auto; }
-    .session-row { border: 1px solid var(--border); border-radius: 10px; padding: 12px; margin-bottom: 10px; background: var(--inner-bg); }
-    .session-row-top { display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px; }
-    .session-row .sr-bed { font-weight: bold; font-size: 15px; }
-    .session-row .sr-meta { font-size: 13px; color: var(--text-muted); margin-bottom: 8px; }
-    .session-row .sr-reassigned { font-size: 12px; color: var(--amber); font-weight: bold; margin-bottom: 8px; }
-    .session-row .sr-actions { display: flex; gap: 8px; }
-    .session-row .sr-actions button { width: auto; flex: 1; padding: 8px; font-size: 13px; margin-top: 0; }
-    .badge-paused { background: var(--amber); }
-    .badge-planned { background: var(--gray); }
-    .pause-group { margin-top: 8px; }
-    .pause-group > label { font-weight: bold; margin-bottom: 6px; font-size: 14px; }
-    .pause-group-buttons { display: flex; gap: 8px; }
-    .pause-group-buttons button { width: auto; flex: 1; padding: 10px 6px; font-size: 12px; margin-top: 0; }
-    .empty-state { text-align: center; color: var(--text-muted); padding: 24px 8px; font-size: 14px; }
-    .bed-history-toggle { background: none; border: none; color: #81c784; font-weight: bold; font-size: 14px; padding: 6px 0; text-align: left; width: auto; cursor: pointer; }
-    .bed-history-body { margin-top: 6px; }
-    .bh-group-label { font-size: 12px; font-weight: bold; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.02em; margin: 12px 0 6px; }
-    .bh-group-label:first-child { margin-top: 0; }
-    .bh-row { border: 1px solid var(--border); border-radius: 10px; padding: 10px 12px; margin-bottom: 8px; background: var(--inner-bg); font-size: 13px; }
-    .bh-row-top { display: flex; align-items: center; justify-content: space-between; margin-bottom: 4px; }
-    .bh-row-top .bh-title { font-weight: bold; }
-    .bh-row .bh-meta { color: var(--text-muted); }
-    .bh-row.bh-exception { background: rgba(229,57,53,0.12); border-color: var(--red); }
-    .field-actions-label { font-size: 12px; font-weight: bold; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.02em; margin: 4px 0 8px; }
-    .field-actions-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; margin-bottom: 16px; }
-    .field-actions-grid button { width: auto; padding: 10px 4px; font-size: 12px; margin-top: 0; background: #1c282e; border: 1px solid var(--border); color: var(--text); line-height: 1.3; }
-    .field-actions-grid button:hover { background: #243338; }
-    .field-actions-grid button:disabled { background: var(--gray); opacity: 0.5; cursor: default; }
-    #quick-launch-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.7); display: flex; align-items: center; justify-content: center; padding: 20px; z-index: 50; }
-    #quick-launch-overlay.hidden { display: none !important; }
-    .modal-box { background: var(--card-bg); border: 1px solid var(--border); border-radius: 16px; padding: 20px; max-width: 400px; width: 100%; }
-    .modal-box h3 { margin: 0 0 8px; font-size: 17px; color: var(--text); }
-    .modal-box p { margin: 4px 0; font-size: 14px; color: var(--text-muted); }
-    .modal-actions { display: flex; gap: 8px; margin-top: 16px; }
-    .modal-actions button { width: auto; flex: 1; margin-top: 0; }
-    #app-header { position: sticky; top: 0; display: flex; align-items: center; justify-content: space-between;
-      background: var(--card-bg); border: 1px solid var(--border); border-radius: 14px; color: var(--text); padding: 10px 14px; margin-bottom: 12px; font-size: 13px; z-index: 10; }
-    #app-header.hidden { display: none !important; }
-    .conn-status { display: flex; align-items: center; gap: 6px; }
-    .conn-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--text-muted); flex-shrink: 0; }
-    .conn-dot.online { background: var(--green); box-shadow: 0 0 8px var(--green); }
-    .conn-dot.checking { background: var(--amber); }
-    .conn-dot.offline { background: var(--red); }
-    #btn-logout { width: auto; padding: 6px 12px; margin: 0; font-size: 11px; background: none; border: none; color: var(--text-muted); text-decoration: underline; cursor: pointer; }
-    #btn-logout:hover { color: var(--text); background: none; }
-    .header-user { font-weight: bold; font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 40vw; }
-    h2 { color: var(--text); }
-    h3 { color: var(--text); }
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+    body { background: var(--bg-dark); color: var(--text); padding: 12px; display: flex; justify-content: center; }
+    .mobile-container { width: 100%; max-width: 440px; display: flex; flex-direction: column; gap: 12px; }
+
+    /* 1. Header */
+    .app-header {
+      background: var(--card-bg); border: 1px solid var(--border); border-radius: 14px;
+      padding: 10px 14px; display: flex; justify-content: space-between; align-items: center;
+    }
+    .status-badge { display: flex; align-items: center; gap: 6px; font-size: 11px; font-weight: 700; color: var(--green); }
+    .status-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--green); box-shadow: 0 0 8px var(--green); }
+    .worker-info { display: flex; align-items: center; gap: 12px; font-size: 12px; }
+    .btn-logout { background: none; border: none; color: var(--text-muted); font-size: 11px; cursor: pointer; text-decoration: underline; }
+
+    /* 2. Bed Context Card & Task Assignment Panel */
+    .card { background: var(--card-bg); border: 1px solid var(--border); border-radius: 16px; padding: 16px; display: flex; flex-direction: column; gap: 14px; }
+    .card-title-bar { border-bottom: 1px solid var(--border); padding-bottom: 10px; }
+    .card-subtitle { font-size: 11px; font-weight: 700; color: var(--green); text-transform: uppercase; font-family: monospace; }
+    .bed-title { font-size: 16px; font-weight: 800; display: flex; align-items: center; gap: 6px; margin-top: 2px; }
+
+    .info-table { background: var(--inner-bg); border: 1px solid var(--border); border-radius: 12px; padding: 12px; display: flex; flex-direction: column; gap: 8px; font-size: 12.5px; }
+    .info-row { display: flex; justify-content: space-between; align-items: center; }
+    .info-label { color: var(--text-muted); display: flex; align-items: center; gap: 5px; }
+    .info-val { font-weight: 700; font-family: monospace; }
+    .info-val.unassigned { color: var(--text-muted); font-weight: 800; font-size: 14px; }
+
+    /* History */
+    .history-box { background: var(--inner-bg); border: 1px solid var(--border); border-radius: 12px; overflow: hidden; }
+    .history-header { padding: 10px 12px; font-size: 11.5px; font-weight: 700; color: var(--text-muted); display: flex; justify-content: space-between; cursor: pointer; }
+    .history-list { padding: 0 12px 10px; display: flex; flex-direction: column; gap: 6px; font-size: 11px; }
+    .history-item { color: var(--text-muted); line-height: 1.3; }
+    .history-item strong { color: var(--text); }
+
+    /* Quick Actions */
+    .quick-actions-title { font-size: 11px; font-weight: 700; color: var(--text-muted); text-transform: uppercase; font-family: monospace; }
+    .quick-actions-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+    .btn-quick { background: #1c282e; border: 1px solid var(--border); color: var(--text); padding: 10px 6px; border-radius: 10px; font-size: 11px; font-weight: 600; cursor: pointer; text-align: center; }
+    .btn-quick:hover { background: #25363e; }
+
+    /* Select Activity */
+    select.activity-select {
+      width: 100%; background: var(--inner-bg); border: 1px solid var(--border); border-radius: 10px;
+      color: var(--text); padding: 10px 12px; font-size: 12.5px; font-weight: 600; outline: none;
+    }
+    optgroup { background: var(--card-bg); color: var(--text-muted); font-weight: 700; }
+    option { background: var(--inner-bg); color: var(--text); }
+
+    /* Actions */
+    .actions-row { display: flex; gap: 10px; margin-top: 4px; }
+    .btn-start { flex: 1; background: var(--green); border: none; color: #fff; padding: 12px; border-radius: 12px; font-size: 13px; font-weight: 800; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 6px; }
+    .btn-cancel { background: #243338; border: 1px solid var(--border); color: var(--text); padding: 12px 16px; border-radius: 12px; font-size: 12px; font-weight: 600; cursor: pointer; }
+
+    /* Modal */
+    .modal-backdrop { position: fixed; inset: 0; background: rgba(0,0,0,0.8); display: flex; align-items: center; justify-content: center; padding: 16px; z-index: 100; }
+    .modal-box { background: var(--card-bg); border: 1px solid var(--border); border-radius: 16px; width: 100%; max-width: 360px; padding: 16px; display: flex; flex-direction: column; gap: 12px; }
+    .modal-title { font-size: 14px; font-weight: 800; color: #fff; }
+    .modal-desc { font-size: 11.5px; color: var(--text-muted); line-height: 1.4; }
+    .input-field { width: 100%; background: var(--inner-bg); border: 1px solid var(--border); border-radius: 8px; color: #fff; padding: 8px 10px; font-size: 12px; margin-top: 4px; }
   </style>
 </head>
 <body>
 
-  <div id="app-header" class="hidden">
-    <div class="conn-status">
-      <span id="conn-dot" class="conn-dot"></span>
-      <span id="conn-text">Not connected</span>
+<div class="mobile-container">
+  <!-- 1. Connected Header -->
+  <div class="app-header">
+    <div class="status-badge">
+      <div class="status-dot"></div>
+      <span>Connected</span>
     </div>
-    <span id="header-user-name" class="header-user"></span>
-    <button id="btn-logout" onclick="appLogout()">Log Out</button>
+    <div class="worker-info">
+      <span id="worker-name-label">Lisa King (Lisa)</span>
+      <button class="btn-logout" onclick="alert('Logging out...');">Log Out</button>
+    </div>
   </div>
 
-  <!-- VIEW 1: AUTHENTICATION -->
-  <div id="view-login" class="card">
-    <h2>Worker Login</h2>
-    <div class="form-group">
-      <label for="login-worker-id">User ID</label>
-      <input type="text" id="login-worker-id" placeholder="e.g. USR-WORKER1" autocapitalize="off" autocorrect="off" spellcheck="false">
-    </div>
-    <div class="form-group">
-      <label for="login-pin">PIN</label>
-      <input type="password" id="login-pin" placeholder="****">
-    </div>
-    <button onclick="appLogin()">Sign In</button>
-  </div>
-
-  <!-- VIEW 1.5: MY ACTIVE SESSIONS (post-login hub -- supports multiple parallel tasks) -->
-  <div id="view-my-sessions" class="card hidden">
-    <div style="display:flex; align-items:center; justify-content:space-between;">
-      <h2 style="margin:0;">My Active Sessions</h2>
-      <button style="width:auto; padding:6px 12px; font-size:12px; margin:0;" onclick="loadMySessions()">Refresh</button>
-    </div>
-    <div id="my-sessions-subtitle" style="font-size:13px; color:var(--text-muted); margin-bottom:10px;"></div>
-    <div id="my-sessions-list"></div>
-    <button onclick="switchView('view-scan')">+ Start New Task</button>
-    <button class="btn-secondary" onclick="loadMyHistory()">View Completed History</button>
-  </div>
-
-  <!-- VIEW 1.6: MY COMPLETED HISTORY (read-only feed of this worker's own FIELD_ACTIVITY_LOG rows) -->
-  <div id="view-my-history" class="card hidden">
-    <div style="display:flex; align-items:center; justify-content:space-between;">
-      <h2 style="margin:0;">Completed History</h2>
-      <button style="width:auto; padding:6px 12px; font-size:12px; margin:0;" onclick="loadMyHistory()">Refresh</button>
-    </div>
-    <div id="my-history-list"></div>
-    <button class="btn-secondary" style="margin-top:16px;" onclick="loadMySessions()">Back to My Sessions</button>
-  </div>
-
-  <!-- VIEW 2: QR / BED SCAN -->
-  <div id="view-scan" class="card hidden">
-    <h2>Scan Location</h2>
-    <div class="form-group">
-      <label for="scan-qr-input">Scan or Enter QR Code</label>
-      <input type="text" id="scan-qr-input" placeholder="e.g. BED:B1-01" onkeypress="handleScanKeyPress(event)">
-    </div>
-    <button onclick="appScanQR()">Process Scan</button>
-
-    <div class="form-group" style="margin-top:20px;">
-      <label for="bed-search-input">Or Search Beds (no camera needed)</label>
-      <input type="text" id="bed-search-input" placeholder="Search by bed, block, or crop..." oninput="renderBedSearchResults()" onfocus="renderBedSearchResults()">
-    </div>
-    <div id="bed-search-results"></div>
-    <button class="btn-secondary" style="margin-top:16px;" onclick="loadMySessions()">Back to My Sessions</button>
-  </div>
-
-  <!-- VIEW 3: CONFIRMATION & TASK SELECTION -->
-  <div id="view-select-task" class="card hidden">
-    <h2>Confirm Assignment</h2>
-
-    <div class="meta-box">
-      <p class="meta-headline">📍 Bed <span id="lbl-bed-id">-</span> <span class="meta-sub">(Block <span id="lbl-block">-</span><span id="row-zone">&nbsp;· Zone <span id="lbl-zone">-</span></span>)</span></p>
-      <p>🌱 <strong>Crop:</strong> <span><span class="meta-crop" id="lbl-crop">-</span> <span class="code-chip" id="lbl-crop-code"></span></span></p>
-      <p>🏷️ <strong>Cohort:</strong> <span class="code-chip" id="lbl-cohort-id">-</span></p>
-      <p id="row-variety-stage">🧬 <strong>Variety:</strong> <span id="lbl-variety-stage">-</span></p>
-      <p id="row-stage-day">📈 <strong>Stage:</strong> <span id="lbl-stage-day">-</span></p>
-      <p id="row-planted">📅 <strong>Planted:</strong> <span id="lbl-planted">-</span></p>
-      <p id="row-harvest-est">🌾 <strong>Harvest:</strong> <span id="lbl-harvest-est">-</span></p>
-      <p id="row-bed-target">🎯 <strong>Bed Target:</strong> <span id="lbl-bed-target">-</span></p>
-      <p>📋 <strong>Field Status:</strong> <span id="lbl-bed-state">-</span></p>
+  <!-- 2. Target UI Component: Bed Context Card & Task Assignment Panel -->
+  <div class="card">
+    <div class="card-title-bar">
+      <div class="card-subtitle">Confirm Assignment</div>
+      <div class="bed-title" id="bed-location-label">📍 Bed B1-10 (Block B1 · Zone B1-ZB)</div>
     </div>
 
-    <button type="button" class="bed-history-toggle" id="bed-history-toggle" onclick="toggleBedHistory()">▸ Bed History</button>
-    <div id="bed-history-body" class="bed-history-body hidden"></div>
-
-    <div class="field-actions-label">Field Actions</div>
-    <div class="field-actions-grid">
-      <button type="button" onclick="quickLaunch('water')">💧<br>Log Water Pass</button>
-      <button type="button" onclick="quickLaunch('fertilizer')">🧪<br>Log Fertilizer</button>
-      <button type="button" onclick="quickLaunch('weeding')">🌿<br>Log Weeding</button>
-    </div>
-
-    <div class="form-group">
-      <label for="activity-picker-container">Or Choose Any Activity</label>
-      <div id="activity-picker-container"></div>
-    </div>
-
-    <div class="form-group" id="harvest-plan-toggle-group" style="display:none;">
-      <label style="display:flex; align-items:center; gap:8px; font-weight:normal;">
-        <input type="checkbox" id="harvest-plan-check" style="width:auto;" onchange="toggleHarvestPlanFields()">
-        Schedule this as a planned harvest (optional)
-      </label>
-      <div id="harvest-plan-fields" class="hidden" style="margin-top:10px;">
-        <label for="harvest-plan-start">Planned Start</label>
-        <input type="datetime-local" id="harvest-plan-start">
-        <label for="harvest-plan-end" style="margin-top:8px;">Planned End</label>
-        <input type="datetime-local" id="harvest-plan-end">
+    <!-- Bed Status Info Table (Clean '—' Guarantee) -->
+    <div class="info-table">
+      <div class="info-row">
+        <span class="info-label">🌱 Crop:</span>
+        <span class="info-val unassigned" id="bed-crop-val">—</span>
+      </div>
+      <div class="info-row">
+        <span class="info-label">🏷️ Cohort:</span>
+        <span class="info-val unassigned" id="bed-cohort-val">—</span>
+      </div>
+      <div class="info-row">
+        <span class="info-label">📋 Field Status:</span>
+        <span class="info-val" id="bed-state-val" style="color:#81c784;">Rest</span>
       </div>
     </div>
 
-    <button id="btn-use-bed" onclick="appStartSession()">▶ Start Task</button>
-    <button class="btn-secondary" onclick="switchView('view-scan')">Cancel / Rescan</button>
-    <button class="btn-secondary" onclick="loadMySessions()">Back to My Sessions</button>
+    <!-- ▼ Bed History (Bed-Level Event Log) -->
+    <div class="history-box">
+      <div class="history-header" onclick="toggleHistory()">
+        <span>▼ Bed History</span>
+        <span id="history-toggle-icon">▲</span>
+      </div>
+      <div class="history-list" id="bed-history-list">
+        <div class="history-item">• <strong>Sep 03, 2026</strong> | Field Turnover completed by M. Vance</div>
+        <div class="history-item">• <strong>Sep 03, 2026</strong> | State changed: Cleanup → Rest</div>
+        <div class="history-item">• <strong>Aug 28, 2026</strong> | Harvest completed (45 lbs)</div>
+      </div>
+    </div>
+
+    <!-- Quick Actions -->
+    <div class="quick-actions-title">Quick Actions</div>
+    <div class="quick-actions-grid">
+      <button class="btn-quick" onclick="handleStartTask('Irrigation')">💧 Log Water Pass</button>
+      <button class="btn-quick" onclick="handleStartTask('Fertilization')">🧪 Log Fertilizer</button>
+      <button class="btn-quick" onclick="handleStartTask('Weeding')">🌿 Log Weeding</button>
+    </div>
+
+    <!-- Select Activity -->
+    <div class="quick-actions-title">Select Activity</div>
+    <select id="activity-dropdown" class="activity-select">
+      <optgroup label="[ Land Prep & Bed Maintenance ] ▾">
+        <option value="Tillage">Land Prep / Tillage</option>
+        <option value="BedForming">Bed Forming</option>
+        <option value="Solarization">Solarization</option>
+      </optgroup>
+      <optgroup label="[ Crop Lifecycle (Requires Cohort Creation) ] ▾">
+        <option value="Seeding">Seeding</option>
+        <option value="Transplanting">Transplanting</option>
+      </optgroup>
+      <optgroup label="[ Maintenance ] ▾">
+        <option value="Cultivation">Cultivation</option>
+        <option value="Weeding">Weeding</option>
+        <option value="Fertilization">Fertilization</option>
+        <option value="Irrigation">Irrigation</option>
+      </optgroup>
+    </select>
+
+    <!-- Task Launch Actions -->
+    <div class="actions-row">
+      <button class="btn-start" onclick="onStartTaskClick()">▶ Start Task</button>
+      <button class="btn-cancel" onclick="rescanPrompt()">Cancel / Rescan</button>
+    </div>
   </div>
+</div>
 
-  <!-- VIEW 4: ACTIVE TIMER EXECUTION -->
-  <div id="view-execution" class="card hidden">
-    <h2>Active Session</h2>
-
-    <div class="meta-box">
-      <p><strong>Status:</strong> <span id="lbl-status" class="badge badge-active">ACTIVE</span></p>
-      <p><strong>Bed:</strong> <span id="exec-bed">-</span></p>
-      <p><strong>Task:</strong> <span id="exec-task">-</span></p>
-      <p><strong>Started:</strong> <span id="exec-start">-</span></p>
-      <p><strong>Elapsed:</strong> <span id="exec-elapsed" style="font-family:monospace; font-weight:800; color:#ffe082;">⏱️ 00:00:00</span></p>
+<!-- Cohort Assignment Modal (Gated for Seeding/Transplanting on Rest Beds) -->
+<div id="cohort-modal" class="modal-backdrop" style="display:none;">
+  <div class="modal-box">
+    <div class="modal-title">🌱 Cohort Assignment Required</div>
+    <div class="modal-desc">
+      Bed is currently in <strong id="modal-bed-state">Rest</strong>. Seeding or Transplanting requires creating or assigning an active Cohort to begin the crop lifecycle.
     </div>
 
-    <div class="form-group hidden" id="harvest-tote-section">
-      <h3 style="margin:16px 0 8px; font-size:15px;">Log Harvest Tote</h3>
-      <div style="display:flex; gap:8px;">
-        <div style="flex:1;"><label for="tote-gross">Gross (lbs)</label><input type="number" id="tote-gross" step="0.1" min="0"></div>
-        <div style="flex:1;"><label for="tote-tare">Tare (lbs)</label><input type="number" id="tote-tare" step="0.1" min="0" value="0"></div>
-      </div>
-      <div style="display:flex; gap:8px; margin-top:8px;">
-        <div style="flex:1;"><label for="tote-crates">Crate/Tote Count</label><input type="number" id="tote-crates" step="1" min="1" value="1"></div>
-        <div style="flex:1;">
-          <label for="tote-grade">Quality Grade</label>
-          <select id="tote-grade">
-            <option value="A">A</option>
-            <option value="B">B</option>
-            <option value="C">C</option>
-          </select>
-        </div>
-      </div>
-      <button class="btn-secondary" onclick="appLogHarvestTote()" style="margin-top:10px;">Log Tote</button>
-      <div id="tote-log-list" style="margin-top:10px;"></div>
-      <div id="tote-log-total" style="font-size:13px; color:var(--text-muted); margin-top:6px;"></div>
-    </div>
-
-    <div class="form-group hidden" id="scout-finding-section">
-      <h3 style="margin:16px 0 8px; font-size:15px;">Scouting</h3>
-      <button class="btn-secondary" onclick="appOpenScoutFinding()">+ Log Scout Finding</button>
-      <div id="scout-finding-log-list" style="margin-top:10px;"></div>
-      <div id="scout-finding-log-total" style="font-size:13px; color:var(--text-muted); margin-top:6px;"></div>
-    </div>
-
-    <button class="btn-danger" onclick="appReportExceptionPrompt()">Report Exception / Issue</button>
-    <button onclick="appCompleteSession()">Complete Activity</button>
-
-    <div class="pause-group">
-      <label>Pause &amp; Back to My Sessions</label>
-      <div class="pause-group-buttons">
-        <button class="btn-secondary" onclick="appPauseAndExit('BREAK')">Take Break</button>
-        <button class="btn-secondary" onclick="appPauseAndExit('LUNCH')">Take Lunch</button>
-        <button class="btn-secondary" onclick="appPauseAndExit('END_OF_DAY')">End of Day</button>
-      </div>
-    </div>
-
-    <button class="btn-secondary" onclick="loadMySessions()">Back to My Sessions</button>
-  </div>
-
-  <!-- VIEW 5: EXCEPTION LOGGING -->
-  <div id="view-exception" class="card hidden">
-    <h2>Report Field Issue</h2>
-    <div class="form-group">
-      <label for="exc-type">Issue Type</label>
-      <select id="exc-type">
-        <option value="PEST">Pest Outbreak</option>
-        <option value="DISEASE">Disease Symptoms</option>
-        <option value="IRRIGATION">Irrigation Failure</option>
-        <option value="EQUIPMENT">Equipment Breakdown</option>
+    <div>
+      <label style="font-size:11px; color:var(--text-muted);">Crop Species</label>
+      <select id="cohort-crop-input" class="input-field">
+        <option value="TOM">Tomatoes (75 days)</option>
+        <option value="PEP">Bell Peppers (80 days)</option>
+        <option value="LET">Salad Lettuce (35 days)</option>
+        <option value="KAL">Kale (55 days)</option>
       </select>
     </div>
-    <div class="form-group">
-      <label for="exc-severity">Severity Level</label>
-      <select id="exc-severity">
-        <option value="LOW">Low</option>
-        <option value="MEDIUM">Medium</option>
-        <option value="HIGH">High / Critical</option>
-      </select>
-    </div>
-    <div class="form-group">
-      <label for="exc-notes">Notes / Observations</label>
-      <input type="text" id="exc-notes" placeholder="Describe what you see...">
-    </div>
-    <div class="form-group">
-      <label for="exc-photo">Attach Photo (optional)</label>
-      <input type="file" id="exc-photo" accept="image/*" capture="environment" onchange="handleExceptionPhotoSelect(event)">
-      <div id="exc-photo-preview" style="margin-top:8px;"></div>
-    </div>
-    <button class="btn-danger" onclick="appSubmitException()">Submit Alert</button>
-    <button class="btn-secondary" onclick="switchView('view-execution')">Return to Task</button>
-  </div>
 
-  <!-- VIEW 6: SCOUT FINDING ENTRY -->
-  <div id="view-scout-finding" class="card hidden">
-    <h2>Log Scout Finding</h2>
-    <div class="meta-box">
-      <p class="meta-headline">📍 Bed <span id="scout-lbl-bed">-</span></p>
-      <p class="meta-sub">Pass: <span id="scout-lbl-activity">-</span></p>
+    <div>
+      <label style="font-size:11px; color:var(--text-muted);">Variety Name</label>
+      <input type="text" id="cohort-variety-input" class="input-field" value="San Marzano II">
     </div>
 
-    <div class="form-group">
-      <label for="scout-domain">What kind of finding?</label>
-      <select id="scout-domain"></select>
-    </div>
-    <div class="form-group">
-      <label for="scout-symptom">What did you see?</label>
-      <input type="text" id="scout-symptom" placeholder="e.g. Aphids on undersides of leaves">
-    </div>
-    <div class="form-group">
-      <label for="scout-severity">Severity</label>
-      <select id="scout-severity"></select>
-    </div>
-    <div class="form-group">
-      <label for="scout-location">Location on Bed (optional)</label>
-      <input type="text" id="scout-location" placeholder="e.g. NW corner, row 3">
-    </div>
-    <div class="form-group">
-      <label for="scout-notes">Notes (optional)</label>
-      <input type="text" id="scout-notes" placeholder="Additional detail...">
-    </div>
-    <div class="form-group">
-      <label style="display:flex; align-items:center; gap:8px; font-weight:normal;">
-        <input type="checkbox" id="scout-requires-action" style="width:auto;">
-        Flag for manager attention (opens an exception)
-      </label>
-    </div>
-    <div class="form-group">
-      <label for="scout-photo">Attach Photo (optional)</label>
-      <input type="file" id="scout-photo" accept="image/*" capture="environment" onchange="handleScoutPhotoSelect(event)">
-      <div id="scout-photo-preview" style="margin-top:8px;"></div>
-    </div>
-
-    <button onclick="appSubmitScoutFinding()">Submit Finding</button>
-
-    <div id="scout-recap-wrap" class="hidden" style="margin-top:16px;">
-      <label style="margin-bottom:6px;">Logged This Pass</label>
-      <div id="scout-finding-recap-list"></div>
-    </div>
-
-    <button class="btn-secondary" style="margin-top:16px;" onclick="switchView('view-execution')">Done &mdash; Back to Session</button>
-  </div>
-
-  <!-- COHORT ASSIGNMENT / CREATION MODAL -- gates Seeding/Transplanting on a
-       REST/PREP bed (no crop/cohort to plant into yet). Creates a new
-       COHORT_MASTER row + attaches it to the bed via 'create-cohort', then
-       hands off to the normal appStartSession() pipeline exactly as if a
-       cohort had already existed. See appStartSession()/openCohortModal_(). -->
-  <div id="cohort-modal-overlay" class="hidden">
-    <div class="modal-box">
-      <h3>Assign a Crop to Plant</h3>
-      <p id="cohort-modal-bed">-</p>
-      <p style="color:var(--text-muted); font-size:13px;">This bed has no active cohort. Pick what's being planted to create one before starting the task.</p>
-      <div id="cohort-modal-picker-container"></div>
-      <div class="modal-actions">
-        <button type="button" class="btn-secondary" onclick="cancelCohortModal()">Cancel</button>
-        <button type="button" id="cohort-modal-confirm-btn" onclick="confirmCohortModal()" disabled>+ Create Cohort &amp; Start</button>
-      </div>
+    <div class="actions-row" style="margin-top:8px;">
+      <button class="btn-cancel" onclick="closeCohortModal()" style="flex:1;">Cancel</button>
+      <button class="btn-start" onclick="confirmCohortAndStart()" style="flex:1;">Create & Start</button>
     </div>
   </div>
-
-  <!-- QUICK-LAUNCH CONFIRM MODAL -- shown by quickLaunch() before handing off to the
-       existing appStartSession() pipeline; never writes anything itself. -->
-  <div id="quick-launch-overlay" class="hidden">
-    <div class="modal-box">
-      <h3 id="ql-modal-title">Start Task?</h3>
-      <p id="ql-modal-bed">-</p>
-      <p id="ql-modal-cohort">-</p>
-      <div class="modal-actions">
-        <button type="button" class="btn-secondary" onclick="cancelQuickLaunch()">Cancel</button>
-        <button type="button" onclick="confirmQuickLaunch()">▶ Start Timer</button>
-      </div>
-    </div>
-  </div>
+</div>
 
 <script>
-  // Paste your Apps Script Web App deployment URL below
-  // Must be deployed as: "Execute as: Me" and "Who has access: Anyone"
-  const WEB_APP_URL = 'https://script.google.com/macros/s/AKfycbwUFXoHDFSUArQCIqkh2De8-fwPfWSG9LRvtagJPzmJdFaBx_95av5V57NzYs1J1IZLnA/exec';
+  var CURRENT_BED_ID = 'B1-10';
+  var CURRENT_BED_STATE = 'Rest';
 
-  // Every id in this list MUST have a matching <div> in the markup above,
-  // or switchView() throws on document.getElementById(v).classList and the
-  // destination view never gets un-hidden. This was the root cause of
-  // buttons appearing to "do nothing" -- 'view-manager' was in this list
-  // with no corresponding element, so every switchView() call silently
-  // threw before reaching the line that shows the new view.
-  const VIEW_IDS = ['view-login', 'view-my-sessions', 'view-my-history', 'view-scan', 'view-select-task', 'view-execution', 'view-exception', 'view-scout-finding'];
-
-  // Must match SCOUTING_ACTIVITY_TYPES_ in ActivityTaxonomy.gs -- the
-  // activity types a scouting finding may legally be logged against. Kept
-  // as its own small constant here (rather than derived from
-  // state.taxonomyGroups) so the "Log Scout Finding" section can show/hide
-  // correctly even before get-taxonomy's response lands.
-  const SCOUTING_ACTIVITY_TYPES = ['PestScouting', 'DiseaseScouting', 'CropInspection', 'MaturityInspection'];
-
-  // Must match ACTIVITY_GROUPS['Planting / Establishment']'s cohort-founding
-  // members in ActivityTaxonomy.gs (Thinning/Replanting act on an existing
-  // cohort, so they're deliberately excluded -- only these two ever need a
-  // brand-new cohort created). Drives the REST/PREP planting-activity gate
-  // in appStartSession() below.
-  const PLANTING_ACTIVITIES_REQUIRING_COHORT = ['Seeding', 'Transplanting'];
-  const REST_LIKE_BED_STATES = ['rest', 'prep', 'empty'];
-
-  var SCOUT_SEVERITY_LABELS = { LOW: 'Low', MEDIUM: 'Medium', HIGH: 'High', CRITICAL: 'Critical' };
-  function scoutSeverityLabel(sev) { return SCOUT_SEVERITY_LABELS[sev] || sev; }
-  function scoutSeverityBadgeClass(sev) {
-    return { LOW: 'badge-low', MEDIUM: 'badge-medium', HIGH: 'badge-danger', CRITICAL: 'badge-critical' }[sev] || '';
-  }
-
-  let state = {
-    workerId: '',
-    workerName: '',
-    bedId: '',
-    cohortId: '',
-    crop: '',
-    bedState: '', // BED_MASTER's Current_State for the currently-scanned bed (e.g. 'Rest','Prep','Planted') -- drives the planting-activity cohort gate
-    selectedActivity: '',
-    sessionId: '',
-    taxonomyGroups: {},
-    taxonomyLabels: {},
-    scoutDomains: [], // e.g. ['PlantCondition','PestPressure',...] -- from get-taxonomy (ActivityTaxonomy.gs SCOUT_DOMAINS)
-    scoutDomainLabels: {},
-    scoutSeverities: [], // ['LOW','MEDIUM','HIGH','CRITICAL']
-    allBeds: [],
-    openSessions: [], // all of this worker's ACTIVE/PAUSED sessions -- multi-tasking means there can be more than one
-    myHistory: [], // this worker's own completed-activity feed from FIELD_ACTIVITY_LOG, via get-activity-history
-    sessionTotes: [], // totes logged via log-harvest-tote during THIS execution-view visit (client-side only -- see handleLogHarvestTote_ in Code.gs for why)
-    sessionFindings: [], // scout findings logged via log-scout-finding during THIS execution-view visit (client-side recap only -- SCOUT_FINDING rows are already durable server-side)
-    exceptionPhotoBase64: '', // base64 payload (no data: prefix) of a photo attached to the current exception report, if any
-    exceptionPhotoMime: '',
-    findingPhotoBase64: '', // same pattern as exceptionPhotoBase64, but for the scout finding photo
-    findingPhotoMime: '',
-    pendingQuickActivity: '', // activity id staged by quickLaunch(), consumed by confirmQuickLaunch()
-    crops: [], // CROP_REFERENCE list from 'list-crops', lazy-loaded the first time the Cohort Assignment modal opens
-    cohortModalCropId: '' // crop selected in the Cohort Assignment / Creation modal, before confirmCohortModal() creates the cohort
-  };
-
-  // Field Actions quick-launch buttons -- each maps to a keyword used to find
-  // a matching activity id in the taxonomy loaded from get-taxonomy (see
-  // findActivityIdForKeywords_). Matching by keyword rather than a hardcoded
-  // canonical id means this keeps working even if ActivityTaxonomy.gs's
-  // exact id spelling changes, as long as the id or its label still contains
-  // the keyword.
-  const QUICK_ACTIONS = {
-    water: { label: 'Water Pass', keywords: ['water', 'irrigation'] },
-    fertilizer: { label: 'Fertilization', keywords: ['fertiliz'] },
-    weeding: { label: 'Weeding', keywords: ['weed'] }
-  };
-
-  function setConnStatus(status, label) {
-    var dot = document.getElementById('conn-dot');
-    var text = document.getElementById('conn-text');
-    if (!dot || !text) return;
-    dot.className = 'conn-dot ' + status;
-    text.textContent = label;
-  }
-
-  function apiCall(action, payload, callback) {
-    setConnStatus('checking', 'Connecting...');
-    fetch(WEB_APP_URL, {
-      method: 'POST',
-      mode: 'cors',
-      redirect: 'follow', // REQUIRED: Follows Google's 302 backend redirect
-      headers: {
-        'Content-Type': 'text/plain;charset=utf-8' // REQUIRED: Avoids CORS OPTIONS preflight
-      },
-      body: JSON.stringify({ action: action, payload: payload })
-    })
-      .then(function(response) {
-        if (!response.ok) throw new Error('HTTP ' + response.status);
-        return response.json();
-      })
-      .then(function(res) {
-        setConnStatus('online', 'Connected');
-        callback(res);
-      })
-      .catch(function(error) {
-        console.error('apiCall failed:', action, error);
-        setConnStatus('offline', 'Connection error');
-        alert('Something went wrong (' + action + '): ' + error.message);
-      });
-  }
-
-  function switchView(viewId) {
-    if (viewId !== 'view-execution') stopExecTimer_();
-    VIEW_IDS.forEach(v => {
-      var el = document.getElementById(v);
-      if (el) el.classList.add('hidden');
-    });
-    var target = document.getElementById(viewId);
-    if (target) target.classList.remove('hidden');
-  }
-
-  function appLogin() {
-    state.workerId = document.getElementById('login-worker-id').value;
-    let pin = document.getElementById('login-pin').value;
-
-    apiCall('login', { workerId: state.workerId, pin: pin }, function(res) {
-      if (res && res.success) {
-        state.workerId = res.user.workerId; // canonical ID from the sheet, not whatever case was typed
-        state.workerName = res.user.name;
-        // Persisted so a browser refresh (or the worker app losing focus/
-        // reloading on a field device) doesn't drop the worker back to the
-        // login screen -- see restoreSessionOnLoad(). sessionStorage (not
-        // localStorage) so it clears itself once the tab/app is fully
-        // closed, rather than leaving a standing login on a shared device.
-        try {
-          sessionStorage.setItem('vpos_workerId', state.workerId);
-          sessionStorage.setItem('vpos_workerName', state.workerName);
-        } catch (e) { /* storage unavailable -- login still works, just won't survive a refresh */ }
-        enterAppAsWorker_();
-      } else {
-        alert('Authentication failed: ' + (res.error || 'Invalid credentials'));
-      }
-    });
-  }
-
-  // Shared by a fresh login and a restored session -- shows the app header
-  // and loads the same three things either way, so a restored session ends
-  // up in an identical state to one that just logged in.
-  function enterAppAsWorker_() {
-    document.getElementById('app-header').classList.remove('hidden');
-    document.getElementById('header-user-name').textContent = state.workerName + ' (' + state.workerId + ')';
-    loadTaxonomy();
-    loadBeds();
-    loadMySessions();
-  }
-
-  // Runs once on page load. If a worker was logged in before a refresh,
-  // skip the login screen and restore them straight to their active
-  // sessions instead of making them re-enter their PIN.
-  function restoreSessionOnLoad() {
-    var workerId, workerName;
-    try {
-      workerId = sessionStorage.getItem('vpos_workerId');
-      workerName = sessionStorage.getItem('vpos_workerName');
-    } catch (e) { return; }
-    if (!workerId) return;
-
-    state.workerId = workerId;
-    state.workerName = workerName || workerId;
-    enterAppAsWorker_();
-  }
-
-  // Logs the LOGOUT event server-side (LOGIN_LOG accountability trail) and
-  // then resets local state. Fired off before state is cleared since we
-  // need workerId to log it; the UI resets immediately rather than waiting
-  // on the network round-trip.
-  function appLogout() {
-    var loggedOutWorkerId = state.workerId;
-    if (loggedOutWorkerId) {
-      apiCall('logout', { workerId: loggedOutWorkerId }, function() {});
-    }
-    try {
-      sessionStorage.removeItem('vpos_workerId');
-      sessionStorage.removeItem('vpos_workerName');
-    } catch (e) { /* storage unavailable -- nothing to clear */ }
-
-    state = {
-      workerId: '', workerName: '', bedId: '', cohortId: '', crop: '', selectedActivity: '',
-      sessionId: '', taxonomyGroups: {}, taxonomyLabels: {},
-      scoutDomains: [], scoutDomainLabels: {}, scoutSeverities: [],
-      allBeds: [], openSessions: [], myHistory: [],
-      sessionTotes: [], sessionFindings: [],
-      exceptionPhotoBase64: '', exceptionPhotoMime: '',
-      findingPhotoBase64: '', findingPhotoMime: ''
-    };
-    document.getElementById('login-worker-id').value = '';
-    document.getElementById('login-pin').value = '';
-    document.getElementById('app-header').classList.add('hidden');
-    document.getElementById('header-user-name').textContent = '';
-    resetBedSearch();
-    switchView('view-login');
-  }
-
-  // Loads ALL of this worker's ACTIVE/PAUSED sessions and lands them on the
-  // "My Active Sessions" hub -- workers can multi-task, so login no longer
-  // assumes there's just one session to resume into. An empty list still
-  // lands here (with a "+ Start New Task" button) rather than jumping
-  // straight to the scan screen, so the hub is always the consistent home base.
-  function loadMySessions() {
-    apiCall('get-open-sessions', { workerId: state.workerId }, function(res) {
-      state.openSessions = (res && res.success && res.sessions) ? res.sessions : [];
-      renderMySessions();
-      switchView('view-my-sessions');
-    });
-  }
-
-  function renderMySessions() {
-    let subtitle = document.getElementById('my-sessions-subtitle');
-    if (subtitle) subtitle.textContent = state.workerName ? ('Logged in as ' + state.workerName + ' (' + state.workerId + ')') : '';
-
-    let container = document.getElementById('my-sessions-list');
-    container.innerHTML = '';
-
-    if (state.openSessions.length === 0) {
-      container.innerHTML = '<div class="empty-state">No active tasks right now. Scan a bed to start one.</div>';
-      return;
-    }
-
-    state.openSessions.forEach(function(s) {
-      let row = document.createElement('div');
-      row.className = 'session-row';
-
-      // PLANNED: a manager dispatched this task but nobody has started it
-      // yet (see handleDispatchTask_ / get-open-sessions, Code.gs). It gets
-      // its own badge/label/action rather than being lumped in with
-      // ACTIVE -- that's the whole point of this status existing: a
-      // dispatched task shouldn't look or act like it's already underway.
-      let badgeClass = s.isPlanned ? 'badge badge-planned' : (s.status === 'PAUSED' ? 'badge badge-paused' : 'badge badge-active');
-      let badgeLabel = s.isPlanned ? 'ASSIGNED' : s.status;
-      let primaryLabel = s.isPlanned ? 'Start' : (s.status === 'PAUSED' ? 'Resume' : 'Open');
-      let pauseNote = (s.status === 'PAUSED' && s.pauseType)
-        ? ' &middot; ' + pauseTypeLabel(s.pauseType)
-        : '';
-      // PLANNED rows have no Start_Time yet -- show who dispatched it and
-      // when instead of a bogus timestamp (new Date('') is Invalid Date).
-      // dispatchedByName/dispatchedAt come from Dispatched_By/Dispatched_At
-      // (see handleDispatchTask_/handleGetOpenSessions_, Code.gs) -- both
-      // are optional, so this still degrades gracefully to "assigned to
-      // you" if either is missing (e.g. an older row from before those
-      // columns existed).
-      let metaTail;
-      if (s.isPlanned) {
-        if (s.dispatchedByName && s.dispatchedAt) {
-          metaTail = 'assigned by ' + s.dispatchedByName + ' at ' + new Date(s.dispatchedAt).toLocaleTimeString();
-        } else if (s.dispatchedByName) {
-          metaTail = 'assigned by ' + s.dispatchedByName;
-        } else {
-          metaTail = 'assigned to you';
-        }
-      } else {
-        metaTail = 'started ' + new Date(s.startTime).toLocaleTimeString() + pauseNote;
-      }
-      let reassignedHtml = s.reassignedToMe
-        ? '<div class="sr-reassigned">&#8635; Reassigned to you from ' + s.reassignedFromName +
-          (s.reassignedByName ? ' by ' + s.reassignedByName : '') +
-          (s.reassignedNote ? ': "' + s.reassignedNote + '"' : '') +
-          '</div>'
-        : '';
-
-      row.innerHTML =
-        '<div class="session-row-top">' +
-          '<span class="sr-bed">' + s.bedId + '</span>' +
-          '<span class="' + badgeClass + '">' + badgeLabel + '</span>' +
-        '</div>' +
-        '<div class="sr-meta">' + labelForActivity(s.activity) + ' &middot; ' + metaTail + '</div>' +
-        reassignedHtml +
-        '<div class="sr-actions">' +
-          '<button class="sr-btn-primary">' + primaryLabel + '</button>' +
-          (s.isPlanned ? '' : '<button class="sr-btn-complete btn-secondary">Complete</button>') +
-        '</div>';
-
-      // PLANNED goes through startPlannedSession (start-planned-session
-      // action) instead of straight into the execution screen -- it needs
-      // to stamp the real Start_Time server-side first (see
-      // handleStartPlannedSession_, Code.gs).
-      row.querySelector('.sr-btn-primary').onclick = s.isPlanned
-        ? function() { startPlannedSession(s); }
-        : function() { openSessionDetail(s); };
-      if (!s.isPlanned) {
-        row.querySelector('.sr-btn-complete').onclick = function() { quickCompleteSession(s); };
-      }
-
-      container.appendChild(row);
-    });
-  }
-
-  // Worker's "Start" tap on a dispatched-but-not-started (PLANNED) task from
-  // the "My Active Sessions" hub. Calls start-planned-session to flip the
-  // session to ACTIVE server-side (stamping the real Start_Time there, not
-  // here), then opens the normal execution screen exactly like any other
-  // freshly-started session.
-  function startPlannedSession(s) {
-    apiCall('start-planned-session', { sessionId: s.sessionId, workerId: state.workerId }, function(res) {
-      if (!res || !res.success) {
-        alert(res && res.error ? res.error : 'Failed to start task');
-        return;
-      }
-      s.status = 'ACTIVE';
-      s.isPlanned = false;
-      s.startTime = res.startTime;
-      openSessionDetail(s);
-    });
-  }
-
-  // Completed-activity history for THIS worker only -- get-activity-history
-  // is called with just workerId (no managerId), so the backend scopes it to
-  // this worker's own FIELD_ACTIVITY_LOG rows. This is where a completed
-  // session actually shows up once it drops off "My Active Sessions".
-  function loadMyHistory() {
-    apiCall('get-activity-history', { workerId: state.workerId, limit: 50 }, function(res) {
-      if (!res || !res.success) {
-        alert(res && res.error ? res.error : 'Failed to load history');
-        return;
-      }
-      state.myHistory = res.entries;
-      renderMyHistory();
-      switchView('view-my-history');
-    });
-  }
-
-  function renderMyHistory() {
-    let container = document.getElementById('my-history-list');
-    container.innerHTML = '';
-
-    if (state.myHistory.length === 0) {
-      container.innerHTML = '<div class="empty-state">No completed activity yet.</div>';
-      return;
-    }
-
-    state.myHistory.forEach(function(h) {
-      let row = document.createElement('div');
-      row.className = 'session-row';
-      let when = h.timestamp ? new Date(h.timestamp).toLocaleString() : '';
-
-      let bodyHtml;
-      if (h.isStateChange) {
-        bodyHtml = '<div class="sr-meta">' + h.fromState + ' &rarr; ' + h.toState + '</div>';
-      } else {
-        let qtyNote = h.quantity ? (' &middot; ' + h.quantity + (h.unit ? ' ' + h.unit : '')) : '';
-        let excNote = h.exceptionFlag ? (' &middot; ' + h.exceptionType) : '';
-        bodyHtml = '<div class="sr-meta">' +
-          (h.elapsedMinutes !== null ? h.elapsedMinutes + ' min active' : '') + qtyNote + excNote +
-        '</div>';
-        if (h.exceptionFlag) {
-          bodyHtml = bodyHtml.replace('class="sr-meta"', 'class="sr-meta" style="color:#ff8a80;"');
-        }
-      }
-
-      row.innerHTML =
-        '<div class="session-row-top">' +
-          '<span class="sr-bed">' + (h.bedId || h.cohortId || '-') + '</span>' +
-          '<span class="badge">' + h.activityLabel + '</span>' +
-        '</div>' +
-        bodyHtml +
-        '<div class="sr-meta">' + when + '</div>';
-
-      container.appendChild(row);
-    });
-  }
-
-  // Opens a specific session's execution screen (pause/complete/report
-  // exception act on THIS session only -- other open sessions are untouched).
-  // Live "Active Elapsed" ticker for the execution view -- purely a display
-  // convenience (mirrors ranch_aab.html's session-timer-card), computed
-  // client-side from the session's Start_Time. The authoritative elapsed
-  // total actually used server-side (Accumulated_Active_Minutes) is only
-  // recomputed on pause/complete -- see handlePauseResume_/
-  // handleCompleteSession_ in Code_main.gs.
-  var EXEC_TIMER_INTERVAL_ = null;
-  function fmtExecElapsed_(startDate) {
-    var elapsedSec = Math.max(0, Math.floor((Date.now() - startDate.getTime()) / 1000));
-    var hh = String(Math.floor(elapsedSec / 3600)).padStart(2, '0');
-    var mm = String(Math.floor((elapsedSec % 3600) / 60)).padStart(2, '0');
-    var ss = String(elapsedSec % 60).padStart(2, '0');
-    return '⏱️ ' + hh + ':' + mm + ':' + ss;
-  }
-  function startExecTimer_(startDate) {
-    stopExecTimer_();
-    var el = document.getElementById('exec-elapsed');
-    if (!el || isNaN(startDate.getTime())) return;
-    el.textContent = fmtExecElapsed_(startDate);
-    EXEC_TIMER_INTERVAL_ = setInterval(function() {
-      el.textContent = fmtExecElapsed_(startDate);
-    }, 1000);
-  }
-  function stopExecTimer_() {
-    if (EXEC_TIMER_INTERVAL_) { clearInterval(EXEC_TIMER_INTERVAL_); EXEC_TIMER_INTERVAL_ = null; }
-  }
-
-  function openSessionDetail(s) {
-    state.bedId = s.bedId;
-    state.cohortId = s.cohortId;
-    state.selectedActivity = s.activity;
-    state.sessionId = s.sessionId;
-
-    document.getElementById('exec-bed').textContent = s.bedId;
-    document.getElementById('exec-task').textContent = labelForActivity(s.activity);
-    document.getElementById('exec-start').textContent = new Date(s.startTime).toLocaleTimeString();
-    startExecTimer_(new Date(s.startTime));
-
-    let statusLbl = document.getElementById('lbl-status');
-    statusLbl.className = 'badge ' + (s.status === 'PAUSED' ? 'badge-paused' : 'badge-active');
-    statusLbl.textContent = s.status;
-
-    // Resuming a session in a fresh app visit has no client-side tote
-    // history to show (see the note in handleLogHarvestTote_, Code.gs) --
-    // the HARVEST_LOG rows already written are safe either way, only this
-    // running-list display resets.
-    state.sessionTotes = [];
-    state.sessionFindings = [];
-    renderToteLog();
-    renderSessionFindings();
-    updateHarvestSectionVisibility();
-    updateScoutSectionVisibility();
-
-    if (s.status === 'PAUSED') {
-      apiCall('resume-session', { sessionId: s.sessionId }, function() {
-        statusLbl.className = 'badge badge-active';
-        statusLbl.textContent = 'ACTIVE';
-        switchView('view-execution');
-      });
+  function toggleHistory() {
+    var list = document.getElementById('bed-history-list');
+    var icon = document.getElementById('history-toggle-icon');
+    if (list.style.display === 'none') {
+      list.style.display = 'flex';
+      icon.textContent = '▲';
     } else {
-      switchView('view-execution');
+      list.style.display = 'none';
+      icon.textContent = '▼';
     }
   }
 
-  // Completes a session directly from the hub list without opening its
-  // detail screen -- lets a worker close out one task while others keep running.
-  function quickCompleteSession(s) {
-    let quantity = 0;
-    if (s.activity === 'Harvest') {
-      quantity = prompt('Enter harvested quantity (lbs/crates) for ' + s.bedId + ':', '0');
-      if (quantity === null) return; // cancelled
-    }
-    apiCall('complete-session', { sessionId: s.sessionId, quantity: quantity }, function(res) {
-      if (res && res.success) {
-        loadMySessions();
-      }
-    });
+  // TECHNICAL CODE ADJUSTMENT: Unified Architectural Contract
+  // Eliminates 'General Field' / 'COH-UNASSIGNED' fallbacks!
+  function onBedScanSuccess(bedData) {
+    CURRENT_BED_ID = bedData.Bed_ID || 'B1-10';
+    CURRENT_BED_STATE = bedData.Current_State || 'Rest';
+
+    var isUnassigned = (CURRENT_BED_STATE === 'Rest' || CURRENT_BED_STATE === 'Prep' || !CURRENT_BED_STATE);
+
+    // NEW (Unified Standard): Em-dash for unassigned
+    var cropDisplay = (!isUnassigned && bedData.Current_Crop && bedData.Current_Crop.trim() !== '') ? bedData.Current_Crop : '—';
+    var cohortDisplay = (!isUnassigned && bedData.Current_Cohort_ID && bedData.Current_Cohort_ID.trim() !== '' && bedData.Current_Cohort_ID !== 'COH-UNASSIGNED') ? bedData.Current_Cohort_ID : '—';
+
+    document.getElementById('bed-crop-val').textContent = cropDisplay;
+    document.getElementById('bed-cohort-val').textContent = cohortDisplay;
+    document.getElementById('bed-state-val').textContent = CURRENT_BED_STATE;
+    document.getElementById('bed-location-label').textContent = '📍 Bed ' + CURRENT_BED_ID;
   }
 
-  function loadBeds() {
-    apiCall('list-beds', {}, function(res) {
-      if (res && res.success) {
-        state.allBeds = res.beds;
-      }
-    });
+  // PLANTING ACTIVITY ACTION GATING
+  function onStartTaskClick() {
+    var selectedActivity = document.getElementById('activity-dropdown').value;
+    handleStartTask(selectedActivity);
   }
 
-  function renderBedSearchResults() {
-    let query = document.getElementById('bed-search-input').value.trim().toUpperCase();
-    let container = document.getElementById('bed-search-results');
-    container.innerHTML = '';
+  function handleStartTask(activity) {
+    var isPlanting = (activity === 'Seeding' || activity === 'Transplanting');
+    var isUnplanted = (CURRENT_BED_STATE === 'Rest' || CURRENT_BED_STATE === 'Prep');
 
-    // Empty query -> show the full bed list (acts like a tap-to-open
-    // dropdown) instead of nothing; typing narrows it from there.
-    let allMatches = query ? state.allBeds.filter(function(b) {
-      return (b.bedId && b.bedId.toUpperCase().indexOf(query) !== -1) ||
-             (b.block && b.block.toUpperCase().indexOf(query) !== -1) ||
-             (b.crop && b.crop.toUpperCase().indexOf(query) !== -1) ||
-             (b.cropName && b.cropName.toUpperCase().indexOf(query) !== -1);
-    }) : state.allBeds.slice().sort(function(a, b) { return String(a.bedId).localeCompare(String(b.bedId)); });
-
-    // Render cap kept only as a safety ceiling, not a practical limit at
-    // current ranch scale (~220 beds) -- NOT a data limit. state.allBeds
-    // already holds every bed from the backend, and everything up to this
-    // cap is shown; only truncation past RENDER_CAP is disclosed to the
-    // worker via the count note below. Raise this if the bed count grows
-    // well past ~250 and DOM render time becomes noticeable on field devices.
-    var RENDER_CAP = 250;
-    let matches = allMatches.slice(0, RENDER_CAP);
-
-    if (matches.length === 0) {
-      container.innerHTML = query
-        ? '<div class="bed-empty-msg">No beds match "' + query + '"</div>'
-        : '<div class="bed-empty-msg">No beds loaded yet.</div>';
+    if (isUnplanted && isPlanting) {
+      // Intercept submit to launch Cohort Assignment Modal!
+      document.getElementById('modal-bed-state').textContent = CURRENT_BED_STATE;
+      document.getElementById('cohort-modal').style.display = 'flex';
       return;
     }
 
-    matches.forEach(function(b) {
-      let row = document.createElement('div');
-      row.className = 'bed-result';
-      row.onclick = function() { selectBedFromSearch(b.bedId); };
-      row.innerHTML = '<div class="bed-id">' + b.bedId + '</div>' +
-        '<div class="bed-meta">Block ' + (b.block || '-') + ' &middot; ' + (b.cropName || b.crop) + ' &middot; ' + (b.state || '-') + '</div>';
-      container.appendChild(row);
-    });
-
-    if (allMatches.length > RENDER_CAP) {
-      let note = document.createElement('div');
-      note.className = 'bed-meta';
-      note.style.marginTop = '8px';
-      note.textContent = 'Showing ' + RENDER_CAP + ' of ' + allMatches.length + ' matches — refine your search to narrow it down.';
-      container.appendChild(note);
-    }
+    // Non-planting activities route directly to dispatch attaching to Bed_ID
+    alert('Started ' + activity + ' on Bed ' + CURRENT_BED_ID + ' (logged against clean bed state).');
   }
 
-  function selectBedFromSearch(bedId) {
-    document.getElementById('scan-qr-input').value = 'BED:' + bedId;
-    appScanQR();
+  function closeCohortModal() {
+    document.getElementById('cohort-modal').style.display = 'none';
   }
 
-  function labelForActivity(act) {
-    return (state.taxonomyLabels && state.taxonomyLabels[act]) || act;
+  function confirmCohortAndStart() {
+    var crop = document.getElementById('cohort-crop-input').value;
+    var variety = document.getElementById('cohort-variety-input').value;
+    closeCohortModal();
+    alert('Created new active cohort (' + crop + ' - ' + variety + ') and started planting on ' + CURRENT_BED_ID + '!');
   }
 
-  var PAUSE_TYPE_LABELS = { BREAK: 'On Break', LUNCH: 'On Lunch', END_OF_DAY: 'Done for Day' };
-  function pauseTypeLabel(pauseType) {
-    return PAUSE_TYPE_LABELS[pauseType] || pauseType;
+  function rescanPrompt() {
+    var next = (CURRENT_BED_ID === 'B1-10') ? 'B1-03' : 'B1-10';
+    onBedScanSuccess({ Bed_ID: next, Current_State: 'Rest', Current_Crop: '', Current_Cohort_ID: '' });
   }
-
-  function loadTaxonomy() {
-    apiCall('get-taxonomy', {}, function(res) {
-      if (res && res.success && res.taxonomy) {
-        state.taxonomyGroups = res.taxonomy.groups;
-        state.taxonomyLabels = res.taxonomy.labels || {};
-        state.scoutDomains = res.taxonomy.scoutDomains || [];
-        state.scoutDomainLabels = res.taxonomy.scoutDomainLabels || {};
-        state.scoutSeverities = res.taxonomy.scoutSeverities || [];
-        renderTaxonomyPicker();
-        renderScoutFormOptions();
-      }
-    });
-  }
-
-  // Populates the domain/severity <select> elements on the scout finding
-  // form. Called once taxonomy loads, and again defensively when the form
-  // is opened (appOpenScoutFinding) in case it's ever reached before
-  // get-taxonomy's response lands.
-  function renderScoutFormOptions() {
-    let domainSelect = document.getElementById('scout-domain');
-    let severitySelect = document.getElementById('scout-severity');
-    if (!domainSelect || !severitySelect) return;
-
-    domainSelect.innerHTML = '';
-    state.scoutDomains.forEach(function(d) {
-      let opt = document.createElement('option');
-      opt.value = d;
-      opt.textContent = state.scoutDomainLabels[d] || d;
-      domainSelect.appendChild(opt);
-    });
-
-    severitySelect.innerHTML = '';
-    state.scoutSeverities.forEach(function(s) {
-      let opt = document.createElement('option');
-      opt.value = s;
-      opt.textContent = scoutSeverityLabel(s);
-      severitySelect.appendChild(opt);
-    });
-  }
-
-  function renderTaxonomyPicker() {
-    let container = document.getElementById('activity-picker-container');
-    container.innerHTML = '';
-
-    let select = document.createElement('select');
-    select.id = 'activity-select-dropdown';
-
-    for (let group in state.taxonomyGroups) {
-      let optgroup = document.createElement('optgroup');
-      optgroup.label = group;
-
-      state.taxonomyGroups[group].forEach(act => {
-        let opt = document.createElement('option');
-        opt.value = act; // raw canonical ID -- this is what gets sent to start-session
-        opt.textContent = labelForActivity(act); // human-readable label if available, falls back to the ID
-        optgroup.appendChild(opt);
-      });
-      select.appendChild(optgroup);
-    }
-    container.appendChild(select);
-    select.addEventListener('change', updateHarvestPlanVisibility);
-    updateHarvestPlanVisibility();
-  }
-
-  // Only Harvest exposes the "schedule as a planned harvest" toggle -- every
-  // other activity's Confirm Assignment screen looks exactly as it did
-  // before this feature existed.
-  function updateHarvestPlanVisibility() {
-    let dropdown = document.getElementById('activity-select-dropdown');
-    let group = document.getElementById('harvest-plan-toggle-group');
-    if (!dropdown || !group) return;
-    let isHarvest = dropdown.value === 'Harvest';
-    group.style.display = isHarvest ? 'block' : 'none';
-    if (!isHarvest) {
-      let check = document.getElementById('harvest-plan-check');
-      if (check) check.checked = false;
-      let fields = document.getElementById('harvest-plan-fields');
-      if (fields) fields.classList.add('hidden');
-    }
-  }
-
-  function toggleHarvestPlanFields() {
-    let checked = document.getElementById('harvest-plan-check').checked;
-    document.getElementById('harvest-plan-fields').classList.toggle('hidden', !checked);
-  }
-
-  // Only Harvest sessions show the tote-logging block on the execution view.
-  function updateHarvestSectionVisibility() {
-    let section = document.getElementById('harvest-tote-section');
-    if (!section) return;
-    section.classList.toggle('hidden', state.selectedActivity !== 'Harvest');
-  }
-
-  // Only PestScouting/DiseaseScouting/CropInspection/MaturityInspection
-  // sessions show the "Log Scout Finding" block -- matches
-  // SCOUTING_ACTIVITY_TYPES_ in ActivityTaxonomy.gs, which is what
-  // logScoutFinding_ actually enforces server-side. Hiding it for other
-  // activities here is just a UX nicety; the real gate is server-side.
-  function updateScoutSectionVisibility() {
-    let section = document.getElementById('scout-finding-section');
-    if (!section) return;
-    section.classList.toggle('hidden', SCOUTING_ACTIVITY_TYPES.indexOf(state.selectedActivity) === -1);
-  }
-
-  function appLogHarvestTote() {
-    let gross = parseFloat(document.getElementById('tote-gross').value);
-    let tare = parseFloat(document.getElementById('tote-tare').value) || 0;
-    let crates = parseInt(document.getElementById('tote-crates').value, 10) || 1;
-    let grade = document.getElementById('tote-grade').value;
-
-    if (isNaN(gross) || gross <= 0) return alert('Enter a gross weight greater than 0.');
-    if (tare < 0) return alert('Tare weight cannot be negative.');
-    if (tare >= gross) return alert('Tare weight must be less than gross weight.');
-
-    apiCall('log-harvest-tote', {
-      sessionId: state.sessionId,
-      grossWeightLbs: gross,
-      tareWeightLbs: tare,
-      crateCount: crates,
-      qualityGrade: grade
-    }, function(res) {
-      if (res && res.success) {
-        state.sessionTotes.push(res);
-        renderToteLog();
-        document.getElementById('tote-gross').value = '';
-        document.getElementById('tote-tare').value = '0';
-        document.getElementById('tote-crates').value = '1';
-      } else {
-        alert(res && res.error ? res.error : 'Failed to log tote');
-      }
-    });
-  }
-
-  function renderToteLog() {
-    let list = document.getElementById('tote-log-list');
-    let totalEl = document.getElementById('tote-log-total');
-    if (!list || !totalEl) return;
-    list.innerHTML = '';
-    let totalNet = 0;
-
-    state.sessionTotes.forEach(function(t) {
-      totalNet += Number(t.netWeightLbs) || 0;
-      let row = document.createElement('div');
-      row.className = 'bed-result';
-      row.style.cursor = 'default';
-      row.innerHTML =
-        '<div class="bed-id">' + t.netWeightLbs + ' lbs net &middot; ' + t.crateCount + ' crate(s) &middot; Grade ' + t.qualityGrade + '</div>' +
-        '<div class="bed-meta"><span class="code-chip">' + t.qrCode + '</span></div>';
-      list.appendChild(row);
-    });
-
-    totalEl.textContent = state.sessionTotes.length
-      ? ('Total logged this session: ' + totalNet.toFixed(1) + ' lbs across ' + state.sessionTotes.length + ' tote(s).')
-      : '';
-  }
-
-  // Reads the selected photo file, downsamples it into a base64 payload the
-  // exception report can carry, and shows a preview + remove option. Kept
-  // to a generous-but-bounded size so a full-resolution phone photo doesn't
-  // blow past what a single POST body can comfortably carry on a field
-  // connection.
-  function handleExceptionPhotoSelect(evt) {
-    let file = evt.target.files && evt.target.files[0];
-    let preview = document.getElementById('exc-photo-preview');
-    if (!file) { clearExceptionPhoto(); return; }
-
-    if (!file.type.startsWith('image/')) {
-      alert('Please select an image file.');
-      evt.target.value = '';
-      return;
-    }
-    const MAX_BYTES = 8 * 1024 * 1024;
-    if (file.size > MAX_BYTES) {
-      alert('Photo is too large (max 8MB). Please choose a smaller image.');
-      evt.target.value = '';
-      return;
-    }
-
-    let reader = new FileReader();
-    reader.onload = function() {
-      let dataUrl = reader.result; // "data:image/jpeg;base64,...."
-      let commaIdx = dataUrl.indexOf(',');
-      state.exceptionPhotoBase64 = dataUrl.substring(commaIdx + 1);
-      state.exceptionPhotoMime = file.type;
-      preview.innerHTML =
-        '<img src="' + dataUrl + '" style="max-width:100%; border-radius:6px;">' +
-        '<button type="button" class="btn-secondary" style="margin-top:6px;" onclick="clearExceptionPhoto()">Remove Photo</button>';
-    };
-    reader.readAsDataURL(file);
-  }
-
-  function clearExceptionPhoto() {
-    state.exceptionPhotoBase64 = '';
-    state.exceptionPhotoMime = '';
-    let input = document.getElementById('exc-photo');
-    if (input) input.value = '';
-    let preview = document.getElementById('exc-photo-preview');
-    if (preview) preview.innerHTML = '';
-  }
-
-  // Opens the scout finding form for whichever session is currently
-  // focused in the execution view. Resets the form to a blank state each
-  // time (rather than leaving stale values from a prior finding) since a
-  // single scouting pass commonly logs several distinct findings in a row.
-  function appOpenScoutFinding() {
-    document.getElementById('scout-lbl-bed').textContent = state.bedId;
-    document.getElementById('scout-lbl-activity').textContent = labelForActivity(state.selectedActivity);
-    renderScoutFormOptions(); // defensive re-populate in case taxonomy wasn't ready when the page first loaded
-    document.getElementById('scout-symptom').value = '';
-    document.getElementById('scout-location').value = '';
-    document.getElementById('scout-notes').value = '';
-    document.getElementById('scout-requires-action').checked = false;
-    clearScoutPhoto();
-    switchView('view-scout-finding');
-  }
-
-  function appSubmitScoutFinding() {
-    let domain = document.getElementById('scout-domain').value;
-    let symptom = document.getElementById('scout-symptom').value.trim();
-    let severity = document.getElementById('scout-severity').value;
-    if (!domain) return alert('Select a finding type.');
-    if (!symptom) return alert('Describe what you saw.');
-    if (!severity) return alert('Select a severity.');
-
-    let payload = {
-      workerId: state.workerId,
-      sessionId: state.sessionId,
-      domain: domain,
-      symptom: symptom,
-      severity: severity,
-      locationDetail: document.getElementById('scout-location').value.trim(),
-      notes: document.getElementById('scout-notes').value.trim(),
-      requiresAction: document.getElementById('scout-requires-action').checked
-    };
-
-    if (state.findingPhotoBase64) {
-      payload.photoBase64 = state.findingPhotoBase64;
-      payload.photoMimeType = state.findingPhotoMime;
-    }
-
-    apiCall('log-scout-finding', payload, function(res) {
-      if (res && res.success) {
-        state.sessionFindings.push({
-          domain: domain,
-          domainLabel: state.scoutDomainLabels[domain] || domain,
-          symptom: symptom,
-          severity: severity,
-          locationDetail: payload.locationDetail,
-          requiresAction: payload.requiresAction
-        });
-        renderSessionFindings();
-
-        // Reset for the next finding but stay on this form -- scouting a
-        // bed thoroughly usually means logging several findings back to back.
-        document.getElementById('scout-symptom').value = '';
-        document.getElementById('scout-location').value = '';
-        document.getElementById('scout-notes').value = '';
-        document.getElementById('scout-requires-action').checked = false;
-        clearScoutPhoto();
-
-        alert(payload.requiresAction ? 'Finding logged and manager notified.' : 'Finding logged.');
-      } else {
-        alert(res && res.error ? res.error : 'Failed to log finding');
-      }
-    });
-  }
-
-  // Renders the running "logged this pass" recap in two places that share
-  // the same underlying state.sessionFindings: the collapsed summary on the
-  // execution view, and the fuller list at the bottom of the finding form
-  // itself. Client-side only, same posture as sessionTotes/renderToteLog --
-  // the SCOUT_FINDING rows themselves are already durable server-side the
-  // moment log-scout-finding succeeds.
-  function renderSessionFindings() {
-    let execList = document.getElementById('scout-finding-log-list');
-    let execTotal = document.getElementById('scout-finding-log-total');
-    let recapWrap = document.getElementById('scout-recap-wrap');
-    let recapList = document.getElementById('scout-finding-recap-list');
-    if (!execList || !execTotal) return;
-
-    execList.innerHTML = '';
-    if (recapList) recapList.innerHTML = '';
-
-    state.sessionFindings.forEach(function(f) {
-      let flagNote = f.requiresAction ? ' &middot; \u{1F6A9} flagged' : '';
-      let locNote = f.locationDetail ? ' &middot; ' + f.locationDetail : '';
-      let rowHtml =
-        '<div class="bed-result" style="cursor:default;">' +
-          '<div class="bed-id">' + f.domainLabel + ' <span class="badge ' + scoutSeverityBadgeClass(f.severity) + '">' + scoutSeverityLabel(f.severity) + '</span></div>' +
-          '<div class="bed-meta">' + f.symptom + locNote + flagNote + '</div>' +
-        '</div>';
-
-      let execRow = document.createElement('div');
-      execRow.innerHTML = rowHtml;
-      execList.appendChild(execRow.firstElementChild);
-
-      if (recapList) {
-        let recapRow = document.createElement('div');
-        recapRow.innerHTML = rowHtml;
-        recapList.appendChild(recapRow.firstElementChild);
-      }
-    });
-
-    execTotal.textContent = state.sessionFindings.length
-      ? (state.sessionFindings.length + ' finding(s) logged this pass.')
-      : '';
-    if (recapWrap) recapWrap.classList.toggle('hidden', state.sessionFindings.length === 0);
-  }
-
-  // Same downsample-free base64 read as handleExceptionPhotoSelect, kept as
-  // a separate buffer (state.findingPhotoBase64) so an in-progress
-  // exception photo and an in-progress finding photo never collide.
-  function handleScoutPhotoSelect(evt) {
-    let file = evt.target.files && evt.target.files[0];
-    let preview = document.getElementById('scout-photo-preview');
-    if (!file) { clearScoutPhoto(); return; }
-
-    if (!file.type.startsWith('image/')) {
-      alert('Please select an image file.');
-      evt.target.value = '';
-      return;
-    }
-    const MAX_BYTES = 8 * 1024 * 1024;
-    if (file.size > MAX_BYTES) {
-      alert('Photo is too large (max 8MB). Please choose a smaller image.');
-      evt.target.value = '';
-      return;
-    }
-
-    let reader = new FileReader();
-    reader.onload = function() {
-      let dataUrl = reader.result;
-      let commaIdx = dataUrl.indexOf(',');
-      state.findingPhotoBase64 = dataUrl.substring(commaIdx + 1);
-      state.findingPhotoMime = file.type;
-      preview.innerHTML =
-        '<img src="' + dataUrl + '" style="max-width:100%; border-radius:6px;">' +
-        '<button type="button" class="btn-secondary" style="margin-top:6px;" onclick="clearScoutPhoto()">Remove Photo</button>';
-    };
-    reader.readAsDataURL(file);
-  }
-
-  function clearScoutPhoto() {
-    state.findingPhotoBase64 = '';
-    state.findingPhotoMime = '';
-    let input = document.getElementById('scout-photo');
-    if (input) input.value = '';
-    let preview = document.getElementById('scout-photo-preview');
-    if (preview) preview.innerHTML = '';
-  }
-
-  // Allows scanner hardware (which types the code then sends Enter) to
-  // trigger a scan without touching the "Process Scan" button.
-  function handleScanKeyPress(e) {
-    if (e.key === 'Enter') {
-      appScanQR();
-    }
-  }
-
-  // Scans a full QR string (e.g. "BED:B1-01") or a bare Bed_ID.
-  function appScanQR() {
-    let raw = document.getElementById('scan-qr-input').value.trim().toUpperCase();
-    if (!raw) return alert('Please enter or scan a QR code');
-
-    apiCall('scan-bed', { bedId: raw, workerId: state.workerId }, function(res) {
-      if (res && res.success) {
-        state.bedId = res.bed.bedId;
-        state.cohortId = res.bed.cohortId;
-        state.crop = res.bed.crop; // raw Crop_ID code, kept in state in case anything downstream needs it
-
-        document.getElementById('lbl-bed-id').textContent = state.bedId;
-        document.getElementById('lbl-block').textContent = res.bed.block || '-';
-        // Unified no-fallback-strings contract: an unplanted bed (crop/cohort
-        // both blank from the backend) renders as an em dash, never a
-        // hardcoded label like "General Field" -- see displayOrDash_().
-        document.getElementById('lbl-crop').textContent = displayOrDash_(res.bed.cropName || state.crop);
-        document.getElementById('lbl-bed-state').textContent = res.bed.bedState || '-';
-        state.bedState = res.bed.bedState || '';
-
-        // Irrigation zone -- shown inline next to Block; hidden entirely for
-        // a bed with no zone assigned rather than showing "Zone -".
-        let zoneEl = document.getElementById('row-zone');
-        if (res.bed.irrigationZone) {
-          zoneEl.classList.remove('hidden');
-          document.getElementById('lbl-zone').textContent = res.bed.irrigationZone;
-        } else {
-          zoneEl.classList.add('hidden');
-        }
-
-        // Only show the raw code chip when it actually differs from the
-        // display name -- avoids a redundant "Eggplant (Eggplant)" if
-        // CROP_REFERENCE ever stores the full name as the code too.
-        let cropCodeEl = document.getElementById('lbl-crop-code');
-        cropCodeEl.textContent = (res.bed.cropName && res.bed.cropName !== state.crop) ? state.crop : '';
-
-        // state.cohortId itself stays the raw value (may be the internal
-        // 'COH-UNASSIGNED' sentinel or '') so downstream calls that key off
-        // it (e.g. start-session's cohortId payload, line ~1465) keep working
-        // unchanged -- only the label gets the — treatment.
-        document.getElementById('lbl-cohort-id').textContent = displayOrDash_(state.cohortId);
-
-        // Variety/Stage and Bed Target only apply to beds with an assigned
-        // cohort -- hide those rows entirely for unplanted/general-use beds
-        // rather than showing "-" placeholders that look like missing data.
-        let cohort = res.bed.cohort;
-        let varietyRow = document.getElementById('row-variety-stage');
-        let targetRow = document.getElementById('row-bed-target');
-        let stageDayRow = document.getElementById('row-stage-day');
-        let plantedRow = document.getElementById('row-planted');
-        let harvestRow = document.getElementById('row-harvest-est');
-        if (cohort) {
-          varietyRow.classList.remove('hidden');
-          targetRow.classList.remove('hidden');
-          document.getElementById('lbl-variety-stage').textContent = cohort.variety || '-';
-          document.getElementById('lbl-bed-target').textContent =
-            (cohort.targetQtyLbs !== null && cohort.targetQtyLbs !== undefined) ? cohort.targetQtyLbs + ' lbs' : '-';
-
-          // Stage · Day N -- only meaningful once the cohort has an actual
-          // planting date; a cohort still in nursery/pre-plant shows just the
-          // stage with no day count rather than a misleading "Day NaN".
-          let dayNum = cohort.actualPlantingDate ? daysBetween_(cohort.actualPlantingDate, new Date()) : null;
-          if (cohort.stage) {
-            stageDayRow.classList.remove('hidden');
-            document.getElementById('lbl-stage-day').textContent =
-              cohort.stage + (dayNum !== null && dayNum >= 0 ? ' \u00b7 Day ' + (dayNum + 1) : '');
-          } else {
-            stageDayRow.classList.add('hidden');
-          }
-
-          if (cohort.actualPlantingDate) {
-            plantedRow.classList.remove('hidden');
-            document.getElementById('lbl-planted').textContent = fmtDateOnly(cohort.actualPlantingDate);
-          } else {
-            plantedRow.classList.add('hidden');
-          }
-
-          if (cohort.expectedHarvestDate) {
-            harvestRow.classList.remove('hidden');
-            let remaining = daysBetween_(new Date().toISOString(), new Date(cohort.expectedHarvestDate));
-            let remainingTxt = (remaining === null) ? ''
-              : remaining > 0 ? ' (' + remaining + ' days remaining)'
-              : remaining === 0 ? ' (today)'
-              : ' (' + Math.abs(remaining) + ' days overdue)';
-            document.getElementById('lbl-harvest-est').textContent = 'Est. ' + fmtDateOnly(cohort.expectedHarvestDate) + remainingTxt;
-          } else {
-            harvestRow.classList.add('hidden');
-          }
-        } else {
-          varietyRow.classList.add('hidden');
-          targetRow.classList.add('hidden');
-          stageDayRow.classList.add('hidden');
-          plantedRow.classList.add('hidden');
-          harvestRow.classList.add('hidden');
-        }
-
-        // Bed history (recent activity, latest scout finding, unresolved
-        // exceptions, last irrigation) -- from getBedHistory() via
-        // scan-bed's response. Collapsed by default so it doesn't get in
-        // the way of the primary "confirm and start task" flow; comes
-        // back empty until real activity/irrigation rows exist.
-        renderBedHistory(res.history);
-        document.getElementById('bed-history-body').classList.add('hidden');
-        document.getElementById('bed-history-toggle').textContent = '▸ Bed History';
-
-        switchView('view-select-task');
-      } else {
-        alert('Scan failed: ' + (res.error || 'Unknown code'));
-      }
-    });
-  }
-
-  function toggleBedHistory() {
-    let body = document.getElementById('bed-history-body');
-    let toggle = document.getElementById('bed-history-toggle');
-    let isHidden = body.classList.contains('hidden');
-    body.classList.toggle('hidden');
-    toggle.textContent = (isHidden ? '▾' : '▸') + ' Bed History';
-  }
-
-  // history = { recentActivities, latestScoutFinding, unresolvedExceptions,
-  // lastIrrigation } from getBedHistory() (VPOS_bed_history_patch.gs).
-  // Defensive throughout -- a bed with no history yet, or a scan-bed call
-  // from an older backend version without the history field, should just
-  // show empty groups rather than break the Confirm Assignment screen.
-  function renderBedHistory(history) {
-    let container = document.getElementById('bed-history-body');
-    container.innerHTML = '';
-    history = history || {};
-
-    let activities = history.recentActivities || [];
-    let scout = history.latestScoutFinding;
-    let exceptions = history.unresolvedExceptions || [];
-    let irrigation = history.lastIrrigation;
-
-    if (activities.length === 0 && !scout && exceptions.length === 0 && !irrigation) {
-      container.innerHTML = '<div class="empty-state">No history logged for this bed yet.</div>';
-      return;
-    }
-
-    let html = '';
-
-    if (exceptions.length > 0) {
-      html += '<div class="bh-group-label">Unresolved Exceptions</div>';
-      exceptions.forEach(function(ex) {
-        html += '<div class="bh-row bh-exception">' +
-          '<div class="bh-row-top"><span class="bh-title">' + (ex.Exception_Type || 'Exception') + '</span>' +
-          '<span class="badge ' + scoutSeverityBadgeClass(ex.Severity) + '">' + scoutSeverityLabel(ex.Severity) + '</span></div>' +
-          (ex.Notes ? '<div>' + ex.Notes + '</div>' : '') +
-          '<div class="bh-meta">' + fmtBedHistoryTime(ex.Reported_At) + '</div>' +
-        '</div>';
-      });
-    }
-
-    if (scout) {
-      html += '<div class="bh-group-label">Latest Scout Finding</div>';
-      html += '<div class="bh-row">' +
-        '<div class="bh-row-top"><span class="bh-title">' + (scout.Domain || '-') + (scout.Symptom ? ': ' + scout.Symptom : '') + '</span>' +
-        '<span class="badge ' + scoutSeverityBadgeClass(scout.Severity) + '">' + scoutSeverityLabel(scout.Severity) + '</span></div>' +
-        (scout.Notes ? '<div>' + scout.Notes + '</div>' : '') +
-        '<div class="bh-meta">' + fmtBedHistoryTime(scout.Timestamp) + '</div>' +
-      '</div>';
-    }
-
-    if (activities.length > 0) {
-      html += '<div class="bh-group-label">Recent Activity</div>';
-      activities.forEach(function(a) {
-        let isStateChange = a.Activity_Type === 'COHORT_STATE_CHANGE';
-        let d = a.details || {};
-        let meta = isStateChange
-          ? ((d.from || '?') + ' \u2192 ' + (d.to || '?'))
-          : [
-              (d.elapsed_minutes !== undefined ? d.elapsed_minutes + ' min' : ''),
-              (d.logged_quantity !== undefined ? d.logged_quantity + (d.unit ? ' ' + d.unit : '') : '')
-            ].filter(Boolean).join(' \u00b7 ');
-        let title = isStateChange ? 'Cohort State Change' : labelForActivity(a.Activity_Type);
-        html += '<div class="bh-row">' +
-          '<div class="bh-row-top"><span class="bh-title">' + title + '</span>' +
-          '<span class="bh-meta">' + (a.Worker_ID || '') + '</span></div>' +
-          (meta ? '<div class="bh-meta">' + meta + '</div>' : '') +
-          '<div class="bh-meta">' + fmtBedHistoryTime(a.Timestamp) + '</div>' +
-        '</div>';
-      });
-    }
-
-    if (irrigation) {
-      html += '<div class="bh-group-label">Last Irrigation</div>';
-      html += '<div class="bh-row">' +
-        '<div class="bh-row-top"><span class="bh-title">' + (irrigation.Trigger_Type || 'Irrigation') + '</span>' +
-        '<span class="bh-meta">' + (irrigation.Status || '') + '</span></div>' +
-        '<div class="bh-meta">' +
-          (irrigation.Duration_Minutes !== undefined && irrigation.Duration_Minutes !== '' ? irrigation.Duration_Minutes + ' min' : '') +
-          (irrigation.Actual_PSI !== undefined && irrigation.Actual_PSI !== '' ? ' \u00b7 ' + irrigation.Actual_PSI + ' PSI' : '') +
-        '</div>' +
-        '<div class="bh-meta">' + fmtBedHistoryTime(irrigation.Timestamp) + '</div>' +
-      '</div>';
-    }
-
-    container.innerHTML = html;
-  }
-
-  function fmtBedHistoryTime(ts) {
-    if (!ts) return '';
-    let d = new Date(ts);
-    return isNaN(d.getTime()) ? '' : d.toLocaleString();
-  }
-
-  // Date-only formatting + day-math for the Bed Snapshot's Stage/Planted/
-  // Harvest lines. Both cohort dates arrive as ISO strings (or '') from
-  // handleScanQr_ -- never assume they're present, since an unplanted cohort
-  // legitimately has no Actual_Planting_Date yet.
-  function fmtDateOnly(iso) {
-    if (!iso) return '';
-    let d = new Date(iso);
-    return isNaN(d.getTime()) ? '' : d.toLocaleDateString();
-  }
-  // Unified no-fallback-strings contract (shared with ranch_aab.html):
-  // an empty/blank value, or the backend's internal 'COH-UNASSIGNED'
-  // sentinel, renders as an em dash -- never a hardcoded label like
-  // "General Field" or the raw sentinel string itself.
-  function displayOrDash_(value) {
-    if (value === null || value === undefined) return '\u2014';
-    let s = String(value).trim();
-    if (s === '' || s === 'COH-UNASSIGNED') return '\u2014';
-    return s;
-  }
-  function daysBetween_(fromIso, toDate) {
-    let from = new Date(fromIso);
-    if (isNaN(from.getTime())) return null;
-    let msPerDay = 24 * 60 * 60 * 1000;
-    // Compare calendar days, not exact 24h windows, so "planted this
-    // morning" reads as Day 1 all day rather than Day 0 until the next
-    // clock-exact hour.
-    let fromDay = new Date(from.getFullYear(), from.getMonth(), from.getDate());
-    let toDay = new Date(toDate.getFullYear(), toDate.getMonth(), toDate.getDate());
-    return Math.round((toDay - fromDay) / msPerDay);
-  }
-
-  // Finds the first activity id in the loaded taxonomy whose id or label
-  // contains any of the given keywords (case-insensitive). Returns '' if
-  // nothing matches -- callers must handle that (taxonomy not loaded yet, or
-  // this ranch's taxonomy just doesn't have that activity type).
-  function findActivityIdForKeywords_(keywords) {
-    for (let group in state.taxonomyGroups) {
-      let ids = state.taxonomyGroups[group] || [];
-      for (let i = 0; i < ids.length; i++) {
-        let id = ids[i];
-        let label = labelForActivity(id);
-        let haystack = (id + ' ' + label).toLowerCase();
-        for (let k = 0; k < keywords.length; k++) {
-          if (haystack.indexOf(keywords[k].toLowerCase()) !== -1) return id;
-        }
-      }
-    }
-    return '';
-  }
-
-  // Field Actions quick-launch buttons -- stages an activity and shows a
-  // brief confirm modal, then hands off to the existing appStartSession()
-  // pipeline exactly as if the worker had picked it from the dropdown and
-  // tapped "Start Task". No separate write path, no bypassing the timer.
-  function quickLaunch(key) {
-    let config = QUICK_ACTIONS[key];
-    if (!config) return;
-    let activityId = findActivityIdForKeywords_(config.keywords);
-    if (!activityId) {
-      return alert('"' + config.label + '" isn\'t set up in this ranch\'s activity list yet -- use "Or Choose Any Activity" below instead.');
-    }
-    state.pendingQuickActivity = activityId;
-    document.getElementById('ql-modal-title').textContent = 'Start ' + labelForActivity(activityId) + ' on Bed ' + state.bedId + '?';
-    document.getElementById('ql-modal-bed').textContent = 'Bed: ' + state.bedId;
-    document.getElementById('ql-modal-cohort').textContent = 'Cohort: ' + displayOrDash_(state.cohortId);
-    document.getElementById('quick-launch-overlay').classList.remove('hidden');
-  }
-
-  function cancelQuickLaunch() {
-    state.pendingQuickActivity = '';
-    document.getElementById('quick-launch-overlay').classList.add('hidden');
-  }
-
-  function confirmQuickLaunch() {
-    let dropdown = document.getElementById('activity-select-dropdown');
-    if (dropdown && state.pendingQuickActivity) {
-      dropdown.value = state.pendingQuickActivity;
-      updateHarvestPlanVisibility();
-    }
-    document.getElementById('quick-launch-overlay').classList.add('hidden');
-    appStartSession();
-  }
-
-  function appStartSession() {
-    let dropdown = document.getElementById('activity-select-dropdown');
-    if (!dropdown) return alert('Activity list not loaded yet -- try rescanning.');
-    state.selectedActivity = dropdown.value;
-
-    // Planting Activity Action Gating: Seeding/Transplanting on a bed that's
-    // currently REST/PREP (nothing planted, per the Unified Architectural
-    // Contract) has no cohort to attach the session to -- intercept and
-    // route through the Cohort Assignment / Creation modal instead of
-    // letting start-session fail server-side with no cohort. Every other
-    // activity (Tillage, Water Pass, Solarization, or any activity on a bed
-    // that already has a cohort) dispatches immediately, unchanged.
-    let bedIsResting = REST_LIKE_BED_STATES.indexOf(String(state.bedState || '').toLowerCase()) !== -1;
-    let isPlantingActivity = PLANTING_ACTIVITIES_REQUIRING_COHORT.indexOf(state.selectedActivity) !== -1;
-    if (bedIsResting && isPlantingActivity) {
-      openCohortModal_();
-      return;
-    }
-
-    proceedStartSession_();
-  }
-
-  // The actual start-session call, factored out of appStartSession() so the
-  // Cohort Assignment modal's confirmCohortModal() can call it too, once a
-  // cohort has just been created for the bed.
-  function proceedStartSession_() {
-    let payload = {
-      workerId: state.workerId,
-      bedId: state.bedId,
-      cohortId: state.cohortId,
-      activity: state.selectedActivity
-    };
-
-    // Optional harvest-plan window -- only ever sent when Harvest is
-    // selected and the worker opted into it; every other activity keeps
-    // starting exactly as before (plannedFlag defaults false server-side).
-    let planCheck = document.getElementById('harvest-plan-check');
-    if (state.selectedActivity === 'Harvest' && planCheck && planCheck.checked) {
-      let startVal = document.getElementById('harvest-plan-start').value;
-      let endVal = document.getElementById('harvest-plan-end').value;
-      if (!startVal || !endVal) {
-        return alert('Enter both a planned start and end time, or uncheck the planned-harvest option.');
-      }
-      let startDate = new Date(startVal);
-      let endDate = new Date(endVal);
-      if (endDate <= startDate) {
-        return alert('Planned end must be after planned start.');
-      }
-      payload.plannedFlag = true;
-      payload.plannedStart = startDate.toISOString();
-      payload.plannedEnd = endDate.toISOString();
-    }
-
-    // Starting a new task no longer touches or is blocked by any of this
-    // worker's other open sessions -- it just logs independently. This
-    // sessionId becomes the "focused" session for the execution view that
-    // follows, but any others keep running untouched in the background.
-    apiCall('start-session', payload, function(res) {
-      if (res && res.success) {
-        state.sessionId = res.sessionId;
-        document.getElementById('exec-bed').textContent = state.bedId;
-        document.getElementById('exec-task').textContent = labelForActivity(state.selectedActivity);
-        document.getElementById('exec-start').textContent = new Date(res.startTime).toLocaleTimeString();
-        startExecTimer_(new Date(res.startTime));
-        let statusLbl = document.getElementById('lbl-status');
-        statusLbl.className = 'badge badge-active';
-        statusLbl.textContent = 'ACTIVE';
-        state.sessionTotes = [];
-        state.sessionFindings = [];
-        renderToteLog();
-        renderSessionFindings();
-        updateHarvestSectionVisibility();
-        updateScoutSectionVisibility();
-        switchView('view-execution');
-      } else {
-        alert(res.error || 'Failed to start session');
-      }
-    });
-  }
-
-  // --- Cohort Assignment / Creation modal -------------------------------
-
-  function openCohortModal_() {
-    document.getElementById('cohort-modal-bed').textContent =
-      'Bed ' + state.bedId + ' -- ' + labelForActivity(state.selectedActivity);
-    state.cohortModalCropId = '';
-    document.getElementById('cohort-modal-confirm-btn').disabled = true;
-
-    if (state.crops && state.crops.length) {
-      renderCohortModalCropPicker_();
-      document.getElementById('cohort-modal-overlay').classList.remove('hidden');
-      return;
-    }
-
-    // Lazy-load CROP_REFERENCE the first time this modal is needed --
-    // nothing else in WorkerApp.html uses the full crop list, so there's no
-    // reason to fetch it on every login/scan.
-    apiCall('list-crops', {}, function(res) {
-      if (res && res.success) {
-        state.crops = res.crops || [];
-        renderCohortModalCropPicker_();
-        document.getElementById('cohort-modal-overlay').classList.remove('hidden');
-      } else {
-        alert(res.error || 'Could not load the crop list -- try again.');
-      }
-    });
-  }
-
-  function renderCohortModalCropPicker_() {
-    let container = document.getElementById('cohort-modal-picker-container');
-    container.innerHTML = '';
-    let select = document.createElement('select');
-    select.id = 'cohort-modal-crop-select';
-
-    let placeholder = document.createElement('option');
-    placeholder.value = '';
-    placeholder.textContent = 'Select a crop\u2026';
-    select.appendChild(placeholder);
-
-    state.crops.forEach(function(c) {
-      let opt = document.createElement('option');
-      opt.value = c.cropId;
-      opt.textContent = c.cropName + (c.nurseryTrack ? ' (' + c.nurseryTrack + ')' : '');
-      select.appendChild(opt);
-    });
-
-    select.addEventListener('change', function() {
-      state.cohortModalCropId = select.value;
-      document.getElementById('cohort-modal-confirm-btn').disabled = !select.value;
-    });
-    container.appendChild(select);
-  }
-
-  function cancelCohortModal() {
-    state.cohortModalCropId = '';
-    document.getElementById('cohort-modal-overlay').classList.add('hidden');
-  }
-
-  function confirmCohortModal() {
-    if (!state.cohortModalCropId) return;
-    let btn = document.getElementById('cohort-modal-confirm-btn');
-    btn.disabled = true;
-    apiCall('create-cohort', { bedId: state.bedId, cropId: state.cohortModalCropId }, function(res) {
-      if (res && res.success) {
-        // Reflect the new cohort in local state exactly as a fresh scan-bed
-        // response would have -- lbl-crop/lbl-cohort-id are updated too so
-        // the Confirm Assignment screen behind the modal isn't stale if the
-        // worker glances at it before the execution view takes over.
-        state.cohortId = res.cohortId;
-        state.crop = res.cropId;
-        document.getElementById('lbl-crop').textContent = displayOrDash_(res.cropName || res.cropId);
-        document.getElementById('lbl-cohort-id').textContent = displayOrDash_(res.cohortId);
-        document.getElementById('cohort-modal-overlay').classList.add('hidden');
-        proceedStartSession_();
-      } else {
-        btn.disabled = false;
-        alert(res.error || 'Could not create the cohort -- try again.');
-      }
-    });
-  }
-
-  // Completes whichever session is currently focused in the execution view.
-  // Any other open sessions for this worker are untouched and still listed
-  // on the hub afterward.
-  function appCompleteSession() {
-    let quantity = 0;
-    if (state.selectedActivity === 'Harvest') {
-      // Prefill with the running total from any totes logged this visit --
-      // still fully editable/confirmable by the worker, and still falls
-      // back to a blank '0' prompt if no totes were logged (e.g. a Harvest
-      // session that just used the old single quantity-at-completion flow).
-      let defaultQty = state.sessionTotes.reduce(function(sum, t) { return sum + (Number(t.netWeightLbs) || 0); }, 0);
-      quantity = prompt('Enter harvested quantity (lbs):', defaultQty ? defaultQty.toFixed(1) : '0');
-    }
-
-    apiCall('complete-session', { sessionId: state.sessionId, quantity: quantity }, function(res) {
-      if (res && res.success) {
-        alert('Activity completed. Duration: ' + res.elapsedMinutes + ' mins');
-        resetBedSearch();
-        loadMySessions();
-      }
-    });
-  }
-
-  function resetBedSearch() {
-    var input = document.getElementById('bed-search-input');
-    var results = document.getElementById('bed-search-results');
-    if (input) input.value = '';
-    if (results) results.innerHTML = '';
-  }
-
-  // Pauses whichever session is currently focused in the execution view and
-  // returns to the "My Active Sessions" hub, where it'll show up as PAUSED
-  // (labeled with the chosen pauseType) alongside any other open sessions --
-  // tapping it there resumes it. pauseType is one of BREAK / LUNCH /
-  // END_OF_DAY -- purely descriptive of worker intent, doesn't change the
-  // elapsed-time math on the backend at all.
-  function appPauseAndExit(pauseType) {
-    apiCall('pause-session', { sessionId: state.sessionId, pauseType: pauseType }, function(res) {
-      if (res && res.success) {
-        resetBedSearch();
-        loadMySessions();
-      } else {
-        alert(res && res.error ? res.error : 'Pause failed');
-      }
-    });
-  }
-
-  function appReportExceptionPrompt() {
-    switchView('view-exception');
-  }
-
-  function appSubmitException() {
-    let payload = {
-      workerId: state.workerId,
-      sessionId: state.sessionId,
-      exceptionType: document.getElementById('exc-type').value,
-      severity: document.getElementById('exc-severity').value,
-      notes: document.getElementById('exc-notes').value
-    };
-
-    if (state.exceptionPhotoBase64) {
-      payload.photoBase64 = state.exceptionPhotoBase64;
-      payload.photoMimeType = state.exceptionPhotoMime;
-    }
-
-    apiCall('report-exception', payload, function(res) {
-      if (res && res.success) {
-        alert('Exception logged and manager notified.');
-        document.getElementById('exc-notes').value = '';
-        clearExceptionPhoto();
-        document.getElementById('lbl-status').className = 'badge badge-danger';
-        document.getElementById('lbl-status').textContent = 'ALERT';
-        switchView('view-execution');
-      } else {
-        alert(res && res.error ? res.error : 'Failed to submit exception');
-      }
-    });
-  }
-
-  restoreSessionOnLoad();
 </script>
+
 </body>
 </html>
