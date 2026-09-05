@@ -2,201 +2,692 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>Ngapori Ranch - Worker App</title>
+  <title>Ngapori Ranch - Worker Mobile App</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <style>
     :root {
-      --bg-dark: #0f1416;
+      --bg-dark: #0a0f12;
+      --device-bg: #141d21;
       --card-bg: #182328;
       --inner-bg: #10171a;
       --border: #26373e;
+      --border-accent: #2c3d44;
       --text: #eceff1;
       --text-muted: #78909c;
-      --green: #43a047;
-      --amber: #fb8c00;
-      --blue: #2196f3;
-      --red: #e53935;
+      --green: #10b981;
+      --green-dark: #059669;
+      --amber: #f59e0b;
+      --blue: #3b82f6;
+      --blue-dark: #1d4ed8;
+      --red: #ef4444;
     }
     * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
-    body { background: var(--bg-dark); color: var(--text); padding: 12px; display: flex; justify-content: center; }
-    .mobile-container { width: 100%; max-width: 440px; display: flex; flex-direction: column; gap: 12px; }
+    body { background: var(--bg-dark); color: var(--text); padding: 12px; display: flex; justify-content: center; min-height: 100vh; }
 
-    /* 1. Header */
-    .app-header {
-      background: var(--card-bg); border: 1px solid var(--border); border-radius: 14px;
-      padding: 10px 14px; display: flex; justify-content: space-between; align-items: center;
+    .mobile-container {
+      width: 100%; max-width: 440px; background: var(--device-bg);
+      border: 1px solid var(--border); border-radius: 28px;
+      overflow: hidden; display: flex; flex-direction: column;
+      box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.7);
     }
-    .status-badge { display: flex; align-items: center; gap: 6px; font-size: 11px; font-weight: 700; color: var(--green); }
-    .status-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--green); box-shadow: 0 0 8px var(--green); }
-    .worker-info { display: flex; align-items: center; gap: 12px; font-size: 12px; }
-    .btn-logout { background: none; border: none; color: var(--text-muted); font-size: 11px; cursor: pointer; text-decoration: underline; }
 
-    /* 2. Bed Context Card & Task Assignment Panel */
-    .card { background: var(--card-bg); border: 1px solid var(--border); border-radius: 16px; padding: 16px; display: flex; flex-direction: column; gap: 14px; }
+    .app-header {
+      background: var(--card-bg); border-bottom: 1px solid var(--border);
+      padding: 12px 16px; display: flex; justify-content: space-between; align-items: center;
+    }
+    .status-badge { display: flex; align-items: center; gap: 6px; font-size: 11px; font-weight: 700; color: var(--green); letter-spacing: 0.05em; text-transform: uppercase; }
+    .status-badge.offline { color: var(--red); }
+    .status-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--green); box-shadow: 0 0 10px var(--green); animation: pulse 2s infinite; }
+    .status-badge.offline .status-dot { background: var(--red); box-shadow: 0 0 10px var(--red); }
+    @keyframes pulse { 0%, 100% { opacity: 1; transform: scale(1); } 50% { opacity: 0.6; transform: scale(0.9); } }
+
+    .worker-info { display: flex; align-items: center; gap: 12px; }
+    .worker-name-group { text-align: right; }
+    .worker-name { font-size: 12px; font-weight: 700; color: #fff; line-height: 1.2; }
+    .worker-id { font-size: 10px; color: var(--text-muted); font-family: monospace; }
+    .btn-logout { background: none; border: none; color: var(--text-muted); font-size: 11px; cursor: pointer; display: flex; align-items: center; gap: 4px; }
+    .btn-logout:hover { color: var(--red); }
+
+    .scan-bar {
+      background: var(--inner-bg); border-bottom: 1px solid var(--border);
+      padding: 8px 12px; display: flex; align-items: center; justify-content: space-between; gap: 6px;
+    }
+    .scan-label { font-size: 11px; font-weight: 700; color: var(--text-muted); display: flex; align-items: center; gap: 4px; white-space: nowrap; }
+    .scan-tabs { display: flex; gap: 5px; overflow-x: auto; scrollbar-width: none; }
+    .scan-tab {
+      background: #1c282e; border: 1px solid var(--border); color: #b0bec5;
+      padding: 4px 8px; border-radius: 8px; font-size: 11px; font-weight: 700;
+      font-family: monospace; cursor: pointer; white-space: nowrap; transition: all .15s;
+    }
+    .scan-tab:hover { background: #263840; color: #fff; }
+    .scan-tab.active { background: var(--green-dark); border-color: var(--green); color: #fff; }
+    .scan-tab-input {
+      background: var(--inner-bg); border: 1px solid var(--border); color: #fff;
+      padding: 4px 8px; border-radius: 8px; font-size: 11px; font-family: monospace; width: 90px;
+    }
+
+    .app-body { padding: 14px; display: flex; flex-direction: column; gap: 14px; overflow-y: auto; max-height: calc(100vh - 120px); }
+
+    .active-session-card {
+      background: rgba(30, 58, 138, 0.25); border: 1px solid rgba(59, 130, 246, 0.45);
+      border-radius: 18px; padding: 14px; display: flex; flex-direction: column; gap: 10px;
+    }
+    .session-card-header { display: flex; justify-content: space-between; align-items: center; }
+    .session-badge {
+      display: flex; align-items: center; gap: 6px; font-size: 10.5px; font-weight: 800;
+      color: #93c5fd; font-family: monospace; text-transform: uppercase; letter-spacing: .05em;
+    }
+    .session-badge-dot { width: 7px; height: 7px; border-radius: 50%; background: #60a5fa; box-shadow: 0 0 8px #60a5fa; }
+    .session-status-tag {
+      background: rgba(59, 130, 246, 0.2); border: 1px solid rgba(59, 130, 246, 0.35);
+      color: #bfdbfe; font-size: 10px; font-weight: 700; font-family: monospace;
+      padding: 2px 7px; border-radius: 9999px;
+    }
+    .session-details {
+      background: var(--inner-bg); border: 1px solid rgba(59, 130, 246, 0.25);
+      border-radius: 12px; padding: 10px 12px; display: flex; flex-direction: column; gap: 6px; font-size: 12px;
+    }
+    .session-row { display: flex; justify-content: space-between; align-items: center; }
+    .session-timer-display {
+      font-size: 14px; font-weight: 800; font-family: monospace; color: #fde047;
+      display: flex; align-items: center; gap: 5px;
+    }
+    .session-actions-grid { display: flex; gap: 8px; }
+    .btn-session-pause {
+      flex: 1; background: rgba(245, 158, 11, 0.18); border: 1px solid rgba(245, 158, 11, 0.4);
+      color: #fcd34d; padding: 9px 12px; border-radius: 10px; font-size: 12px; font-weight: 700;
+      cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 5px;
+    }
+    .btn-session-pause:hover { background: rgba(245, 158, 11, 0.28); }
+    .btn-session-resume {
+      flex: 1; background: rgba(16, 185, 129, 0.18); border: 1px solid rgba(16, 185, 129, 0.4);
+      color: #6ee7b7; padding: 9px 12px; border-radius: 10px; font-size: 12px; font-weight: 700;
+      cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 5px;
+    }
+    .btn-session-complete {
+      flex: 1.2; background: var(--green-dark); border: none;
+      color: #fff; padding: 9px 12px; border-radius: 10px; font-size: 12px; font-weight: 800;
+      cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 5px;
+      box-shadow: 0 4px 10px rgba(5, 150, 105, 0.3);
+    }
+    .btn-session-complete:hover { background: var(--green); }
+    .no-session-note { font-size: 11.5px; color: var(--text-muted); text-align: center; padding: 6px 0; }
+
+    .card {
+      background: var(--card-bg); border: 1px solid var(--border-accent);
+      border-radius: 20px; padding: 16px; display: flex; flex-direction: column; gap: 14px;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+    }
     .card-title-bar { border-bottom: 1px solid var(--border); padding-bottom: 10px; }
-    .card-subtitle { font-size: 11px; font-weight: 700; color: var(--green); text-transform: uppercase; font-family: monospace; }
-    .bed-title { font-size: 16px; font-weight: 800; display: flex; align-items: center; gap: 6px; margin-top: 2px; }
+    .card-subtitle { font-size: 11px; font-weight: 800; color: var(--green); text-transform: uppercase; font-family: monospace; letter-spacing: .04em; }
+    .bed-title { font-size: 16px; font-weight: 800; display: flex; align-items: center; gap: 6px; margin-top: 3px; color: #fff; }
+    .bed-title-sub { font-size: 12px; font-weight: 400; color: var(--text-muted); }
 
-    .info-table { background: var(--inner-bg); border: 1px solid var(--border); border-radius: 12px; padding: 12px; display: flex; flex-direction: column; gap: 8px; font-size: 12.5px; }
+    .info-table {
+      background: var(--inner-bg); border: 1px solid var(--border);
+      border-radius: 14px; padding: 12px 14px; display: flex; flex-direction: column; gap: 9px; font-size: 12.5px;
+    }
     .info-row { display: flex; justify-content: space-between; align-items: center; }
-    .info-label { color: var(--text-muted); display: flex; align-items: center; gap: 5px; }
+    .info-label { color: var(--text-muted); display: flex; align-items: center; gap: 6px; }
     .info-val { font-weight: 700; font-family: monospace; }
     .info-val.unassigned { color: var(--text-muted); font-weight: 800; font-size: 14px; }
-
-    /* History */
-    .history-box { background: var(--inner-bg); border: 1px solid var(--border); border-radius: 12px; overflow: hidden; }
-    .history-header { padding: 10px 12px; font-size: 11.5px; font-weight: 700; color: var(--text-muted); display: flex; justify-content: space-between; cursor: pointer; }
-    .history-list { padding: 0 12px 10px; display: flex; flex-direction: column; gap: 6px; font-size: 11px; }
-    .history-item { color: var(--text-muted); line-height: 1.3; }
-    .history-item strong { color: var(--text); }
-
-    /* Quick Actions */
-    .quick-actions-title { font-size: 11px; font-weight: 700; color: var(--text-muted); text-transform: uppercase; font-family: monospace; }
-    .quick-actions-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
-    .btn-quick { background: #1c282e; border: 1px solid var(--border); color: var(--text); padding: 10px 6px; border-radius: 10px; font-size: 11px; font-weight: 600; cursor: pointer; text-align: center; }
-    .btn-quick:hover { background: #25363e; }
-
-    /* Select Activity */
-    select.activity-select {
-      width: 100%; background: var(--inner-bg); border: 1px solid var(--border); border-radius: 10px;
-      color: var(--text); padding: 10px 12px; font-size: 12.5px; font-weight: 600; outline: none;
+    .info-val.active-crop { color: var(--green); font-weight: 800; }
+    .status-pill {
+      font-size: 11.5px; font-weight: 700; padding: 2px 8px; border-radius: 6px;
+      background: rgba(16, 185, 129, 0.15); color: #a7f3d0; border: 1px solid rgba(16, 185, 129, 0.3);
     }
+
+    .history-box { background: var(--inner-bg); border: 1px solid var(--border); border-radius: 12px; overflow: hidden; }
+    .history-header {
+      padding: 10px 12px; font-size: 11.5px; font-weight: 700; color: #cfd8dc;
+      display: flex; justify-content: space-between; align-items: center; cursor: pointer;
+    }
+    .history-header:hover { background: rgba(255,255,255,0.03); }
+    .history-list { padding: 4px 12px 10px; display: flex; flex-direction: column; gap: 7px; font-size: 11px; border-top: 1px solid var(--border); }
+    .history-item { color: var(--text-muted); line-height: 1.35; }
+    .history-item strong { color: #eceff1; font-weight: 600; }
+
+    .section-label { font-size: 11px; font-weight: 800; color: var(--text-muted); text-transform: uppercase; font-family: monospace; letter-spacing: .04em; }
+    .quick-actions-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+    .btn-quick {
+      background: #1c282e; border: 1px solid var(--border); color: #e2e8f0;
+      padding: 10px 6px; border-radius: 12px; font-size: 11px; font-weight: 600;
+      cursor: pointer; display: flex; flex-direction: column; align-items: center; text-align: center; gap: 4px;
+      transition: all .15s;
+    }
+    .btn-quick:hover { background: #25363e; border-color: #3b505a; transform: translateY(-1px); }
+    .btn-quick:disabled { opacity: 0.4; cursor: not-allowed; transform: none; }
+
+    select.activity-select {
+      width: 100%; background: var(--inner-bg); border: 1px solid var(--border);
+      border-radius: 12px; color: #fff; padding: 11px 12px; font-size: 12.5px; font-weight: 600;
+      outline: none; cursor: pointer;
+    }
+    select.activity-select:focus { border-color: var(--green); }
     optgroup { background: var(--card-bg); color: var(--text-muted); font-weight: 700; }
-    option { background: var(--inner-bg); color: var(--text); }
+    option { background: var(--inner-bg); color: #fff; }
 
-    /* Actions */
-    .actions-row { display: flex; gap: 10px; margin-top: 4px; }
-    .btn-start { flex: 1; background: var(--green); border: none; color: #fff; padding: 12px; border-radius: 12px; font-size: 13px; font-weight: 800; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 6px; }
-    .btn-cancel { background: #243338; border: 1px solid var(--border); color: var(--text); padding: 12px 16px; border-radius: 12px; font-size: 12px; font-weight: 600; cursor: pointer; }
+    .gating-hint-box {
+      background: rgba(245, 158, 11, 0.12); border: 1px solid rgba(245, 158, 11, 0.35);
+      border-radius: 10px; padding: 9px 12px; font-size: 11px; color: #fde68a;
+      display: flex; gap: 6px; line-height: 1.4;
+    }
 
-    /* Modal */
-    .modal-backdrop { position: fixed; inset: 0; background: rgba(0,0,0,0.8); display: flex; align-items: center; justify-content: center; padding: 16px; z-index: 100; }
-    .modal-box { background: var(--card-bg); border: 1px solid var(--border); border-radius: 16px; width: 100%; max-width: 360px; padding: 16px; display: flex; flex-direction: column; gap: 12px; }
-    .modal-title { font-size: 14px; font-weight: 800; color: #fff; }
-    .modal-desc { font-size: 11.5px; color: var(--text-muted); line-height: 1.4; }
-    .input-field { width: 100%; background: var(--inner-bg); border: 1px solid var(--border); border-radius: 8px; color: #fff; padding: 8px 10px; font-size: 12px; margin-top: 4px; }
+    .actions-row { display: flex; gap: 8px; }
+    .btn-start {
+      flex: 1.4; background: var(--green-dark); border: none; color: #fff;
+      padding: 13px; border-radius: 14px; font-size: 13px; font-weight: 800;
+      cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 6px;
+      box-shadow: 0 4px 14px rgba(5, 150, 105, 0.4); transition: all .15s;
+    }
+    .btn-start:hover { background: var(--green); transform: translateY(-1px); }
+    .btn-start:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+    .btn-cancel {
+      flex: 1; background: #223036; border: 1px solid var(--border); color: #cfd8dc;
+      padding: 13px; border-radius: 14px; font-size: 12px; font-weight: 600;
+      cursor: pointer; text-align: center; transition: all .15s;
+    }
+    .btn-cancel:hover { background: #2b3d45; color: #fff; }
+
+    .modal-backdrop {
+      position: fixed; inset: 0; background: rgba(0,0,0,0.8);
+      display: flex; align-items: center; justify-content: center;
+      padding: 16px; z-index: 100; backdrop-filter: blur(2px);
+    }
+    .modal-box {
+      background: var(--card-bg); border: 1px solid var(--border-accent);
+      border-radius: 20px; width: 100%; max-width: 380px; padding: 18px;
+      display: flex; flex-direction: column; gap: 14px; box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.5);
+    }
+    .modal-header { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border); padding-bottom: 8px; }
+    .modal-title { font-size: 14px; font-weight: 800; color: #fff; display: flex; align-items: center; gap: 6px; }
+    .btn-close-modal { background: none; border: none; color: var(--text-muted); font-size: 18px; cursor: pointer; }
+    .btn-close-modal:hover { color: #fff; }
+    .modal-desc { font-size: 12px; color: #b0bec5; line-height: 1.45; }
+    .input-field {
+      width: 100%; background: var(--inner-bg); border: 1px solid var(--border);
+      border-radius: 10px; color: #fff; padding: 10px 12px; font-size: 12.5px; margin-top: 4px; outline: none;
+    }
+    .input-field:focus { border-color: var(--green); }
+
+    .pause-reasons-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-top: 4px; }
+    .btn-pause-type {
+      background: var(--inner-bg); border: 1px solid var(--border); color: #cbd5e1;
+      padding: 12px 6px; border-radius: 12px; font-size: 11.5px; font-weight: 700;
+      cursor: pointer; text-align: center; transition: all .15s;
+    }
+    .btn-pause-type:hover { background: #1c282e; }
+    .btn-pause-type.active { background: rgba(245, 158, 11, 0.2); border-color: var(--amber); color: #fde047; }
+
+    .toast {
+      position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%);
+      background: #064e3b; border: 1px solid #10b981; color: #ecfdf5;
+      padding: 10px 18px; border-radius: 12px; font-size: 12px; font-weight: 700;
+      box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.5); display: none; z-index: 200; max-width: 90%; text-align: center;
+    }
+    .toast.error { background: #450a0a; border-color: var(--red); color: #fee2e2; }
+
+    .spinner-overlay {
+      position: fixed; inset: 0; background: rgba(0,0,0,0.35); z-index: 300;
+      display: none; align-items: center; justify-content: center;
+    }
+    .spinner { width: 34px; height: 34px; border: 3px solid rgba(255,255,255,0.2); border-top-color: var(--green); border-radius: 50%; animation: spin 0.8s linear infinite; }
+    @keyframes spin { to { transform: rotate(360deg); } }
   </style>
 </head>
 <body>
 
 <div class="mobile-container">
-  <!-- 1. Connected Header -->
+  <!-- 1. Header -->
   <div class="app-header">
-    <div class="status-badge">
+    <div class="status-badge" id="connection-badge">
       <div class="status-dot"></div>
-      <span>Connected</span>
+      <span id="connection-label">Connecting…</span>
     </div>
     <div class="worker-info">
-      <span id="worker-name-label">Lisa King (Lisa)</span>
-      <button class="btn-logout" onclick="alert('Logging out...');">Log Out</button>
+      <div class="worker-name-group">
+        <div class="worker-name" id="worker-name-label">—</div>
+        <div class="worker-id" id="worker-id-label">—</div>
+      </div>
+      <button class="btn-logout" onclick="handleLogout()">Log Out</button>
     </div>
   </div>
 
-  <!-- 2. Target UI Component: Bed Context Card & Task Assignment Panel -->
-  <div class="card">
-    <div class="card-title-bar">
-      <div class="card-subtitle">Confirm Assignment</div>
-      <div class="bed-title" id="bed-location-label">📍 Bed B1-10 (Block B1 · Zone B1-ZB)</div>
+  <!-- 2. Scan Bar -->
+  <div class="scan-bar">
+    <div class="scan-label">📷 Scan Bed:</div>
+    <div class="scan-tabs">
+      <button class="scan-tab active" id="tab-B1-10" onclick="scanBedById('B1-10')">B1-10</button>
+      <button class="scan-tab" id="tab-B1-03" onclick="scanBedById('B1-03')">B1-03</button>
+      <button class="scan-tab" id="tab-B1-01" onclick="scanBedById('B1-01')">B1-01</button>
+      <input type="text" class="scan-tab-input" id="manual-bed-input" placeholder="Bed ID…" onkeydown="if(event.key==='Enter'){scanBedById(this.value.trim().toUpperCase()); this.value='';}">
     </div>
+  </div>
 
-    <!-- Bed Status Info Table (Clean '—' Guarantee) -->
-    <div class="info-table">
-      <div class="info-row">
-        <span class="info-label">🌱 Crop:</span>
-        <span class="info-val unassigned" id="bed-crop-val">—</span>
+  <!-- App Body -->
+  <div class="app-body">
+
+    <!-- 3. Active Shift Task Card -->
+    <div class="active-session-card" id="active-session-card" style="display: none;">
+      <div class="session-card-header">
+        <div class="session-badge">
+          <div class="session-badge-dot"></div>
+          <span>Active Shift Task</span>
+        </div>
+        <div class="session-status-tag" id="session-status-tag">ACTIVE</div>
       </div>
-      <div class="info-row">
-        <span class="info-label">🏷️ Cohort:</span>
-        <span class="info-val unassigned" id="bed-cohort-val">—</span>
+
+      <div class="session-details">
+        <div class="session-row">
+          <span style="color:var(--text-muted);">Bed Location:</span>
+          <strong id="session-bed-id" style="font-family:monospace; color:#fff;">—</strong>
+        </div>
+        <div class="session-row">
+          <span style="color:var(--text-muted);">Task Activity:</span>
+          <strong id="session-activity-name" style="color:#6ee7b7;">—</strong>
+        </div>
+        <div class="session-row" style="border-top:1px solid rgba(59,130,246,0.2); padding-top:6px; margin-top:2px;">
+          <span style="color:var(--text-muted);">Active Elapsed:</span>
+          <div class="session-timer-display" id="session-timer-display">⏱️ 00:00:00</div>
+        </div>
       </div>
-      <div class="info-row">
-        <span class="info-label">📋 Field Status:</span>
-        <span class="info-val" id="bed-state-val" style="color:#81c784;">Rest</span>
+
+      <div class="session-actions-grid">
+        <button class="btn-session-pause" id="btn-pause-toggle" onclick="openPauseModal()">⏸ Pause</button>
+        <button class="btn-session-complete" onclick="openCompleteModal()">✓ Complete Task</button>
       </div>
     </div>
+    <div class="no-session-note" id="no-session-note">No active task right now — start one below.</div>
 
-    <!-- ▼ Bed History (Bed-Level Event Log) -->
-    <div class="history-box">
-      <div class="history-header" onclick="toggleHistory()">
-        <span>▼ Bed History</span>
-        <span id="history-toggle-icon">▲</span>
+    <!-- 4. Bed Context Card & Task Assignment Panel -->
+    <div class="card">
+      <div class="card-title-bar">
+        <div class="card-subtitle">Confirm Assignment</div>
+        <div class="bed-title" id="bed-location-label">
+          <span>📍 Scan a bed to begin</span>
+        </div>
       </div>
-      <div class="history-list" id="bed-history-list">
-        <div class="history-item">• <strong>Sep 03, 2026</strong> | Field Turnover completed by M. Vance</div>
-        <div class="history-item">• <strong>Sep 03, 2026</strong> | State changed: Cleanup → Rest</div>
-        <div class="history-item">• <strong>Aug 28, 2026</strong> | Harvest completed (45 lbs)</div>
+
+      <div class="info-table">
+        <div class="info-row">
+          <span class="info-label">🌱 Crop:</span>
+          <span class="info-val unassigned" id="bed-crop-val">—</span>
+        </div>
+        <div class="info-row">
+          <span class="info-label">🏷️ Cohort:</span>
+          <span class="info-val unassigned" id="bed-cohort-val">—</span>
+        </div>
+        <div class="info-row">
+          <span class="info-label">📋 Field Status:</span>
+          <span class="status-pill" id="bed-state-val">—</span>
+        </div>
       </div>
-    </div>
 
-    <!-- Quick Actions -->
-    <div class="quick-actions-title">Quick Actions</div>
-    <div class="quick-actions-grid">
-      <button class="btn-quick" onclick="handleStartTask('Irrigation')">💧 Log Water Pass</button>
-      <button class="btn-quick" onclick="handleStartTask('Fertilization')">🧪 Log Fertilizer</button>
-      <button class="btn-quick" onclick="handleStartTask('Weeding')">🌿 Log Weeding</button>
-    </div>
+      <div class="history-box">
+        <div class="history-header" onclick="toggleHistory()">
+          <span>▼ Bed History (Bed-Level)</span>
+          <span id="history-toggle-icon" style="font-size:10px; color:var(--text-muted);">▲</span>
+        </div>
+        <div class="history-list" id="bed-history-list">
+          <div class="history-item" style="color:var(--text-muted);">Scan a bed to load history.</div>
+        </div>
+      </div>
 
-    <!-- Select Activity -->
-    <div class="quick-actions-title">Select Activity</div>
-    <select id="activity-dropdown" class="activity-select">
-      <optgroup label="[ Land Prep & Bed Maintenance ] ▾">
-        <option value="Tillage">Land Prep / Tillage</option>
-        <option value="BedForming">Bed Forming</option>
-        <option value="Solarization">Solarization</option>
-      </optgroup>
-      <optgroup label="[ Crop Lifecycle (Requires Cohort Creation) ] ▾">
-        <option value="Seeding">Seeding</option>
-        <option value="Transplanting">Transplanting</option>
-      </optgroup>
-      <optgroup label="[ Maintenance ] ▾">
-        <option value="Cultivation">Cultivation</option>
-        <option value="Weeding">Weeding</option>
-        <option value="Fertilization">Fertilization</option>
-        <option value="Irrigation">Irrigation</option>
-      </optgroup>
-    </select>
+      <div class="section-label">Quick Actions</div>
+      <div class="quick-actions-grid">
+        <button class="btn-quick" id="qa-water" onclick="handleStartTask('Irrigation')" disabled>
+          <span style="font-size:16px;">💧</span>
+          <span>Log Water Pass</span>
+        </button>
+        <button class="btn-quick" id="qa-fert" onclick="handleStartTask('Fertilization')" disabled>
+          <span style="font-size:16px;">🧪</span>
+          <span>Log Fertilizer</span>
+        </button>
+        <button class="btn-quick" id="qa-weed" onclick="handleStartTask('Weeding')" disabled>
+          <span style="font-size:16px;">🌿</span>
+          <span>Log Weeding</span>
+        </button>
+      </div>
 
-    <!-- Task Launch Actions -->
-    <div class="actions-row">
-      <button class="btn-start" onclick="onStartTaskClick()">▶ Start Task</button>
-      <button class="btn-cancel" onclick="rescanPrompt()">Cancel / Rescan</button>
+      <div class="section-label">Select Activity</div>
+      <select id="activity-dropdown" class="activity-select" onchange="onActivityChange()" disabled>
+        <option value="">Loading activities…</option>
+      </select>
+
+      <div class="gating-hint-box" id="gating-hint" style="display:none;">
+        <span>ℹ️</span>
+        <span>Gating rule: <strong>Seeding/Transplanting</strong> on a Rest/Prep bed will prompt cohort assignment to officially begin the crop lifecycle.</span>
+      </div>
+
+      <div class="actions-row">
+        <button class="btn-start" id="btn-start-task" onclick="onStartTaskClick()" disabled>▶ Start Task</button>
+        <button class="btn-cancel" onclick="rescanPrompt()">Cancel / Rescan</button>
+      </div>
     </div>
   </div>
 </div>
 
-<!-- Cohort Assignment Modal (Gated for Seeding/Transplanting on Rest Beds) -->
+<!-- 5. Cohort Assignment Modal -->
 <div id="cohort-modal" class="modal-backdrop" style="display:none;">
   <div class="modal-box">
-    <div class="modal-title">🌱 Cohort Assignment Required</div>
+    <div class="modal-header">
+      <div class="modal-title">🌱 Cohort Assignment Required</div>
+      <button class="btn-close-modal" onclick="closeCohortModal()">&times;</button>
+    </div>
     <div class="modal-desc">
-      Bed is currently in <strong id="modal-bed-state">Rest</strong>. Seeding or Transplanting requires creating or assigning an active Cohort to begin the crop lifecycle.
+      Bed <strong id="modal-bed-id">—</strong> is currently in <strong id="modal-bed-state" style="color:var(--amber);">—</strong>. Planting requires attaching an active Cohort to begin tracking the crop lifecycle.
     </div>
 
     <div>
       <label style="font-size:11px; color:var(--text-muted);">Crop Species</label>
       <select id="cohort-crop-input" class="input-field">
-        <option value="TOM">Tomatoes (75 days)</option>
-        <option value="PEP">Bell Peppers (80 days)</option>
-        <option value="LET">Salad Lettuce (35 days)</option>
-        <option value="KAL">Kale (55 days)</option>
+        <option value="">Loading crops…</option>
       </select>
     </div>
 
-    <div>
-      <label style="font-size:11px; color:var(--text-muted);">Variety Name</label>
-      <input type="text" id="cohort-variety-input" class="input-field" value="San Marzano II">
+    <!-- NOTE: Variety / Target Yield removed from the live payload -- the
+         backend's createCohortForBed_(bedId, cropId) has no field for
+         either today. Left as display-only notes below rather than silently
+         collected and dropped. -->
+    <div class="modal-desc" style="font-size:11px; opacity:0.8;">
+      Variety and target yield aren't captured by the cohort-creation step yet — only the crop species is sent. Ask if you want those added to <code>createCohortForBed_</code>.
     </div>
 
-    <div class="actions-row" style="margin-top:8px;">
-      <button class="btn-cancel" onclick="closeCohortModal()" style="flex:1;">Cancel</button>
-      <button class="btn-start" onclick="confirmCohortAndStart()" style="flex:1;">Create & Start</button>
+    <div class="actions-row" style="margin-top:6px;">
+      <button class="btn-cancel" onclick="closeCohortModal()">Cancel</button>
+      <button class="btn-start" onclick="confirmCohortAndStart()">Create &amp; Start</button>
     </div>
   </div>
 </div>
 
+<!-- 6. Pause Modal -->
+<div id="pause-modal" class="modal-backdrop" style="display:none;">
+  <div class="modal-box">
+    <div class="modal-header">
+      <div class="modal-title">⏸ Select Pause Reason</div>
+      <button class="btn-close-modal" onclick="closePauseModal()">&times;</button>
+    </div>
+    <div class="modal-desc">
+      Timer freezes immediately. Paused time is logged separately and will not count toward task labor totals.
+    </div>
+
+    <div class="pause-reasons-grid">
+      <button class="btn-pause-type active" id="pause-BREAK" onclick="selectPauseReason('BREAK')">Short Break</button>
+      <button class="btn-pause-type" id="pause-LUNCH" onclick="selectPauseReason('LUNCH')">Lunch</button>
+      <button class="btn-pause-type" id="pause-END_OF_DAY" onclick="selectPauseReason('END_OF_DAY')">End of Day</button>
+    </div>
+
+    <div class="actions-row" style="margin-top:6px;">
+      <button class="btn-cancel" onclick="closePauseModal()">Cancel</button>
+      <button class="btn-start" style="background:var(--amber); color:#111;" onclick="confirmPause()">Confirm Pause</button>
+    </div>
+  </div>
+</div>
+
+<!-- 7. Complete Task Modal -->
+<div id="complete-modal" class="modal-backdrop" style="display:none;">
+  <div class="modal-box">
+    <div class="modal-header">
+      <div class="modal-title">✓ Complete Activity</div>
+      <button class="btn-close-modal" onclick="closeCompleteModal()">&times;</button>
+    </div>
+    <div class="modal-desc" id="complete-modal-desc">
+      Task will be finalized and archived into FIELD_ACTIVITY_LOG. Total elapsed time will be recorded.
+    </div>
+
+    <div id="harvest-qty-group" style="display:none;">
+      <label style="font-size:11px; color:var(--text-muted);">Harvested Quantity (Lbs)</label>
+      <input type="number" id="harvest-qty-input" class="input-field" value="0">
+    </div>
+
+    <div class="actions-row" style="margin-top:6px;">
+      <button class="btn-cancel" onclick="closeCompleteModal()">Cancel</button>
+      <button class="btn-start" onclick="confirmComplete()">Archive &amp; Finish</button>
+    </div>
+  </div>
+</div>
+
+<div id="toast" class="toast">Action logged successfully</div>
+<div id="spinner-overlay" class="spinner-overlay"><div class="spinner"></div></div>
+
 <script>
-  var CURRENT_BED_ID = 'B1-10';
-  var CURRENT_BED_STATE = 'Rest';
+  // =====================================================================
+  // SERVER BRIDGE
+  //
+  // apiCall(action, payload) -> Promise. Calls the apiCall(action, payload)
+  // wrapper added to Code_main.gs, which just forwards to routeAction_ --
+  // the same router doPost() uses. This works as soon as the page is
+  // opened through its Apps Script exec/dev URL (doGet() serves this file)
+  // -- no separate deployment or CORS setup needed, unlike a raw fetch()
+  // to this project's own web-app URL.
+  // =====================================================================
+  function apiCall(action, payload) {
+    return new Promise(function(resolve, reject) {
+      if (typeof google === 'undefined' || !google.script || !google.script.run) {
+        reject(new Error('google.script.run unavailable -- this page must be opened through its Apps Script URL, not a static file.'));
+        return;
+      }
+      google.script.run
+        .withSuccessHandler(function(res) {
+          if (res && res.success === false) { reject(new Error(res.error || 'Request failed.')); return; }
+          resolve(res);
+        })
+        .withFailureHandler(function(err) { reject(new Error(err && err.message ? err.message : String(err))); })
+        .apiCall(action, payload || {});
+    });
+  }
+
+  // =====================================================================
+  // SESSION / IDENTITY
+  //
+  // TODO: no login screen exists in this file yet (see handleLogin_ in
+  // Code_main.gs for the real backend call). Hardcoded here as a known,
+  // explicit placeholder -- swap this for a real PIN-entry screen calling
+  // apiCall('login', {workerId, pin}) before shipping to workers.
+  // =====================================================================
+  var CURRENT_WORKER = { workerId: 'USR-LISA', name: 'Lisa King', role: 'Worker' };
+
+  var CURRENT_BED = null;       // last handleScanQr_ 'bed' object
+  var ACTIVE_SESSION = null;    // { sessionId, bedId, activity, status, startTime, accumulatedMinutes }
+  var TAXONOMY = null;          // get-taxonomy payload
+  var CROPS = null;             // list-crops payload
+  var selectedPauseReason = 'BREAK';
+  var timerInterval = null;
+
+  window.onload = function() {
+    document.getElementById('worker-name-label').textContent = CURRENT_WORKER.name;
+    document.getElementById('worker-id-label').textContent = '(' + CURRENT_WORKER.workerId + ')';
+
+    Promise.all([
+      loadTaxonomy(),
+      refreshOpenSessions(),
+      scanBedById('B1-10')
+    ]).then(function() {
+      setConnected(true);
+    }).catch(function(err) {
+      setConnected(false, err.message);
+    });
+  };
+
+  function setConnected(ok, message) {
+    var badge = document.getElementById('connection-badge');
+    var label = document.getElementById('connection-label');
+    if (ok) {
+      badge.classList.remove('offline');
+      label.textContent = 'Connected';
+    } else {
+      badge.classList.add('offline');
+      label.textContent = 'Offline';
+      showToast(message || 'Could not reach the server.', true);
+    }
+  }
+
+  function showSpinner(show) {
+    document.getElementById('spinner-overlay').style.display = show ? 'flex' : 'none';
+  }
+
+  function showToast(msg, isError) {
+    var toast = document.getElementById('toast');
+    toast.textContent = msg;
+    toast.className = 'toast' + (isError ? ' error' : '');
+    toast.style.display = 'block';
+    setTimeout(function() { toast.style.display = 'none'; }, 3200);
+  }
+
+  function handleLogout() {
+    showSpinner(true);
+    apiCall('logout', { workerId: CURRENT_WORKER.workerId })
+      .then(function() { showToast('Logged out.'); })
+      .catch(function(err) { showToast(err.message, true); })
+      .then(function() { showSpinner(false); });
+  }
+
+  // =====================================================================
+  // TAXONOMY -- populates the Select Activity dropdown from get-taxonomy
+  // instead of a hardcoded <option> list, so a new CANONICAL_ACTIVITIES
+  // entry (ActivityTaxonomy.gs) shows up here with no frontend edit.
+  // =====================================================================
+  function loadTaxonomy() {
+    return apiCall('get-taxonomy', {}).then(function(res) {
+      TAXONOMY = res.taxonomy;
+      var dropdown = document.getElementById('activity-dropdown');
+      dropdown.innerHTML = '';
+      Object.keys(TAXONOMY.groups).forEach(function(groupName) {
+        var optgroup = document.createElement('optgroup');
+        optgroup.label = groupName;
+        TAXONOMY.groups[groupName].forEach(function(activityKey) {
+          var opt = document.createElement('option');
+          opt.value = activityKey;
+          opt.textContent = TAXONOMY.labels[activityKey] || activityKey;
+          optgroup.appendChild(opt);
+        });
+        dropdown.appendChild(optgroup);
+      });
+      dropdown.disabled = false;
+      onActivityChange();
+    });
+  }
+
+  function loadCrops() {
+    if (CROPS) return Promise.resolve(CROPS);
+    return apiCall('list-crops', {}).then(function(res) {
+      CROPS = res.crops;
+      var select = document.getElementById('cohort-crop-input');
+      select.innerHTML = '';
+      CROPS.forEach(function(c) {
+        var opt = document.createElement('option');
+        opt.value = c.cropId;
+        opt.textContent = c.cropName;
+        select.appendChild(opt);
+      });
+      return CROPS;
+    });
+  }
+
+  // =====================================================================
+  // BED SCAN -- calls the real handleScanQr_ via 'scan-bed'
+  // =====================================================================
+  function scanBedById(bedId) {
+    if (!bedId) return Promise.resolve();
+    showSpinner(true);
+    return apiCall('scan-bed', { bedId: bedId, workerId: CURRENT_WORKER.workerId })
+      .then(function(res) {
+        renderBedFromServer(res.bed, res.history);
+        highlightScanTab(bedId);
+        setConnected(true);
+      })
+      .catch(function(err) {
+        showToast(err.message, true);
+        setConnected(false, err.message);
+      })
+      .then(function() { showSpinner(false); });
+  }
+
+  function highlightScanTab(bedId) {
+    ['B1-10', 'B1-03', 'B1-01'].forEach(function(id) {
+      var tab = document.getElementById('tab-' + id);
+      if (!tab) return;
+      if (id === bedId) tab.classList.add('active'); else tab.classList.remove('active');
+    });
+  }
+
+  function renderBedFromServer(bed, history) {
+    CURRENT_BED = bed;
+
+    var cropEl = document.getElementById('bed-crop-val');
+    var cohortEl = document.getElementById('bed-cohort-val');
+
+    // Server already applies the no-fallback-strings contract: cropName/
+    // cohortId display fields come back '' for an unplanted bed, so the
+    // only client-side rule needed is "blank -> em dash".
+    var cropDisplay = bed.cropName || '—';
+    var cohortDisplay = (bed.cohortId && bed.cohortId !== 'COH-UNASSIGNED') ? bed.cohortId : '—';
+
+    cropEl.textContent = cropDisplay;
+    cohortEl.textContent = cohortDisplay;
+    var displayClass = cropDisplay === '—' ? 'info-val unassigned' : 'info-val active-crop';
+    cropEl.className = displayClass;
+    cohortEl.className = displayClass;
+
+    document.getElementById('bed-state-val').textContent = bed.bedState || '—';
+    document.getElementById('bed-location-label').innerHTML =
+      '<span>📍 Bed ' + bed.bedId + '</span>' +
+      (bed.block ? ' <span class="bed-title-sub">(Block ' + bed.block + (bed.irrigationZone ? ' · Zone ' + bed.irrigationZone : '') + ')</span>' : '');
+
+    renderBedHistory(history);
+    enableActionsForBed(bed);
+    onActivityChange();
+  }
+
+  function renderBedHistory(history) {
+    var list = document.getElementById('bed-history-list');
+    if (!history) {
+      list.innerHTML = '<div class="history-item" style="color:var(--text-muted);">History unavailable.</div>';
+      return;
+    }
+    var items = [];
+    (history.recentActivities || []).forEach(function(a) {
+      items.push({ ts: a.Timestamp, html: formatHistoryDate(a.Timestamp) + ' | <strong>' + (TAXONOMY && TAXONOMY.labels[a.Activity_Type] || a.Activity_Type) + '</strong> completed' + (a.Worker_ID ? ' by ' + a.Worker_ID : '') });
+    });
+    if (history.latestScoutFinding) {
+      var f = history.latestScoutFinding;
+      items.push({ ts: f.Timestamp, html: formatHistoryDate(f.Timestamp) + ' | Scouting: <strong>' + (f.Symptom || f.Domain) + '</strong> (' + f.Severity + ')' });
+    }
+    (history.unresolvedExceptions || []).forEach(function(e) {
+      items.push({ ts: e.Reported_At, html: formatHistoryDate(e.Reported_At) + ' | ⚠️ Open exception: <strong>' + e.Exception_Type + '</strong>' });
+    });
+    if (history.lastIrrigation) {
+      var irr = history.lastIrrigation;
+      items.push({ ts: irr.Timestamp, html: formatHistoryDate(irr.Timestamp) + ' | Last irrigation logged' });
+    }
+    items.sort(function(a, b) { return new Date(b.ts) - new Date(a.ts); });
+
+    if (items.length === 0) {
+      list.innerHTML = '<div class="history-item" style="color:var(--text-muted);">No history logged for this bed.</div>';
+      return;
+    }
+    list.innerHTML = items.map(function(it) { return '<div class="history-item">• ' + it.html + '</div>'; }).join('');
+  }
+
+  function formatHistoryDate(raw) {
+    if (!raw) return 'Unknown date';
+    var d = new Date(raw);
+    if (isNaN(d.getTime())) return String(raw);
+    return d.toLocaleDateString(undefined, { month: 'short', day: '2-digit', year: 'numeric' });
+  }
+
+  function enableActionsForBed(bed) {
+    var hasBed = !!bed;
+    document.getElementById('qa-water').disabled = !hasBed;
+    document.getElementById('qa-fert').disabled = !hasBed;
+    document.getElementById('qa-weed').disabled = !hasBed;
+    document.getElementById('btn-start-task').disabled = !hasBed;
+  }
+
+  function rescanPrompt() {
+    var next = (CURRENT_BED && CURRENT_BED.bedId === 'B1-10') ? 'B1-03' : 'B1-10';
+    scanBedById(next);
+  }
 
   function toggleHistory() {
     var list = document.getElementById('bed-history-list');
@@ -210,59 +701,239 @@
     }
   }
 
-  // TECHNICAL CODE ADJUSTMENT: Unified Architectural Contract
-  // Eliminates 'General Field' / 'COH-UNASSIGNED' fallbacks!
-  function onBedScanSuccess(bedData) {
-    CURRENT_BED_ID = bedData.Bed_ID || 'B1-10';
-    CURRENT_BED_STATE = bedData.Current_State || 'Rest';
-
-    var isUnassigned = (CURRENT_BED_STATE === 'Rest' || CURRENT_BED_STATE === 'Prep' || !CURRENT_BED_STATE);
-
-    // NEW (Unified Standard): Em-dash for unassigned
-    var cropDisplay = (!isUnassigned && bedData.Current_Crop && bedData.Current_Crop.trim() !== '') ? bedData.Current_Crop : '—';
-    var cohortDisplay = (!isUnassigned && bedData.Current_Cohort_ID && bedData.Current_Cohort_ID.trim() !== '' && bedData.Current_Cohort_ID !== 'COH-UNASSIGNED') ? bedData.Current_Cohort_ID : '—';
-
-    document.getElementById('bed-crop-val').textContent = cropDisplay;
-    document.getElementById('bed-cohort-val').textContent = cohortDisplay;
-    document.getElementById('bed-state-val').textContent = CURRENT_BED_STATE;
-    document.getElementById('bed-location-label').textContent = '📍 Bed ' + CURRENT_BED_ID;
+  function isPlantingActivity(activity) {
+    // Matches the mockup's own "Crop Lifecycle (Requires Cohort Creation)"
+    // grouping, not DashboardAPI.gs's separate PLANTING_ACTIVITY_TYPES_
+    // whitelist (that one gates DOB-locking on verification, a different
+    // decision from "does starting this need a brand-new cohort").
+    return activity === 'Seeding' || activity === 'Transplanting';
   }
 
-  // PLANTING ACTIVITY ACTION GATING
+  function onActivityChange() {
+    var activity = document.getElementById('activity-dropdown').value;
+    var isUnplanted = CURRENT_BED && (CURRENT_BED.bedState === 'Rest' || CURRENT_BED.bedState === 'Prep');
+    var hint = document.getElementById('gating-hint');
+    hint.style.display = (isPlantingActivity(activity) && isUnplanted) ? 'flex' : 'none';
+  }
+
+  // =====================================================================
+  // START TASK -- routes to 'create-cohort' (if gated) then 'start-session'
+  // =====================================================================
   function onStartTaskClick() {
-    var selectedActivity = document.getElementById('activity-dropdown').value;
-    handleStartTask(selectedActivity);
+    var activity = document.getElementById('activity-dropdown').value;
+    handleStartTask(activity);
   }
 
   function handleStartTask(activity) {
-    var isPlanting = (activity === 'Seeding' || activity === 'Transplanting');
-    var isUnplanted = (CURRENT_BED_STATE === 'Rest' || CURRENT_BED_STATE === 'Prep');
+    if (!CURRENT_BED) { showToast('Scan a bed first.', true); return; }
+    var isUnplanted = CURRENT_BED.bedState === 'Rest' || CURRENT_BED.bedState === 'Prep';
 
-    if (isUnplanted && isPlanting) {
-      // Intercept submit to launch Cohort Assignment Modal!
-      document.getElementById('modal-bed-state').textContent = CURRENT_BED_STATE;
+    if (isUnplanted && isPlantingActivity(activity)) {
+      document.getElementById('modal-bed-id').textContent = CURRENT_BED.bedId;
+      document.getElementById('modal-bed-state').textContent = CURRENT_BED.bedState;
+      loadCrops().catch(function(err) { showToast(err.message, true); });
       document.getElementById('cohort-modal').style.display = 'flex';
       return;
     }
 
-    // Non-planting activities route directly to dispatch attaching to Bed_ID
-    alert('Started ' + activity + ' on Bed ' + CURRENT_BED_ID + ' (logged against clean bed state).');
+    launchSession(CURRENT_BED.bedId, activity, CURRENT_BED.cohortId);
   }
 
+  function launchSession(bedId, activity, cohortId) {
+    showSpinner(true);
+    apiCall('start-session', {
+      workerId: CURRENT_WORKER.workerId,
+      bedId: bedId,
+      cohortId: cohortId || '',
+      activity: activity
+    }).then(function(res) {
+      ACTIVE_SESSION = {
+        sessionId: res.sessionId,
+        bedId: bedId,
+        activity: activity,
+        status: 'ACTIVE',
+        startTime: res.startTime
+      };
+      renderActiveSession();
+      showToast('Started ' + (TAXONOMY.labels[activity] || activity) + ' on Bed ' + bedId);
+      return scanBedById(bedId); // refresh bed state/history
+    }).catch(function(err) {
+      showToast(err.message, true);
+    }).then(function() { showSpinner(false); });
+  }
+
+  // =====================================================================
+  // OPEN SESSIONS -- 'get-open-sessions' drives the Active Shift Task card
+  // =====================================================================
+  function refreshOpenSessions() {
+    return apiCall('get-open-sessions', { workerId: CURRENT_WORKER.workerId }).then(function(res) {
+      var sessions = (res.sessions || []).filter(function(s) { return !s.isPlanned; });
+      if (sessions.length === 0) {
+        ACTIVE_SESSION = null;
+      } else {
+        var s = sessions[0];
+        ACTIVE_SESSION = { sessionId: s.sessionId, bedId: s.bedId, activity: s.activity, status: s.status, startTime: s.startTime };
+      }
+      renderActiveSession();
+    });
+  }
+
+  function renderActiveSession() {
+    var card = document.getElementById('active-session-card');
+    var note = document.getElementById('no-session-note');
+    if (!ACTIVE_SESSION) {
+      card.style.display = 'none';
+      note.style.display = 'block';
+      if (timerInterval) { clearInterval(timerInterval); timerInterval = null; }
+      return;
+    }
+    note.style.display = 'none';
+    card.style.display = 'flex';
+    document.getElementById('session-bed-id').textContent = ACTIVE_SESSION.bedId;
+    document.getElementById('session-activity-name').textContent = TAXONOMY ? (TAXONOMY.labels[ACTIVE_SESSION.activity] || ACTIVE_SESSION.activity) : ACTIVE_SESSION.activity;
+    setSessionStatusUi(ACTIVE_SESSION.status, '');
+    startTimer();
+  }
+
+  function setSessionStatusUi(status, pauseType) {
+    var tag = document.getElementById('session-status-tag');
+    var btn = document.getElementById('btn-pause-toggle');
+    if (status === 'PAUSED') {
+      tag.textContent = 'PAUSED' + (pauseType ? ' (' + pauseType + ')' : '');
+      tag.style.background = 'rgba(245,158,11,0.2)';
+      tag.style.color = '#fde047';
+      btn.textContent = '▶ Resume';
+      btn.className = 'btn-session-resume';
+    } else {
+      tag.textContent = 'ACTIVE';
+      tag.style.background = 'rgba(59,130,246,0.2)';
+      tag.style.color = '#bfdbfe';
+      btn.textContent = '⏸ Pause';
+      btn.className = 'btn-session-pause';
+    }
+  }
+
+  // Client-side display timer only -- the real elapsed-time source of
+  // truth is FIELD_LIVE_SESSION's Segment_Start_Time/Accumulated_Active_Minutes
+  // (see handlePauseResume_/handleCompleteSession_ in Code_main.gs). This
+  // just counts up from startTime for a live-feeling display; it does not
+  // feed anything back to the sheet.
+  function startTimer() {
+    if (timerInterval) clearInterval(timerInterval);
+    timerInterval = setInterval(function() {
+      if (!ACTIVE_SESSION || ACTIVE_SESSION.status === 'PAUSED') return;
+      var start = new Date(ACTIVE_SESSION.startTime).getTime();
+      if (isNaN(start)) return;
+      var elapsedSec = Math.max(0, Math.floor((Date.now() - start) / 1000));
+      var hh = String(Math.floor(elapsedSec / 3600)).padStart(2, '0');
+      var mm = String(Math.floor((elapsedSec % 3600) / 60)).padStart(2, '0');
+      var ss = String(elapsedSec % 60).padStart(2, '0');
+      var el = document.getElementById('session-timer-display');
+      if (el) el.textContent = '⏱️ ' + hh + ':' + mm + ':' + ss;
+    }, 1000);
+  }
+
+  // =====================================================================
+  // COHORT CREATION -- 'create-cohort' then 'start-session'
+  // =====================================================================
   function closeCohortModal() {
     document.getElementById('cohort-modal').style.display = 'none';
   }
 
   function confirmCohortAndStart() {
-    var crop = document.getElementById('cohort-crop-input').value;
-    var variety = document.getElementById('cohort-variety-input').value;
+    var cropId = document.getElementById('cohort-crop-input').value;
+    var activity = document.getElementById('activity-dropdown').value;
+    if (!cropId) { showToast('Pick a crop first.', true); return; }
     closeCohortModal();
-    alert('Created new active cohort (' + crop + ' - ' + variety + ') and started planting on ' + CURRENT_BED_ID + '!');
+    showSpinner(true);
+    apiCall('create-cohort', { bedId: CURRENT_BED.bedId, cropId: cropId })
+      .then(function(res) {
+        showToast('Cohort ' + res.cohortId + ' created.');
+        return launchSession(CURRENT_BED.bedId, activity, res.cohortId);
+      })
+      .catch(function(err) { showToast(err.message, true); showSpinner(false); });
   }
 
-  function rescanPrompt() {
-    var next = (CURRENT_BED_ID === 'B1-10') ? 'B1-03' : 'B1-10';
-    onBedScanSuccess({ Bed_ID: next, Current_State: 'Rest', Current_Crop: '', Current_Cohort_ID: '' });
+  // =====================================================================
+  // PAUSE / RESUME -- 'pause-session' / 'resume-session'
+  // =====================================================================
+  function openPauseModal() {
+    if (!ACTIVE_SESSION) return;
+    if (ACTIVE_SESSION.status === 'PAUSED') {
+      showSpinner(true);
+      apiCall('resume-session', { sessionId: ACTIVE_SESSION.sessionId })
+        .then(function(res) {
+          ACTIVE_SESSION.status = res.status;
+          ACTIVE_SESSION.startTime = new Date().toISOString(); // fresh display segment
+          setSessionStatusUi(res.status, '');
+          showToast('Task resumed.');
+        })
+        .catch(function(err) { showToast(err.message, true); })
+        .then(function() { showSpinner(false); });
+      return;
+    }
+    document.getElementById('pause-modal').style.display = 'flex';
+  }
+
+  function closePauseModal() {
+    document.getElementById('pause-modal').style.display = 'none';
+  }
+
+  function selectPauseReason(reason) {
+    selectedPauseReason = reason;
+    ['BREAK', 'LUNCH', 'END_OF_DAY'].forEach(function(r) {
+      var btn = document.getElementById('pause-' + r);
+      if (r === reason) btn.classList.add('active'); else btn.classList.remove('active');
+    });
+  }
+
+  function confirmPause() {
+    if (!ACTIVE_SESSION) return;
+    closePauseModal();
+    showSpinner(true);
+    apiCall('pause-session', { sessionId: ACTIVE_SESSION.sessionId, pauseType: selectedPauseReason })
+      .then(function(res) {
+        ACTIVE_SESSION.status = res.status;
+        setSessionStatusUi(res.status, res.pauseType);
+        showToast('Task paused (' + selectedPauseReason + '). Timer frozen.');
+      })
+      .catch(function(err) { showToast(err.message, true); })
+      .then(function() { showSpinner(false); });
+  }
+
+  // =====================================================================
+  // COMPLETE -- 'complete-session'
+  // =====================================================================
+  function openCompleteModal() {
+    if (!ACTIVE_SESSION) return;
+    var isHarvest = ACTIVE_SESSION.activity === 'Harvest';
+    document.getElementById('harvest-qty-group').style.display = isHarvest ? 'block' : 'none';
+    document.getElementById('complete-modal').style.display = 'flex';
+  }
+
+  function closeCompleteModal() {
+    document.getElementById('complete-modal').style.display = 'none';
+  }
+
+  function confirmComplete() {
+    if (!ACTIVE_SESSION) return;
+    var isHarvest = ACTIVE_SESSION.activity === 'Harvest';
+    var quantity = isHarvest ? Number(document.getElementById('harvest-qty-input').value) || 0 : 0;
+    var unit = isHarvest ? 'lbs' : '';
+    var bedId = ACTIVE_SESSION.bedId;
+    var activity = ACTIVE_SESSION.activity;
+
+    closeCompleteModal();
+    showSpinner(true);
+    apiCall('complete-session', { sessionId: ACTIVE_SESSION.sessionId, quantity: quantity, unit: unit })
+      .then(function() {
+        ACTIVE_SESSION = null;
+        renderActiveSession();
+        showToast('✓ ' + (TAXONOMY.labels[activity] || activity) + ' on Bed ' + bedId + ' completed & archived.');
+        return scanBedById(bedId); // refresh bed state/history
+      })
+      .catch(function(err) { showToast(err.message, true); })
+      .then(function() { showSpinner(false); });
   }
 </script>
 
