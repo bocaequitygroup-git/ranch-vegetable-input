@@ -174,6 +174,18 @@
       <label for="activity-picker-container">Or Choose Any Activity</label>
       <div id="activity-picker-container"></div>
       <div id="planting-gate-warning" class="hidden" style="margin-top:8px; padding:10px; border-radius:6px; background:#3a2a12; color:#f0c674; font-size:0.92em;"></div>
+      <!-- Crop picker (2026-09-05, worker pending-cohort flow): shown instead
+           of a hard block when a planting activity is selected on a bed with
+           no active cohort. Picking a crop here and tapping Start Task mints
+           a fresh, unverified cohort server-side (createCohort_ via
+           resolveSessionCohortAndCrop_'s newPlantingCropId path, Database.gs)
+           -- a manager still has to verify the resulting activity (Verify &
+           Lock DOB) before the bed/cohort formally advance out of Rest/Prep. -->
+      <div id="planting-gate-crop-picker" class="hidden" style="margin-top:8px; padding:10px; border-radius:6px; background:#1a2a1e; font-size:0.92em;">
+        <label for="planting-gate-crop-select" style="display:block; margin-bottom:6px;">🌱 What crop are you planting?</label>
+        <select id="planting-gate-crop-select" onchange="onPlantingGateCropChange()"></select>
+        <p style="margin:6px 0 0; opacity:0.8;">A manager will verify this planting once it's checked -- you can start now.</p>
+      </div>
     </div>
 
     <div class="form-group" id="harvest-plan-toggle-group" style="display:none;">
@@ -483,6 +495,7 @@
     document.getElementById('app-header').classList.remove('hidden');
     document.getElementById('header-user-name').textContent = state.workerName + ' (' + state.workerId + ')';
     loadTaxonomy();
+    loadCropPicklist();
     loadBeds();
     loadMySessions();
   }
@@ -519,6 +532,7 @@
 
     state = {
       workerId: '', workerName: '', bedId: '', cohortId: '', crop: '', selectedActivity: '',
+      newPlantingCropId: '', cropPicklist: [],
       sessionId: '', taxonomyGroups: {}, taxonomyLabels: {},
       scoutDomains: [], scoutDomainLabels: {}, scoutSeverities: [],
       allBeds: [], openSessions: [], myHistory: [],
@@ -824,6 +838,20 @@
     return PAUSE_TYPE_LABELS[pauseType] || pauseType;
   }
 
+  // Crop picklist for the planting-gate crop picker (2026-09-05). Loaded
+  // once at startup, same pattern as loadTaxonomy() -- CROP_REFERENCE is
+  // static reference data, not something that changes mid-shift.
+  function loadCropPicklist() {
+    apiCall('get-crop-picklist', {}, function(res) {
+      if (res && res.success) {
+        state.cropPicklist = res.crops || [];
+        // Re-run the gate in case a worker already had the planting screen
+        // open and hit the "crop list hasn't loaded yet" fallback above.
+        updatePlantingGateWarning();
+      }
+    });
+  }
+
   function loadTaxonomy() {
     apiCall('get-taxonomy', {}, function(res) {
       if (res && res.success && res.taxonomy) {
@@ -900,34 +928,88 @@
     updatePlantingGateWarning();
   }
 
-  // Warns BEFORE the worker taps Start Task, rather than only after
-  // start-session round-trips and fails, when the selected activity is a
-  // planting one (Seeding/Transplanting/Replanting) and the scanned bed has
-  // no cohort to plant into (Rest/Prep, see resolveSessionCohortAndCrop_'s
-  // header comment in Database.gs). This is a UX nicety only -- the real
-  // gate stays server-side, and this can go stale if taxonomy hasn't
-  // loaded yet, so Start Task is still left enabled rather than silently
-  // blocked; the goal is just to stop the failure from being a surprise.
+  // Runs BEFORE the worker taps Start Task, whenever the selected activity
+  // is a planting one (Seeding/Transplanting/Replanting) and the scanned bed
+  // has no cohort to plant into (Rest/Prep, see resolveSessionCohortAndCrop_'s
+  // header comment in Database.gs).
+  //
+  // REWORKED 2026-09-05 (worker pending-cohort flow): this used to hard-block
+  // Start Task with a warning telling the worker to find a manager. It now
+  // shows a crop picker instead -- picking a crop and starting mints a fresh,
+  // unverified ("pending") cohort server-side via resolveSessionCohortAndCrop_'s
+  // newPlantingCropId path, the same way a manager's dispatch-side "New
+  // Cohort" step does, just triggered from the worker's own Start Task tap.
+  // A manager still has to verify the resulting activity later (Verify &
+  // Lock DOB) before the bed/cohort leave Rest/Prep for real -- this only
+  // unblocks STARTING the work, not the lifecycle transition itself.
+  //
+  // Falls back to the old hard-block message only if the crop picklist
+  // hasn't loaded yet (loadCropPicklist() failed or is still in flight) --
+  // better to tell the worker to wait/retry than let them start a planting
+  // session with no way to actually pick what's being planted.
   function updatePlantingGateWarning() {
     let dropdown = document.getElementById('activity-select-dropdown');
     let warningEl = document.getElementById('planting-gate-warning');
+    let pickerEl = document.getElementById('planting-gate-crop-picker');
     let startBtn = document.getElementById('btn-use-bed');
-    if (!dropdown || !warningEl || !startBtn) return;
+    if (!dropdown || !warningEl || !pickerEl || !startBtn) return;
 
     let plantingTypes = state.plantingActivityTypes || [];
     let unassignedStates = state.bedUnassignedStates || [];
     let isPlantingActivity = plantingTypes.indexOf(dropdown.value) !== -1;
     let bedHasNoCohort = unassignedStates.indexOf(state.bedState) !== -1;
 
-    if (isPlantingActivity && bedHasNoCohort) {
-      warningEl.textContent = '\u26A0\uFE0F ' + labelForActivity(dropdown.value) + ' needs a cohort on this bed first. ' +
-        'This bed is currently ' + (state.bedState || 'Rest') + ' with nothing assigned -- ask a manager to create/assign a cohort for it before starting this task.';
+    if (!isPlantingActivity || !bedHasNoCohort) {
+      warningEl.classList.add('hidden');
+      pickerEl.classList.add('hidden');
+      state.newPlantingCropId = '';
+      startBtn.disabled = false;
+      return;
+    }
+
+    if (!state.cropPicklist || !state.cropPicklist.length) {
+      // Picklist not loaded -- fall back to the old hard block rather than
+      // letting a planting session start with nothing to attach it to.
+      pickerEl.classList.add('hidden');
+      warningEl.textContent = '\u26A0\uFE0F ' + labelForActivity(dropdown.value) + ' needs a crop selected, but the crop list hasn\'t loaded yet -- try rescanning the bed.';
       warningEl.classList.remove('hidden');
       startBtn.disabled = true;
-    } else {
-      warningEl.classList.add('hidden');
-      startBtn.disabled = false;
+      return;
     }
+
+    warningEl.classList.add('hidden');
+    pickerEl.classList.remove('hidden');
+    renderPlantingGateCropSelect_();
+    startBtn.disabled = !state.newPlantingCropId;
+  }
+
+  function renderPlantingGateCropSelect_() {
+    let select = document.getElementById('planting-gate-crop-select');
+    if (!select) return;
+    // Only rebuild options if empty, so re-running this on every dropdown
+    // change (updatePlantingGateWarning fires on activity-select's change
+    // event) doesn't blow away the worker's already-made crop choice.
+    if (!select.options.length) {
+      let placeholder = document.createElement('option');
+      placeholder.value = '';
+      placeholder.textContent = 'Select a crop\u2026';
+      select.appendChild(placeholder);
+      state.cropPicklist.forEach(c => {
+        let opt = document.createElement('option');
+        opt.value = c.cropId;
+        opt.textContent = c.cropName;
+        select.appendChild(opt);
+      });
+    }
+    select.value = state.newPlantingCropId || '';
+  }
+
+  function onPlantingGateCropChange() {
+    let select = document.getElementById('planting-gate-crop-select');
+    let startBtn = document.getElementById('btn-use-bed');
+    if (!select || !startBtn) return;
+    state.newPlantingCropId = select.value;
+    startBtn.disabled = !state.newPlantingCropId;
   }
 
   // Only Harvest exposes the "schedule as a planned harvest" toggle -- every
@@ -1237,6 +1319,14 @@
         state.crop = res.bed.crop; // raw Crop_ID code, kept in state in case anything downstream needs it
         state.bedState = res.bed.bedState || ''; // needed by updatePlantingGateWarning below
 
+        // Reset any crop choice left over from a previously scanned bed
+        // (2026-09-05) -- also clears the <select>'s options so
+        // renderPlantingGateCropSelect_ rebuilds them fresh rather than
+        // reusing a stale, already-populated list from the last bed.
+        state.newPlantingCropId = '';
+        let cropSelectEl = document.getElementById('planting-gate-crop-select');
+        if (cropSelectEl) cropSelectEl.innerHTML = '';
+
         document.getElementById('lbl-bed-id').textContent = state.bedId;
         document.getElementById('lbl-block').textContent = res.bed.block || '-';
         document.getElementById('lbl-crop').textContent = res.bed.cropName || state.crop;
@@ -1505,12 +1595,28 @@
     if (!dropdown) return alert('Activity list not loaded yet -- try rescanning.');
     state.selectedActivity = dropdown.value;
 
+    // Belt-and-suspenders re-check of the planting gate (2026-09-05) --
+    // updatePlantingGateWarning already disables Start Task in this state,
+    // but this guards against a stale/disabled-attribute edge case rather
+    // than silently sending start-session with no crop for the backend to
+    // mint a cohort from.
+    let plantingTypes = state.plantingActivityTypes || [];
+    let unassignedStates = state.bedUnassignedStates || [];
+    let needsCropPick = plantingTypes.indexOf(state.selectedActivity) !== -1 &&
+      unassignedStates.indexOf(state.bedState) !== -1;
+    if (needsCropPick && !state.newPlantingCropId) {
+      return alert('Select a crop before starting ' + labelForActivity(state.selectedActivity) + ' on this bed.');
+    }
+
     let payload = {
       workerId: state.workerId,
       bedId: state.bedId,
       cohortId: state.cohortId,
       activity: state.selectedActivity
     };
+    if (needsCropPick) {
+      payload.newPlantingCropId = state.newPlantingCropId;
+    }
 
     // Optional harvest-plan window -- only ever sent when Harvest is
     // selected and the worker opted into it; every other activity keeps
